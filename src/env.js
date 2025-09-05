@@ -11,6 +11,7 @@ export const env = createEnv({
     GOOGLE_DRIVE_API_KEY: z.string().optional(),
     N8N_WEBHOOK_URL: z.string().optional(),
     N8N_INPUT_WEBHOOK_URL: z.string().optional(),
+    GOOGLE_DRIVE_FOLDER_ID: z.string(),
   },
 
   /**
@@ -37,6 +38,7 @@ export const env = createEnv({
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
+    GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
