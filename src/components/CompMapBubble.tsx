@@ -109,7 +109,7 @@ const CompBubble: React.FC<BubbleProps> = ({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onSizeChange, property.id]);
+  }, [property.id]); // Remove onSizeChange from dependencies to prevent infinite loop
 
   return (
     <AdvancedMarker
@@ -209,24 +209,14 @@ const CompTail: React.FC<TailProps> = ({
   useEffect(() => {
     if (!map) return;
 
-    // Calculate triangle points using projection + precise edge intersection
+    // Debug: Log when recalculation happens (remove this later)
+    // if (id === 5) {
+    //   console.log(`[Comp 5] RECALCULATING tail - bubble: ${bubblePosition.lat}, ${bubblePosition.lng}`);
+    // }
+
+    // Simple triangle approach: points directly to bubble center
     const calculateTrianglePoints = () => {
-      // Calculate direction vector from bubble to marker
-      const dx = markerPosition.lng - bubblePosition.lng;
-      const dy = markerPosition.lat - bubblePosition.lat;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance === 0) return [];
-
-      // Normalize direction vector
-      const nx = dx / distance;
-      const ny = dy / distance;
-
-      // Calculate perpendicular vector for triangle width
-      const perpX = -ny;
-      const perpY = nx;
-
-      // Use map projection to compute accurate pixel geometry
+      // Use map projection for accurate pixel geometry
       const proj = map.getProjection();
       if (!proj) return [];
       const zoomScale = Math.pow(2, map.getZoom() ?? 0);
@@ -242,210 +232,69 @@ const CompTail: React.FC<TailProps> = ({
       // Convert to screen pixels relative to zoom
       const toPixels = (p: google.maps.Point) =>
         new google.maps.Point(p.x * zoomScale, p.y * zoomScale);
-      const bubblePx = toPixels(bubblePoint);
+      const bubbleAnchorPx = toPixels(bubblePoint);
       const markerPx = toPixels(markerPoint);
 
-      // Use measured size if provided; fallback otherwise
+      // Get bubble dimensions for visual center calculation
       const fallback = { width: 240, height: 80 };
       const bubbleWidthPx = bubbleSizePx?.width ?? fallback.width;
       const bubbleHeightPx = bubbleSizePx?.height ?? fallback.height;
 
-      // Build bubble rectangle (centered at bubblePx)
-      const rectLeft = bubblePx.x - bubbleWidthPx / 2;
-      const rectRight = bubblePx.x + bubbleWidthPx / 2;
-      const rectTop = bubblePx.y - bubbleHeightPx / 2;
-      const rectBottom = bubblePx.y + bubbleHeightPx / 2;
-
-      // Debug: log bubble rect and corners for Comp 5
-      if (id === 5) {
-        const pxToLL = (p: google.maps.Point) =>
-          proj.fromPointToLatLng(
-            new google.maps.Point(p.x / zoomScale, p.y / zoomScale),
-          )!;
-        const tlPx = new google.maps.Point(rectLeft, rectTop);
-        const trPx = new google.maps.Point(rectRight, rectTop);
-        const blPx = new google.maps.Point(rectLeft, rectBottom);
-        const brPx = new google.maps.Point(rectRight, rectBottom);
-        const tlLL = pxToLL(tlPx);
-        const trLL = pxToLL(trPx);
-        const blLL = pxToLL(blPx);
-        const brLL = pxToLL(brPx);
-        // eslint-disable-next-line no-console
-        console.log(
-          "[Comp 5] bubble px center:",
-          JSON.stringify(bubblePx, null, 2),
-        );
-        console.log("marker px:", JSON.stringify(markerPx, null, 2));
-        // eslint-disable-next-line no-console
-        console.log(
-          "[Comp 5] rect px TL/TR/BL/BR:",
-          JSON.stringify({ tlPx, trPx, blPx, brPx }, null, 2),
-        );
-        // eslint-disable-next-line no-console
-        console.log(
-          "[Comp 5] rect latlng TL/TR/BL/BR:",
-          JSON.stringify(
-            {
-              TL: { lat: tlLL.lat(), lng: tlLL.lng() },
-              TR: { lat: trLL.lat(), lng: trLL.lng() },
-              BL: { lat: blLL.lat(), lng: blLL.lng() },
-              BR: { lat: brLL.lat(), lng: brLL.lng() },
-            },
-            null,
-            2,
-          ),
-        );
-      }
-
-      // Ray from bubble center to marker: bubblePx + t*(markerPx-bubblePx)
-      const rx = markerPx.x - bubblePx.x;
-      const ry = markerPx.y - bubblePx.y;
-
-      const tCandidates: number[] = [];
-      if (rx !== 0) {
-        tCandidates.push((rectLeft - bubblePx.x) / rx);
-        tCandidates.push((rectRight - bubblePx.x) / rx);
-      }
-      if (ry !== 0) {
-        tCandidates.push((rectTop - bubblePx.y) / ry);
-        tCandidates.push((rectBottom - bubblePx.y) / ry);
-      }
-      let tHit = Infinity;
-      let hitX = bubblePx.x;
-      let hitY = bubblePx.y;
-      let hitSide: "left" | "right" | "top" | "bottom" | null = null;
-      for (const t of tCandidates) {
-        if (t <= 0) continue;
-        const x = bubblePx.x + rx * t;
-        const y = bubblePx.y + ry * t;
-        const onLeft =
-          Math.abs(x - rectLeft) < 0.5 && y >= rectTop && y <= rectBottom;
-        const onRight =
-          Math.abs(x - rectRight) < 0.5 && y >= rectTop && y <= rectBottom;
-        const onTop =
-          Math.abs(y - rectTop) < 0.5 && x >= rectLeft && x <= rectRight;
-        const onBottom =
-          Math.abs(y - rectBottom) < 0.5 && x >= rectLeft && x <= rectRight;
-        if (onLeft || onRight || onTop || onBottom) {
-          if (t < tHit) {
-            tHit = t;
-            hitX = x;
-            hitY = y;
-            hitSide = onLeft
-              ? "left"
-              : onRight
-                ? "right"
-                : onTop
-                  ? "top"
-                  : "bottom";
-          }
-        }
-      }
-
-      if (!isFinite(tHit) || !hitSide) return [];
-
-      // Base length in pixels
-      const baseLengthPx =
-        hitSide === "left" || hitSide === "right"
-          ? Math.min(0.9 * bubbleHeightPx, 52)
-          : Math.min(0.9 * bubbleWidthPx, 88);
-
-      // Create base endpoints precisely on the side, and slightly inside bubble to avoid gaps
-      const insetPx = 1.0;
-      // Choose anchor: prefer center only when ray is near-normal to the side; else snap to nearer corner
-      const sideCenter =
-        hitSide === "left" || hitSide === "right"
-          ? new google.maps.Point(hitX, (rectTop + rectBottom) / 2)
-          : new google.maps.Point((rectLeft + rectRight) / 2, hitY);
-      const topOrLeftCorner =
-        hitSide === "left" || hitSide === "right"
-          ? new google.maps.Point(hitX, rectTop)
-          : new google.maps.Point(rectLeft, hitY);
-      const bottomOrRightCorner =
-        hitSide === "left" || hitSide === "right"
-          ? new google.maps.Point(hitX, rectBottom)
-          : new google.maps.Point(rectRight, hitY);
-
-      // Angle of ray relative to side normal in radians
-      const angleToNormal =
-        hitSide === "left" || hitSide === "right"
-          ? Math.atan2(Math.abs(ry), Math.abs(rx)) // 0 => perfectly horizontal (normal), larger => more tangential
-          : Math.atan2(Math.abs(rx), Math.abs(ry)); // 0 => perfectly vertical (normal)
-      const nearNormal = angleToNormal < 0.35; // ~20 degrees
-
-      let anchor = sideCenter;
+      // Target the actual top edge of the bubble to ensure perfect connection
+      // Add extra offset when bubble is above marker to ensure visual connection
       const bubbleAboveMarker = bubblePosition.lat > markerPosition.lat;
-      // If we hit top/bottom and the bubble is above the marker, prefer the nearest corner
-      if (
-        !nearNormal ||
-        ((hitSide === "top" || hitSide === "bottom") && bubbleAboveMarker)
-      ) {
-        // Choose the closer corner to the marker
-        const d1 = Math.hypot(
-          topOrLeftCorner.x - markerPx.x,
-          topOrLeftCorner.y - markerPx.y,
-        );
-        const d2 = Math.hypot(
-          bottomOrRightCorner.x - markerPx.x,
-          bottomOrRightCorner.y - markerPx.y,
-        );
-        anchor = d1 <= d2 ? topOrLeftCorner : bottomOrRightCorner;
+      const extraOffset = bubbleAboveMarker ? 450 : 0; // Extra pixels when above
+
+      console.log("extraOffset", extraOffset);
+      const bubblePx = new google.maps.Point(
+        bubbleAnchorPx.x, // X is already centered
+        bubbleAnchorPx.y - bubbleHeightPx - extraOffset, // Move up to top edge + extra offset if above
+      );
+
+      // Debug: Log the coordinate transformation
+      if (id === 5) {
+        console.log("[Comp 5] Coordinate debugging:");
+        console.log("  bubbleAnchorPx:", {
+          x: bubbleAnchorPx.x,
+          y: bubbleAnchorPx.y,
+        });
+        console.log("  bubblePx (with offset):", {
+          x: bubblePx.x,
+          y: bubblePx.y,
+        });
+        console.log("  bubbleHeightPx:", bubbleHeightPx);
+        console.log("  extraOffset:", extraOffset);
+        console.log("  difference:", bubbleAnchorPx.y - bubblePx.y);
       }
 
-      // Build base along the hit edge. If the anchor is a corner, extend from the corner inward along the edge (not centered).
-      let base1 = new google.maps.Point(anchor.x, anchor.y);
-      let base2 = new google.maps.Point(anchor.x, anchor.y);
-      const horizontalEdge = hitSide === "top" || hitSide === "bottom";
-      const verticalEdge = hitSide === "left" || hitSide === "right";
-      const maxHorizLen = Math.max(0, rectRight - rectLeft - 2 * insetPx);
-      const maxVertLen = Math.max(0, rectBottom - rectTop - 2 * insetPx);
-      const lenAlongEdge = horizontalEdge
-        ? Math.min(baseLengthPx, maxHorizLen)
-        : Math.min(baseLengthPx, maxVertLen);
+      // Calculate direction from marker to bubble visual center
+      const dx = bubblePx.x - markerPx.x;
+      const dy = bubblePx.y - markerPx.y;
+      const distance = Math.hypot(dx, dy);
 
-      if (verticalEdge) {
-        const xInside =
-          hitSide === "left" ? rectLeft + insetPx : rectRight - insetPx;
-        if (anchor === sideCenter) {
-          base1 = new google.maps.Point(xInside, anchor.y - lenAlongEdge / 2);
-          base2 = new google.maps.Point(xInside, anchor.y + lenAlongEdge / 2);
-        } else if (anchor === topOrLeftCorner) {
-          // Top corner on a vertical side: extend downward
-          base1 = new google.maps.Point(xInside, rectTop + insetPx);
-          base2 = new google.maps.Point(
-            xInside,
-            rectTop + insetPx + lenAlongEdge,
-          );
-        } else {
-          // Bottom corner on a vertical side: extend upward
-          base1 = new google.maps.Point(xInside, rectBottom - insetPx);
-          base2 = new google.maps.Point(
-            xInside,
-            rectBottom - insetPx - lenAlongEdge,
-          );
-        }
-      } else if (horizontalEdge) {
-        const yInside =
-          hitSide === "top" ? rectTop + insetPx : rectBottom - insetPx;
-        if (anchor === sideCenter) {
-          base1 = new google.maps.Point(anchor.x - lenAlongEdge / 2, yInside);
-          base2 = new google.maps.Point(anchor.x + lenAlongEdge / 2, yInside);
-        } else if (anchor === topOrLeftCorner) {
-          // Left corner on a horizontal side: extend rightward
-          base1 = new google.maps.Point(rectLeft + insetPx, yInside);
-          base2 = new google.maps.Point(
-            rectLeft + insetPx + lenAlongEdge,
-            yInside,
-          );
-        } else {
-          // Right corner on a horizontal side: extend leftward
-          base1 = new google.maps.Point(rectRight - insetPx, yInside);
-          base2 = new google.maps.Point(
-            rectRight - insetPx - lenAlongEdge,
-            yInside,
-          );
-        }
-      }
+      if (distance === 0) return []; // Avoid division by zero
+
+      // Normalized direction vector
+      const unitX = dx / distance;
+      const unitY = dy / distance;
+
+      // Perpendicular vector for base width
+      const perpX = -unitY;
+      const perpY = unitX;
+
+      // Base width in pixels (make it wider for better coverage)
+      const baseWidthPx = 30;
+      const halfBase = baseWidthPx / 2;
+
+      // Create triangle base at the bubble center
+      const base1 = new google.maps.Point(
+        bubblePx.x + perpX * halfBase,
+        bubblePx.y + perpY * halfBase,
+      );
+      const base2 = new google.maps.Point(
+        bubblePx.x - perpX * halfBase,
+        bubblePx.y - perpY * halfBase,
+      );
 
       // Triangle tip is at markerPx
       const tipPx = new google.maps.Point(markerPx.x, markerPx.y);
@@ -455,43 +304,48 @@ const CompTail: React.FC<TailProps> = ({
         proj.fromPointToLatLng(
           new google.maps.Point(p.x / zoomScale, p.y / zoomScale),
         )!;
-
       const tipLL = fromPixels(tipPx);
       const b1LL = fromPixels(base1);
       const b2LL = fromPixels(base2);
 
-      // Debug logs for Comp 5
+      // Debug: Log final coordinate conversion
       if (id === 5) {
-        // eslint-disable-next-line no-console
-        console.log(
-          "[Comp 5] hitSide:",
-          JSON.stringify(hitSide, null, 2),
-          "anchor px:",
-          JSON.stringify(anchor, null, 2),
-          "base px:",
-          JSON.stringify(base1, null, 2),
-          JSON.stringify(base2, null, 2),
-        );
-        // eslint-disable-next-line no-console
-        console.log(
-          "[Comp 5] triangle latlng:",
-          JSON.stringify(
-            {
-              tip: { lat: tipLL.lat(), lng: tipLL.lng() },
-              base1: { lat: b1LL.lat(), lng: b1LL.lng() },
-              base2: { lat: b2LL.lat(), lng: b2LL.lng() },
-            },
-            null,
-            2,
-          ),
-        );
+        console.log("[Comp 5] Final coordinates:");
+        console.log("  tipPx:", { x: tipPx.x, y: tipPx.y }, "-> tipLL:", {
+          lat: tipLL.lat(),
+          lng: tipLL.lng(),
+        });
+        console.log("  base1Px:", { x: base1.x, y: base1.y }, "-> base1LL:", {
+          lat: b1LL.lat(),
+          lng: b1LL.lng(),
+        });
+        console.log("  base2Px:", { x: base2.x, y: base2.y }, "-> base2LL:", {
+          lat: b2LL.lat(),
+          lng: b2LL.lng(),
+        });
       }
 
-      return [
+      // Debug logs for Comp 5 (remove this later)
+      // if (id === 5) {
+      //   console.log(`[Comp 5] Triangle created successfully`);
+      // }
+
+      const result = [
         { lat: tipLL.lat(), lng: tipLL.lng() },
         { lat: b1LL.lat(), lng: b1LL.lng() },
         { lat: b2LL.lat(), lng: b2LL.lng() },
       ];
+
+      // Debug: Check for degenerate triangles (remove this later)
+      // if (id === 5 && result.length === 3) {
+      //   const p1 = result[0]!;
+      //   const p2 = result[1]!;
+      //   const p3 = result[2]!;
+      //   const area = Math.abs((p1.lat * (p2.lng - p3.lng) + p2.lat * (p3.lng - p1.lng) + p3.lat * (p1.lng - p2.lng)) / 2);
+      //   if (area < 0.0001) console.log(`[Comp 5] WARNING: Triangle is very small!`);
+      // }
+
+      return result;
     };
 
     const trianglePoints = calculateTrianglePoints();
@@ -504,10 +358,13 @@ const CompTail: React.FC<TailProps> = ({
         strokeOpacity: 0.8,
         strokeWeight: 1,
         fillColor: color,
-        fillOpacity: 0.8,
+        fillOpacity: 0.7,
         map: map,
-        zIndex: 1,
+        zIndex: 10,
+        clickable: false,
       });
+
+      // Store polygon for cleanup
 
       polygonRef.current = polygon;
 
@@ -523,6 +380,9 @@ const CompTail: React.FC<TailProps> = ({
     markerPosition.lat,
     markerPosition.lng,
     color,
+    bubbleSizePx?.width,
+    bubbleSizePx?.height,
+    id, // Add id to ensure we can distinguish between different tails in debugging
   ]);
 
   // Update polygon when positions change

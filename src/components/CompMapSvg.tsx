@@ -1,0 +1,492 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  APIProvider,
+  Map,
+  AdvancedMarker,
+  useMap,
+} from "@vis.gl/react-google-maps";
+
+// Property data
+interface Property {
+  id: number;
+  compNumber: string;
+  address: string;
+  type: "subject" | "comparable";
+  distance?: number;
+}
+
+interface Position {
+  lat: number;
+  lng: number;
+}
+
+const properties: Property[] = [
+  {
+    id: 1,
+    compNumber: "Subject",
+    address: "360 SE Loop 338, Odessa, TX 79766",
+    type: "subject",
+  },
+  {
+    id: 2,
+    compNumber: "COMPARABLE No. 1",
+    address: "123 Main St, Midland, TX 79701",
+    type: "comparable",
+    distance: 0.5,
+  },
+  {
+    id: 3,
+    compNumber: "COMPARABLE No. 2",
+    address: "456 Oak Ave, Midland, TX 79702",
+    type: "comparable",
+    distance: 0.8,
+  },
+  {
+    id: 4,
+    compNumber: "COMPARABLE No. 3",
+    address: "789 Pine Dr, Midland, TX 79703",
+    type: "comparable",
+    distance: 1.2,
+  },
+  {
+    id: 5,
+    compNumber: "COMPARABLE No. 5",
+    address: "700 W Louisiana Ave, Midland, TX 79701-3249",
+    type: "comparable",
+    distance: 0.07,
+  },
+];
+
+// SVG Bubble Component (just the bubble, no tail)
+interface SvgBubbleProps {
+  property: Property;
+  position: Position;
+  markerPosition: Position;
+  onDragEnd: (position: Position) => void;
+}
+
+const SvgBubble: React.FC<SvgBubbleProps> = ({
+  property,
+  position,
+  markerPosition,
+  onDragEnd,
+}) => {
+  const isSubject = property.type === "subject";
+  const bubbleColor = isSubject ? "#B40404" : "#007bff";
+  const borderColor = isSubject ? "#8B0000" : "#0056b3";
+
+  return (
+    <AdvancedMarker
+      position={position} // Position at the bubble location
+      draggable={false} // The marker itself shouldn't be draggable
+    >
+      <div
+        style={{
+          cursor: "move",
+          width: "220px",
+          height: "100px",
+          position: "relative",
+        }}
+      >
+        {/* SVG with bubble and tail */}
+        <svg
+          width="220"
+          height="100"
+          viewBox="0 0 437 200"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{
+            position: "relative",
+          }}
+        >
+          {/* Bubble background */}
+          <rect
+            x="37.5352"
+            y="2.5"
+            width="396"
+            height="194"
+            rx="9.5"
+            fill="white"
+          />
+
+          {/* Bubble border */}
+          <rect
+            x="37.5352"
+            y="2.5"
+            width="396"
+            height="194"
+            rx="9.5"
+            stroke={borderColor}
+            strokeWidth="5"
+            fill="none"
+          />
+        </svg>
+
+        {/* Content overlay on the bubble */}
+        <div
+          style={{
+            position: "absolute",
+            top: "6px",
+            left: "25px",
+            right: "25px",
+            bottom: "6px", // Reduced from 75px to match smaller height
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            padding: "8px",
+            color: "black",
+            fontSize: "12px",
+            fontFamily: "Arial, sans-serif",
+            textAlign: "left",
+            lineHeight: "1.4",
+            pointerEvents: "all",
+          }}
+          onMouseDown={(e) => {
+            // Prevent map interaction during bubble drag
+            e.preventDefault();
+            e.stopPropagation();
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLat = position.lat;
+            const startLng = position.lng;
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              moveEvent.preventDefault();
+              moveEvent.stopPropagation();
+
+              const deltaX = moveEvent.clientX - startX;
+              const deltaY = moveEvent.clientY - startY;
+
+              // More precise conversion - adjust based on latitude
+              const lat = startLat;
+              const latInRadians = lat * (Math.PI / 180);
+              const meterPerPixel =
+                (156543.03392 * Math.cos(latInRadians)) / Math.pow(2, 13); // zoom level 13
+              const degreePerMeter = 1 / 111320;
+              const degreePerPixel = meterPerPixel * degreePerMeter;
+
+              const latChange = -deltaY * degreePerPixel; // Negative because screen Y is inverted
+              const lngChange = deltaX * degreePerPixel;
+
+              const newPosition = {
+                lat: startLat + latChange,
+                lng: startLng + lngChange,
+              };
+
+              onDragEnd(newPosition);
+            };
+
+            const handleMouseUp = (upEvent: MouseEvent) => {
+              upEvent.preventDefault();
+              upEvent.stopPropagation();
+              document.removeEventListener("mousemove", handleMouseMove);
+              document.removeEventListener("mouseup", handleMouseUp);
+            };
+
+            document.addEventListener("mousemove", handleMouseMove);
+            document.addEventListener("mouseup", handleMouseUp);
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "14px", // Slightly smaller
+              marginBottom: "2px",
+              color: bubbleColor,
+            }}
+          >
+            {property.compNumber}
+          </div>
+          <div
+            style={{
+              fontSize: "10px", // Smaller
+              marginBottom: "1px",
+            }}
+          >
+            {property.address}
+          </div>
+          {property.distance !== undefined && (
+            <div
+              style={{
+                fontSize: "10px", // Smaller
+                fontWeight: "bold",
+                color: bubbleColor,
+              }}
+            >
+              {property.distance.toFixed(2)} miles
+            </div>
+          )}
+        </div>
+      </div>
+    </AdvancedMarker>
+  );
+};
+
+// Tail component positioned at marker location
+interface TailProps {
+  bubblePosition: Position;
+  markerPosition: Position;
+  color: string;
+}
+
+const TailAtMarker: React.FC<TailProps> = ({
+  bubblePosition,
+  markerPosition,
+  color,
+}) => {
+  const map = useMap();
+
+  const calculateTailPath = () => {
+    if (!map) return "";
+
+    const proj = map.getProjection();
+    if (!proj) return "";
+
+    // Convert positions to pixel coordinates to get direction
+    const bubblePoint = proj.fromLatLngToPoint(
+      new google.maps.LatLng(bubblePosition.lat, bubblePosition.lng),
+    );
+    const markerPoint = proj.fromLatLngToPoint(
+      new google.maps.LatLng(markerPosition.lat, markerPosition.lng),
+    );
+
+    if (!bubblePoint || !markerPoint) return "";
+
+    // Calculate direction from marker to bubble (this is correct)
+    const deltaX = bubblePoint.x - markerPoint.x;
+    const deltaY = bubblePoint.y - markerPoint.y;
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (distance === 0) return "";
+
+    // Normalize direction - this points FROM marker TO bubble (which is what we want)
+    const dirX = deltaX / distance;
+    const dirY = deltaY / distance;
+
+    // Calculate actual distance in pixel coordinates
+    const mapZoom = map.getZoom() ?? 13;
+    const zoomScale = Math.pow(2, mapZoom);
+    const pixelDistance = distance * zoomScale;
+
+    // Convert to our SVG coordinate system with more precise length calculation
+    const svgScale = 1; // Use 1:1 scale for accurate distance
+    // Reduce extra length since bubbles are now smaller (100px height)
+    const extraLength = 50; // Smaller extra length to avoid overshooting
+    // const tailLength = Math.min(pixelDistance / svgScale + extraLength, 500); // Reduced cap for better proportions
+    const tailLength = pixelDistance;
+
+    // Create triangle pointing toward bubble
+    // Tip is at (0,0) in our local coordinate system (the marker position)
+    const tipX = 0;
+    const tipY = 0;
+
+    // Base of triangle extends toward the bubble at the calculated distance
+    const baseWidth = 25; // Width of triangle base
+
+    // Simple approach: just aim directly at the bubble center
+    const baseX = tipX + dirX * tailLength;
+    const baseY = tipY + dirY * tailLength;
+
+    // Perpendicular vector for triangle width
+    const perpX = (-dirY * baseWidth) / 2;
+    const perpY = (dirX * baseWidth) / 2;
+
+    const base1X = baseX + perpX;
+    const base1Y = baseY + perpY;
+    const base2X = baseX - perpX;
+    const base2Y = baseY - perpY;
+
+    // Debug for different bubble positions
+    if (
+      bubblePosition.lat.toString().includes("31.8468") || // Comp 1
+      bubblePosition.lat.toString().includes("31.8428") || // Comp 2
+      bubblePosition.lat.toString().includes("31.8408")
+    ) {
+      // Comp 3
+      console.log(`Debug tail for lat ${bubblePosition.lat.toFixed(4)}:`, {
+        bubblePoint: { x: bubblePoint.x, y: bubblePoint.y },
+        markerPoint: { x: markerPoint.x, y: markerPoint.y },
+        deltaX,
+        deltaY,
+        dirX,
+        dirY,
+        baseX,
+        baseY,
+      });
+    }
+
+    const result = `M${tipX},${tipY} L${base1X},${base1Y} L${base2X},${base2Y} Z`;
+
+    // Debug logging for tail 1
+    if (bubblePosition.lat.toString().includes("31.8478")) {
+      // Comp 1 position
+      console.log("Comp 1 tail debug:", {
+        distance,
+        pixelDistance,
+        tailLength,
+        tipX,
+        tipY,
+        baseX,
+        baseY,
+        base1X,
+        base1Y,
+        base2X,
+        base2Y,
+        result,
+      });
+    }
+
+    return result;
+  };
+
+  const tailPath = calculateTailPath();
+
+  return (
+    <AdvancedMarker position={markerPosition}>
+      <div style={{ position: "relative", pointerEvents: "none" }}>
+        {/* Debug: Make SVG background visible */}
+        <svg
+          width="1000"
+          height="1000"
+          viewBox="-500 -500 1000 1000"
+          style={{
+            position: "absolute",
+            left: "-500px",
+            top: "-500px",
+            // backgroundColor: "rgba(255,0,0,0.1)", // Temporary debug background
+            overflow: "visible",
+          }}
+        >
+          {/* Debug: Add a small circle at center to verify positioning */}
+          <circle cx="0" cy="0" r="3" fill="red" opacity="0.5" />
+
+          {tailPath && (
+            <path
+              d={tailPath}
+              fill={color}
+              stroke={color}
+              strokeWidth="2"
+              opacity="0.9"
+            />
+          )}
+
+          {/* Fallback: simple line if path fails */}
+          {!tailPath && (
+            <line
+              x1="0"
+              y1="0"
+              x2="50"
+              y2="50"
+              stroke={color}
+              strokeWidth="3"
+            />
+          )}
+        </svg>
+      </div>
+    </AdvancedMarker>
+  );
+};
+
+// Red dot marker for the geographic anchor point
+interface RedDotProps {
+  position: Position;
+}
+
+const RedDot: React.FC<RedDotProps> = ({ position }) => {
+  return (
+    <AdvancedMarker position={position}>
+      <div
+        style={{
+          width: "12px",
+          height: "12px",
+          borderRadius: "50%",
+          backgroundColor: "#ff0000",
+          border: "2px solid white",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+        }}
+      />
+    </AdvancedMarker>
+  );
+};
+
+// Main component
+export default function CompMapSvg() {
+  // State for bubble positions (initially offset from marker positions)
+  const [bubblePositions, setBubblePositions] = useState<
+    Record<number, Position>
+  >({
+    1: { lat: 31.8458, lng: -102.3676 }, // Subject
+    2: { lat: 31.8478, lng: -102.3656 }, // Comp 1
+    3: { lat: 31.8438, lng: -102.3696 }, // Comp 2
+    4: { lat: 31.8418, lng: -102.3636 }, // Comp 3
+    5: { lat: 31.8498, lng: -102.3716 }, // Comp 5
+  });
+
+  // Fixed marker positions (red dots)
+  const markerPositions: Record<number, Position> = {
+    1: { lat: 31.8458, lng: -102.3676 }, // Subject marker
+    2: { lat: 31.8468, lng: -102.3646 }, // Comp 1 marker
+    3: { lat: 31.8428, lng: -102.3686 }, // Comp 2 marker
+    4: { lat: 31.8408, lng: -102.3626 }, // Comp 3 marker
+    5: { lat: 31.8488, lng: -102.3706 }, // Comp 5 marker
+  };
+
+  const handleBubbleDragEnd = (id: number, newPosition: Position) => {
+    setBubblePositions((prev) => ({
+      ...prev,
+      [id]: newPosition,
+    }));
+  };
+
+  return (
+    <div style={{ height: "100vh", width: "100%" }}>
+      <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
+        <Map
+          defaultCenter={{ lat: 31.8458, lng: -102.3676 }}
+          defaultZoom={13}
+          gestureHandling="greedy"
+          disableDefaultUI={false}
+          mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
+        >
+          {/* Render red dot markers */}
+          {properties.map((property) => (
+            <RedDot
+              key={`marker-${property.id}`}
+              position={markerPositions[property.id]!}
+            />
+          ))}
+
+          {/* Render tails at marker positions */}
+          {properties.map((property) => {
+            const isSubject = property.type === "subject";
+            const borderColor = isSubject ? "#8B0000" : "#0056b3";
+            return (
+              <TailAtMarker
+                key={`tail-${property.id}`}
+                bubblePosition={bubblePositions[property.id]!}
+                markerPosition={markerPositions[property.id]!}
+                color={borderColor}
+              />
+            );
+          })}
+
+          {/* Render SVG bubbles */}
+          {properties.map((property) => (
+            <SvgBubble
+              key={`bubble-${property.id}`}
+              property={property}
+              position={bubblePositions[property.id]!}
+              markerPosition={markerPositions[property.id]!}
+              onDragEnd={(newPosition) =>
+                handleBubbleDragEnd(property.id, newPosition)
+              }
+            />
+          ))}
+        </Map>
+      </APIProvider>
+    </div>
+  );
+}
