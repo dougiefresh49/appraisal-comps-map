@@ -34,11 +34,12 @@ export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
     error?: string;
   } | null>(null);
 
-  const numPages = 1 + Math.ceil((photos.length - 3) / 6); // 3 is the number of photos in the first page
+  // 3 is the number of photos in the first page
+  const numPages = 1 + Math.ceil((photos.length - 3) / 6);
   const firstPagePhotos = photos.slice(0, 3);
   const otherPhotos = photos.slice(3);
   const otherPagePhotos = Array.from({ length: numPages - 1 }, (_, pageIndex) =>
-    otherPhotos.slice(pageIndex * 6, (pageIndex + 2) * 6),
+    otherPhotos.slice(pageIndex * 6, (pageIndex + 1) * 6),
   );
   const pagePhotos = [firstPagePhotos, ...otherPagePhotos];
 
@@ -237,7 +238,7 @@ export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
           {isDenseGrid ? (
             // Dense Grid Layout - 4 columns, no page dividers
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {photos.map((photo) => (
+              {photos.map((photo, index) => (
                 <PhotoCard
                   key={photo.image}
                   photo={photo}
@@ -246,6 +247,7 @@ export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
                   }
                   onDelete={handleDelete}
                   isDense={true}
+                  index={index}
                 />
               ))}
             </div>
@@ -262,17 +264,25 @@ export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
                         : "grid-cols-2"
                     }`}
                   >
-                    {pagePhotos[pageIndex]?.map((photo, photoIndex) => (
-                      <PhotoCard
-                        key={photo.image}
-                        photo={photo}
-                        onLabelChange={(newLabel: string) =>
-                          handleLabelChange(photo.image, newLabel)
-                        }
-                        onDelete={handleDelete}
-                        isDense={false}
-                      />
-                    ))}
+                    {pagePhotos[pageIndex]?.map((photo, photoIndex) => {
+                      // Calculate global index across all pages
+                      const globalIndex =
+                        pageIndex === 0
+                          ? photoIndex
+                          : 3 + (pageIndex - 1) * 6 + photoIndex;
+                      return (
+                        <PhotoCard
+                          key={photo.image}
+                          photo={photo}
+                          onLabelChange={(newLabel: string) =>
+                            handleLabelChange(photo.image, newLabel)
+                          }
+                          onDelete={handleDelete}
+                          isDense={false}
+                          index={globalIndex}
+                        />
+                      );
+                    })}
                   </div>
                   {/* Add page divider after each page except the last */}
                   {pageIndex < numPages - 1 && (

@@ -4,12 +4,14 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 import { type PhotoInput } from "~/server/photos/actions";
+import { LazyImage } from "./LazyImage";
 
 interface PhotoCardProps {
   photo: PhotoInput;
   onLabelChange: (newLabel: string) => void;
   onDelete: (imageName: string) => void;
   isDense?: boolean;
+  index?: number; // For staggered loading delays
 }
 
 export function PhotoCard({
@@ -17,7 +19,10 @@ export function PhotoCard({
   onLabelChange,
   onDelete,
   isDense = false,
+  index = 0,
 }: PhotoCardProps) {
+  // Stagger loading delays: 100ms per image to prevent rate limiting
+  const loadDelay = index * 100;
   const [isEditing, setIsEditing] = useState(false);
   const [editLabel, setEditLabel] = useState(photo.label);
 
@@ -63,11 +68,11 @@ export function PhotoCard({
           {...attributes}
           {...listeners}
         >
-          <img
+          <LazyImage
             src={photo.webViewUrl}
             alt={photo.label}
             className="h-full w-full object-cover"
-            loading="lazy"
+            delay={loadDelay}
           />
           {/* Drag handle overlay */}
           <div className="bg-opacity-0 group-hover:bg-opacity-10 absolute inset-0 flex items-center justify-center transition-all duration-200">
