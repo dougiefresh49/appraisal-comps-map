@@ -1,14 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface PropertyInfo {
   address: string;
+  addressForDisplay?: string;
   legalDescription: string;
   acres?: string;
 }
 
+interface StreetLabelData {
+  id: string;
+  position: { lat: number; lng: number };
+  text: string;
+  rotation: number;
+  isEditing: boolean;
+}
+
 interface PropertyInfoPanelProps {
+  heading?: string;
+  projectName: string;
+  onProjectNameEdit?: () => void;
+  onProjectSwitch?: () => void;
   propertyInfo: PropertyInfo;
   onPropertyInfoChange: (info: PropertyInfo) => void;
   onAddressSearch: (address: string) => void;
@@ -18,9 +31,29 @@ interface PropertyInfoPanelProps {
   onTailDirectionChange: (direction: "left" | "right") => void;
   hideUI: boolean;
   onHideUIChange: (hide: boolean) => void;
+  showDocumentOverlay?: boolean;
+  onShowDocumentOverlayChange?: (show: boolean) => void;
+  isTailPinned: boolean;
+  onIsTailPinnedChange: (pinned: boolean) => void;
+  pinnedTailTipPosition?: { lat: number; lng: number };
+  onPinnedTailTipPositionChange?: (
+    position: { lat: number; lng: number } | undefined,
+  ) => void;
+  isRepositioningTail: boolean;
+  onIsRepositioningTailChange: (repositioning: boolean) => void;
+  streetLabels: StreetLabelData[];
+  onStreetLabelsChange: (labels: StreetLabelData[]) => void;
+  labelSize: number;
+  onLabelSizeChange: (size: number) => void;
+  mapCenter: { lat: number; lng: number };
+  onShare?: () => void;
 }
 
 export function PropertyInfoPanel({
+  heading = "Subject Location Map",
+  projectName,
+  onProjectNameEdit,
+  onProjectSwitch,
   propertyInfo,
   onPropertyInfoChange,
   onAddressSearch,
@@ -28,14 +61,41 @@ export function PropertyInfoPanel({
   onBubbleSizeChange,
   tailDirection,
   onTailDirectionChange,
-  hideUI,
-  onHideUIChange,
+    hideUI,
+    onHideUIChange,
+    showDocumentOverlay,
+    onShowDocumentOverlayChange,
+    isTailPinned,
+  onIsTailPinnedChange,
+  pinnedTailTipPosition,
+  onPinnedTailTipPositionChange,
+  isRepositioningTail,
+  onIsRepositioningTailChange,
+  streetLabels,
+  onStreetLabelsChange,
+  labelSize,
+  onLabelSizeChange,
+  mapCenter,
+  onShare,
 }: PropertyInfoPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
 
+  useEffect(() => {
+    setSearchAddress(propertyInfo.address || "");
+  }, [propertyInfo.address]);
+
   const handleAddressChange = (value: string) => {
     setSearchAddress(value);
-    onPropertyInfoChange({ ...propertyInfo, address: value });
+    const shouldSyncDisplay =
+      !propertyInfo.addressForDisplay ||
+      propertyInfo.addressForDisplay === propertyInfo.address;
+    onPropertyInfoChange({
+      ...propertyInfo,
+      address: value,
+      addressForDisplay: shouldSyncDisplay
+        ? value
+        : propertyInfo.addressForDisplay,
+    });
   };
 
   const handleSearch = () => {
@@ -54,7 +114,50 @@ export function PropertyInfoPanel({
 
   return (
     <div className="w-80 border-r border-gray-300 bg-white p-6 shadow-lg">
-      <h2 className="mb-4 text-xl font-bold">Subject Location Map</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold">{heading}</h2>
+        {onShare && (
+          <button
+            onClick={onShare}
+            className="rounded-md border-2 border-blue-500 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            Share
+          </button>
+        )}
+      </div>
+
+      <div className="mb-4 border-b border-gray-200 pb-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">
+              Project
+            </span>
+            <span className="text-base font-semibold text-gray-900">
+              {projectName}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onProjectNameEdit}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              title="Rename project"
+              disabled={!onProjectNameEdit}
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              onClick={onProjectSwitch}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              title="Switch project"
+              disabled={!onProjectSwitch}
+            >
+              🔁
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Address Search */}
       <div className="mb-4">
@@ -90,9 +193,12 @@ export function PropertyInfoPanel({
         </label>
         <input
           type="text"
-          value={propertyInfo.address}
+          value={propertyInfo.addressForDisplay ?? ""}
           onChange={(e) =>
-            onPropertyInfoChange({ ...propertyInfo, address: e.target.value })
+            onPropertyInfoChange({
+              ...propertyInfo,
+              addressForDisplay: e.target.value,
+            })
           }
           placeholder="360 SE Loop 338, Odessa, TX 79766"
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
@@ -158,32 +264,179 @@ export function PropertyInfoPanel({
         </div>
       </div>
 
-      {/* Tail Direction Control */}
+      {/* Tail Pin Control */}
       <div className="mb-4">
         <label className="mb-2 block text-sm font-medium text-gray-700">
-          Tail Direction
+          Tail Pin
         </label>
         <div className="flex gap-2">
           <button
-            onClick={() => onTailDirectionChange("left")}
+            onClick={() => {
+              // Reposition tail tip: enter pin mode - user will click on map to place tail tip
+              onIsRepositioningTailChange(true);
+            }}
             className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-              tailDirection === "left"
-                ? "border-blue-500 bg-blue-50 text-blue-700"
+              isRepositioningTail
+                ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             }`}
           >
-            ← Left
+            {isRepositioningTail
+              ? "Click map to set tail tip..."
+              : "📍 Reposition Tail Tip"}
           </button>
           <button
-            onClick={() => onTailDirectionChange("right")}
-            className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-              tailDirection === "right"
-                ? "border-blue-500 bg-blue-50 text-blue-700"
+            onClick={() => {
+              // Toggle tail pinning on/off
+              onIsTailPinnedChange(!isTailPinned);
+              if (!isTailPinned && onPinnedTailTipPositionChange) {
+                // If enabling, keep existing position or set undefined
+                onPinnedTailTipPositionChange(pinnedTailTipPosition);
+              } else if (isTailPinned && onPinnedTailTipPositionChange) {
+                // If disabling, clear position
+                onPinnedTailTipPositionChange(undefined);
+              }
+              if (isRepositioningTail) {
+                onIsRepositioningTailChange(false);
+              }
+            }}
+            className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+              isTailPinned
+                ? "border-green-500 bg-green-50 text-green-700"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             }`}
+            title={
+              isTailPinned ? "Disable tail pinning" : "Enable tail pinning"
+            }
           >
-            Right →
+            {isTailPinned ? "🔒" : "🔓"}
           </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          {isTailPinned
+            ? pinnedTailTipPosition
+              ? "Tail tip is pinned. Move bubble to stretch tail."
+              : "Click 'Reposition Tail Tip' to set the pin location."
+            : "Tail pinning is disabled."}
+        </div>
+      </div>
+
+      {/* Tail Direction Control - only show when tail is not pinned */}
+      {!isTailPinned && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Tail Direction
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onTailDirectionChange("left")}
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tailDirection === "left"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              ← Left
+            </button>
+            <button
+              onClick={() => onTailDirectionChange("right")}
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tailDirection === "right"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Right →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Labels Section */}
+      <div className="mb-4">
+        <label className="mb-2 block text-sm font-medium text-gray-700">
+          Labels
+        </label>
+        {streetLabels.map((label, index) => (
+          <div
+            key={label.id}
+            className="mb-2 rounded-md border border-gray-200 p-2"
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-700">
+                Label {index + 1}
+              </label>
+              {streetLabels.length > 1 && (
+                <button
+                  onClick={() => {
+                    onStreetLabelsChange(
+                      streetLabels.filter((l) => l.id !== label.id),
+                    );
+                  }}
+                  className="text-xs text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={label.text}
+              onChange={(e) => {
+                onStreetLabelsChange(
+                  streetLabels.map((l) =>
+                    l.id === label.id ? { ...l, text: e.target.value } : l,
+                  ),
+                );
+              }}
+              placeholder="Enter label text..."
+              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            const newLabel: StreetLabelData = {
+              id: `label-${Date.now()}-${Math.random()}`,
+              position: mapCenter,
+              text: "",
+              rotation: 0,
+              isEditing: false,
+            };
+            onStreetLabelsChange([...streetLabels, newLabel]);
+          }}
+          className="w-full rounded-md border-2 border-blue-500 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+        >
+          Add Label +
+        </button>
+      </div>
+
+      {/* Label Size Controls */}
+      <div className="mb-4">
+        <label className="mb-2 block text-sm font-medium text-gray-700">
+          Label Size
+        </label>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onLabelSizeChange(Math.max(0.5, labelSize - 0.1))}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            title="Decrease label size"
+          >
+            −
+          </button>
+          <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+            {Math.round(labelSize * 100)}%
+          </span>
+          <button
+            onClick={() => onLabelSizeChange(Math.min(2.0, labelSize + 0.1))}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            title="Increase label size"
+          >
+            +
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          Base: 36px (100%) | Max: 72px (200%)
         </div>
       </div>
 
@@ -204,10 +457,26 @@ export function PropertyInfoPanel({
             ? "✓ UI Hidden (Ready for Screenshot)"
             : "Hide UI for Screenshot"}
         </button>
+        {onShowDocumentOverlayChange && (
+          <button
+            onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
+            className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+              showDocumentOverlay
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {showDocumentOverlay
+              ? "✓ Document Frame Visible"
+              : "Show 8.5×11\" Document Frame"}
+          </button>
+        )}
         <div className="mt-2 text-xs text-gray-500">
           {hideUI
             ? "All buttons and controls are hidden. Ready to take a screenshot!"
             : "Toggle to hide all UI elements for clean screenshots"}
+          {showDocumentOverlay &&
+            " The document frame shows the 8.5×11\" area that will fit on a Google Doc page."}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
@@ -9,13 +10,6 @@ import { CircleDrawingTool } from "~/components/CircleDrawingTool";
 import { PropertyInfoPanel } from "~/components/PropertyInfoPanel";
 import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
-import { DocumentOverlay } from "~/components/DocumentOverlay";
-import { useSearchParams } from "next/navigation";
-import {
-  encodeState,
-  decodeState,
-  MAX_URL_STATE_LENGTH,
-} from "~/utils/statePersistence";
 import {
   createDefaultProject,
   normalizeProjectData,
@@ -26,162 +20,71 @@ import {
   DEFAULT_MAP_CENTER,
   DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
-  COMPARABLE_TYPES,
 } from "~/utils/projectStore";
 import type {
-  ComparablesMapState,
-  ComparableType,
-  LocationMapState,
-  ProjectData,
   ProjectsMap,
-  ProjectSubjectState,
+  ProjectData,
+  ComparableInfo,
   SubjectInfo,
   StreetLabelData,
   Circle,
   PolygonPath,
+  ProjectSubjectState,
+  LocationMapState,
+  ComparablesMapState,
 } from "~/utils/projectStore";
+import {
+  encodeState,
+  decodeState,
+  MAX_URL_STATE_LENGTH,
+} from "~/utils/statePersistence";
 
 type PropertyInfo = SubjectInfo;
 
-export default function LocationMapPage() {
+export default function LandCompMapPage() {
   const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project") ?? undefined;
+  const compId = searchParams.get("compId") ?? undefined;
+  const mapStateParam = searchParams.get("mapState") ?? undefined;
+
   const projectStoreRef = useRef<ProjectsMap>({});
-  const [projectName, setProjectName] = useState("Project 1");
+  const serializedProjectRef = useRef<ProjectData | null>(null);
+
+  const [projectName, setProjectName] = useState<string>(
+    projectParam ?? "Project 1",
+  );
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
     addressForDisplay: "",
     legalDescription: "",
     acres: "",
   });
-  const [markerPosition, setMarkerPosition] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-  const [bubblePosition, setBubblePosition] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [bubblePosition, setBubblePosition] = useState<{ lat: number; lng: number } | null>(null);
   const [polygonPath, setPolygonPath] = useState<PolygonPath[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDrawingCircle, setIsDrawingCircle] = useState(false);
-  const [circleRadius, setCircleRadius] = useState<1 | 2 | 3 | 5>(
-    DEFAULT_CIRCLE_RADIUS,
-  ); // Default radius in meters
+  const [circleRadius, setCircleRadius] = useState<1 | 2 | 3 | 5>(DEFAULT_CIRCLE_RADIUS);
   const [circles, setCircles] = useState<Circle[]>([]);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(
-    () => ({
-      ...DEFAULT_MAP_CENTER,
-    }),
-  );
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ ...DEFAULT_MAP_CENTER });
   const [mapZoom, setMapZoom] = useState(17);
-  const [bubbleSize, setBubbleSize] = useState(1.0); // 1.0 = 100% (400x200 base)
+  const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
-  const [hideUI, setHideUI] = useState(false); // Screenshot mode
-  const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
-  const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true); // Enable tail pinning by default
-  const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] =
-    useState<
-      | {
-          lat: number;
-          lng: number;
-        }
-      | undefined
-    >(undefined);
-  const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] =
-    useState(false);
+  const [hideUI, setHideUI] = useState(false);
+  const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true);
+  const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] = useState<
+    { lat: number; lng: number } | undefined
+  >(undefined);
+  const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] = useState(false);
   const [streetLabels, setStreetLabels] = useState<StreetLabelData[]>([]);
-  const [labelSize, setLabelSize] = useState(1.0); // 1.0 = 100% (36px base)
+  const [labelSize, setLabelSize] = useState(DEFAULT_LABEL_SIZE);
+  const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [comparable, setComparable] = useState<ComparableInfo | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const markerPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
-  const [isStateHydrated, setIsStateHydrated] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
-  const applyProjectState = useCallback(
-    (project?: ProjectData) => {
-      const snapshot = normalizeProjectData(project);
-      const subjectSnapshot = snapshot.subject;
-      const locationSnapshot = snapshot.location;
 
-      const infoSnapshot = subjectSnapshot.info;
-      setPropertyInfo({
-        address: infoSnapshot.address ?? "",
-        addressForDisplay:
-          infoSnapshot.addressForDisplay ?? infoSnapshot.address ?? "",
-        legalDescription: infoSnapshot.legalDescription ?? "",
-        acres: infoSnapshot.acres ?? "",
-      });
-      setMarkerPosition(
-        subjectSnapshot.markerPosition
-          ? { ...subjectSnapshot.markerPosition }
-          : null,
-      );
-      setBubblePosition(
-        subjectSnapshot.bubblePosition
-          ? { ...subjectSnapshot.bubblePosition }
-          : null,
-      );
-      setPolygonPath(
-        locationSnapshot.polygonPath
-          ? locationSnapshot.polygonPath.map((point) => ({ ...point }))
-          : [],
-      );
-      setCircles(
-        locationSnapshot.circles
-          ? locationSnapshot.circles.map((circle) => ({
-              ...circle,
-              center: { ...circle.center },
-            }))
-          : [],
-      );
-      setMapCenter(
-        locationSnapshot.mapCenter
-          ? { ...locationSnapshot.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(locationSnapshot.mapZoom ?? 17);
-      setBubbleSize(locationSnapshot.bubbleSize ?? 1.0);
-      setTailDirection(locationSnapshot.tailDirection ?? "right");
-      setHideUI(locationSnapshot.hideUI ?? false);
-      setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
-      setSubjectPinnedTailTipPosition(
-        subjectSnapshot.pinnedTailTipPosition ?? undefined,
-      );
-      setStreetLabels(
-        locationSnapshot.streetLabels
-          ? locationSnapshot.streetLabels.map((label) => ({
-              ...label,
-              position: { ...label.position },
-            }))
-          : [],
-      );
-      setLabelSize(locationSnapshot.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(locationSnapshot.circleRadius ?? DEFAULT_CIRCLE_RADIUS);
-      setIsDrawing(false);
-      setIsDrawingCircle(false);
-      setIsRepositioningSubjectTail(false);
-    },
-    [
-      setPropertyInfo,
-      setMarkerPosition,
-      setBubblePosition,
-      setPolygonPath,
-      setCircles,
-      setMapCenter,
-      setMapZoom,
-      setBubbleSize,
-      setTailDirection,
-      setHideUI,
-      setIsSubjectTailPinned,
-      setSubjectPinnedTailTipPosition,
-      setStreetLabels,
-      setLabelSize,
-      setCircleRadius,
-      setIsDrawing,
-      setIsDrawingCircle,
-      setIsRepositioningSubjectTail,
-    ],
-  );
-
-  // Sync refs with state
   useEffect(() => {
     markerPositionRef.current = markerPosition;
   }, [markerPosition]);
@@ -190,7 +93,117 @@ export default function LocationMapPage() {
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
-  // Hydrate state from URL or localStorage
+  const applyProjectState = useCallback(
+    (project?: ProjectData) => {
+      if (!compId) {
+        setLoadError("Missing land comparable id in the URL.");
+        return;
+      }
+
+      const snapshot = normalizeProjectData(project);
+      const landState = snapshot.comparables.byType.Land;
+      const targetComparable =
+        landState.comparables?.find((entry) => entry.id === compId) ?? null;
+
+      if (!targetComparable) {
+        setLoadError(
+          "Land comparable not found in this project. Switch projects or add the comparable first.",
+        );
+        setComparable(null);
+        return;
+      }
+
+      setComparable(targetComparable);
+      setLoadError(null);
+
+      const landMapState =
+        landState.landLocationMaps?.[compId] ??
+        (undefined as LocationMapState | undefined);
+
+      const resolvedPropertyInfo =
+        landMapState?.propertyInfo ?? {
+          address: targetComparable.address ?? "",
+          addressForDisplay:
+            targetComparable.addressForDisplay ??
+            targetComparable.address ??
+            "",
+          legalDescription: "",
+          acres: "",
+        };
+
+      setPropertyInfo({
+        address: resolvedPropertyInfo.address ?? "",
+        addressForDisplay:
+          resolvedPropertyInfo.addressForDisplay ??
+          resolvedPropertyInfo.address ??
+          "",
+        legalDescription: resolvedPropertyInfo.legalDescription ?? "",
+        acres: resolvedPropertyInfo.acres ?? "",
+      });
+
+      const resolvedMarker =
+        landMapState?.markerPosition ??
+        targetComparable.markerPosition ??
+        null;
+      setMarkerPosition(resolvedMarker ? { ...resolvedMarker } : null);
+
+      const resolvedBubble =
+        landMapState?.bubblePosition ??
+        targetComparable.position ??
+        resolvedMarker ??
+        null;
+      setBubblePosition(resolvedBubble ? { ...resolvedBubble } : null);
+
+      setPolygonPath(
+        landMapState?.polygonPath
+          ? landMapState.polygonPath.map((point) => ({ ...point }))
+          : [],
+      );
+      setCircles(
+        landMapState?.circles
+          ? landMapState.circles.map((circle) => ({
+              ...circle,
+              center: { ...circle.center },
+            }))
+          : [],
+      );
+      const resolvedCenter =
+        landMapState?.mapCenter ??
+        resolvedMarker ??
+        resolvedBubble ??
+        DEFAULT_MAP_CENTER;
+      setMapCenter({ ...resolvedCenter });
+      setMapZoom(landMapState?.mapZoom ?? 17);
+      setBubbleSize(landMapState?.bubbleSize ?? 1.0);
+      setTailDirection(landMapState?.tailDirection ?? "right");
+      setHideUI(landMapState?.hideUI ?? false);
+      setIsSubjectTailPinned(
+        landMapState?.isSubjectTailPinned ??
+          targetComparable.isTailPinned ??
+          true,
+      );
+      setSubjectPinnedTailTipPosition(
+        landMapState?.subjectPinnedTailTipPosition ??
+          targetComparable.pinnedTailTipPosition ??
+          undefined,
+      );
+      setStreetLabels(
+        landMapState?.streetLabels
+          ? landMapState.streetLabels.map((label) => ({
+              ...label,
+              position: { ...label.position },
+            }))
+          : [],
+      );
+      setLabelSize(landMapState?.labelSize ?? DEFAULT_LABEL_SIZE);
+      setCircleRadius(landMapState?.circleRadius ?? DEFAULT_CIRCLE_RADIUS);
+      setIsDrawing(false);
+      setIsDrawingCircle(false);
+      setIsRepositioningSubjectTail(false);
+    },
+    [compId],
+  );
+
   useEffect(() => {
     if (isStateHydrated) return;
     if (typeof window === "undefined") return;
@@ -199,46 +212,50 @@ export default function LocationMapPage() {
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
+        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
       }
     }
 
-    let selectedProjectName =
-      window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ?? undefined;
-
-    const encodedFromUrl = searchParams.get("mapState");
-    if (encodedFromUrl) {
-      const decoded = decodeState<ProjectData>(encodedFromUrl);
+    if (mapStateParam) {
+      const decoded = decodeState(mapStateParam);
       if (decoded) {
         const normalized = normalizeProjectData(decoded);
-        const newProjectName = getNextProjectName(Object.keys(projectStore));
-        projectStore[newProjectName] = normalized;
-        selectedProjectName = newProjectName;
-      }
-    }
-
-    const projectKeys = Object.keys(projectStore);
-    if (!selectedProjectName || !projectStore[selectedProjectName]) {
-      if (projectKeys.length > 0) {
-        selectedProjectName = projectKeys[0];
+        const existingNames = Object.keys(projectStore);
+        const generatedName = getNextProjectName(existingNames);
+        projectStore[generatedName] = normalized;
+        setProjectName(generatedName);
       } else {
-        const defaultName = getNextProjectName([]);
-        projectStore[defaultName] = createDefaultProject();
-        selectedProjectName = defaultName;
+        window.alert(
+          "Failed to load shared map state. The encoded data may be invalid or too large.",
+        );
       }
     }
 
-    const finalProjectName = selectedProjectName as string;
+    let finalProjectName = projectName;
+    const storedCurrent = window.localStorage.getItem(
+      CURRENT_PROJECT_STORAGE_KEY,
+    );
+    if (projectParam && projectStore[projectParam]) {
+      finalProjectName = projectParam;
+    } else if (storedCurrent && projectStore[storedCurrent]) {
+      finalProjectName = storedCurrent;
+    } else if (!projectStore[finalProjectName]) {
+      finalProjectName =
+        Object.keys(projectStore)[0] ?? getNextProjectName(Object.keys(projectStore));
+    }
+
+    if (!projectStore[finalProjectName]) {
+      projectStore[finalProjectName] = createDefaultProject();
+    }
 
     projectStoreRef.current = projectStore;
     setProjectName(finalProjectName);
+
     applyProjectState(projectStore[finalProjectName]);
+    serializedProjectRef.current = projectStore[finalProjectName];
 
     try {
       window.localStorage.setItem(
@@ -254,16 +271,39 @@ export default function LocationMapPage() {
     }
 
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, searchParams]);
+  }, [
+    applyProjectState,
+    isStateHydrated,
+    mapStateParam,
+    projectName,
+    projectParam,
+  ]);
 
   const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
+    if (!projectName || !compId) return;
     const baseProject = projectStoreRef.current[projectName]
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    const subject: ProjectSubjectState = {
-      info: {
+    const subject: ProjectSubjectState = baseProject.subject;
+
+    const landState =
+      baseProject.comparables.byType.Land ??
+      (createDefaultProject().comparables.byType.Land as ComparablesMapState);
+
+    const updatedComparables = (landState.comparables ?? []).map((comp) =>
+      comp.id === compId
+        ? {
+            ...comp,
+            address: propertyInfo.address ?? "",
+            addressForDisplay:
+              propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
+          }
+        : comp,
+    );
+
+    const landLocationSnapshot: LocationMapState = {
+      propertyInfo: {
         address: propertyInfo.address ?? "",
         addressForDisplay:
           propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
@@ -272,17 +312,6 @@ export default function LocationMapPage() {
       },
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
-
-    const locationState: LocationMapState = {
-      ...baseProject.location,
-      propertyInfo: { ...subject.info },
-      markerPosition: subject.markerPosition,
-      bubblePosition: subject.bubblePosition,
       polygonPath: polygonPath.map((point) => ({ ...point })),
       circles: circles.map((circle) => ({
         ...circle,
@@ -293,8 +322,10 @@ export default function LocationMapPage() {
       bubbleSize,
       tailDirection,
       hideUI,
-      isSubjectTailPinned: subject.isTailPinned,
-      subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+      isSubjectTailPinned,
+      subjectPinnedTailTipPosition: subjectPinnedTailTipPosition
+        ? { ...subjectPinnedTailTipPosition }
+        : null,
       streetLabels: streetLabels.map((label) => ({
         ...label,
         position: { ...label.position },
@@ -303,45 +334,38 @@ export default function LocationMapPage() {
       circleRadius,
     };
 
-    const comparablesByType = COMPARABLE_TYPES.reduce<
-      Record<ComparableType, ComparablesMapState>
-    >(
-      (acc, type) => {
-        const currentState =
-          baseProject.comparables.byType[type] ??
-          createDefaultProject().comparables.byType[type];
-        acc[type] = {
-          ...currentState,
-          subjectInfo: { ...subject.info },
-          subjectMarkerPosition: subject.markerPosition,
-          subjectBubblePosition: subject.bubblePosition,
-          isSubjectTailPinned: subject.isTailPinned,
-          subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
-        };
-        return acc;
+    const updatedLandState: ComparablesMapState = {
+      ...landState,
+      comparables: updatedComparables,
+      landLocationMaps: {
+        ...(landState.landLocationMaps ?? {}),
+        [compId]: landLocationSnapshot,
       },
-      {} as Record<ComparableType, ComparablesMapState>,
-    );
+    };
 
     const comparablesState = {
-      activeType: baseProject.comparables.activeType,
-      byType: comparablesByType,
+      ...baseProject.comparables,
+      byType: {
+        ...baseProject.comparables.byType,
+        Land: updatedLandState,
+      },
     };
 
     const snapshot: ProjectData = {
       subject,
-      location: locationState,
       comparables: comparablesState,
+      location: baseProject.location,
     };
 
     projectStoreRef.current[projectName] = snapshot;
     serializedProjectRef.current = snapshot;
   }, [
     bubblePosition,
+    bubbleSize,
     circleRadius,
     circles,
+    compId,
     hideUI,
-    isSubjectTailPinned,
     labelSize,
     mapCenter,
     mapZoom,
@@ -352,7 +376,7 @@ export default function LocationMapPage() {
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
-    bubbleSize,
+    isSubjectTailPinned,
   ]);
 
   const writeProjectsToStorage = useCallback((currentName: string) => {
@@ -362,21 +386,24 @@ export default function LocationMapPage() {
         PROJECTS_STORAGE_KEY,
         JSON.stringify(projectStoreRef.current),
       );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
+      window.localStorage.setItem(
+        CURRENT_PROJECT_STORAGE_KEY,
+        currentName,
+      );
     } catch (error) {
-      console.error("Failed to save location map projects", error);
+      console.error("Failed to save projects", error);
     }
   }, []);
 
   const handleProjectNameEdit = useCallback(() => {
     if (typeof window === "undefined") return;
-    const input = window.prompt("Rename project", projectName)?.trim();
+    const input = window
+      .prompt("Rename project", projectName)
+      ?.trim();
     if (!input || input === projectName) return;
 
     if (projectStoreRef.current[input]) {
-      window.alert(
-        "A project with that name already exists. Choose another name.",
-      );
+      window.alert("A project with that name already exists. Choose another name.");
       return;
     }
 
@@ -457,7 +484,7 @@ export default function LocationMapPage() {
   ]);
 
   const handleShare = useCallback(async () => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !compId) return;
     persistCurrentProjectState();
     writeProjectsToStorage(projectName);
     const projectSnapshot =
@@ -475,78 +502,138 @@ export default function LocationMapPage() {
       return;
     }
 
-    const url = new URL(window.location.href);
+    const url = new URL(`${window.location.origin}/land-comp-map`);
+    url.searchParams.set("project", projectName);
+    url.searchParams.set("compId", compId);
     url.searchParams.set("mapState", encoded);
 
     try {
       await navigator.clipboard.writeText(url.toString());
-      window.alert(`Shareable link for ${projectName} copied to clipboard!`);
+      window.alert("Shareable land comp map link copied to clipboard!");
     } catch (error) {
       console.error("Failed to copy share link", error);
       window.prompt("Copy this share link", url.toString());
     }
-  }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
+  }, [compId, persistCurrentProjectState, projectName, writeProjectsToStorage]);
 
-  // Handle address search
-  const handleAddressSearch = async (address: string) => {
-    if (!address.trim()) return;
+  const handleAddressSearch = useCallback(
+    async (address: string) => {
+      if (!address.trim()) return;
 
-    try {
-      const geocoder = new google.maps.Geocoder();
-      const results = await new Promise<google.maps.GeocoderResult[]>(
-        (resolve, reject) => {
-          geocoder.geocode({ address }, (results, status) => {
-            if (status === "OK" && results) {
-              resolve(results);
-            } else {
-              reject(new Error(`Geocoding failed: ${status}`));
-            }
-          });
-        },
-      );
+      try {
+        const geocoder = new google.maps.Geocoder();
+        const results = await new Promise<google.maps.GeocoderResult[]>(
+          (resolve, reject) => {
+            geocoder.geocode({ address }, (res, status) => {
+              if (status === "OK" && res) {
+                resolve(res);
+              } else {
+                reject(new Error(`Geocoding failed: ${status}`));
+              }
+            });
+          },
+        );
 
-      if (results && results.length > 0) {
-        const location = results[0]!.geometry.location;
-        const formattedAddress = results[0]?.formatted_address ?? address;
-        const newPosition = {
-          lat: location.lat(),
-          lng: location.lng(),
-        };
-        setMapCenter(newPosition);
-        setMarkerPosition(newPosition);
-        // Set bubble position slightly offset from marker
-        setBubblePosition({
-          lat: newPosition.lat + 0.001,
-          lng: newPosition.lng + 0.001,
-        });
-        // Set default pinned tail tip position if pinned but not set yet
-        if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
-          setSubjectPinnedTailTipPosition(newPosition);
+        if (results.length === 0) {
+          window.alert("No results found for that address.");
+          return;
         }
-        setMapZoom(18);
-        setPropertyInfo((prev) => {
-          const keepDisplay =
-            prev.addressForDisplay &&
-            prev.addressForDisplay.trim().length > 0 &&
-            prev.addressForDisplay !== prev.address;
-          return {
-            ...prev,
-            address: formattedAddress,
-            addressForDisplay: keepDisplay
+
+        const location = results[0].geometry.location;
+        const lat = location.lat();
+        const lng = location.lng();
+
+        const newMarker = { lat, lng };
+        setMarkerPosition(newMarker);
+        setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
+        setMapCenter({ lat, lng });
+        setMapZoom(17);
+        if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+          setSubjectPinnedTailTipPosition(newMarker);
+        }
+
+        setPropertyInfo((prev) => ({
+          ...prev,
+          address,
+          addressForDisplay:
+            prev.addressForDisplay && prev.addressForDisplay !== prev.address
               ? prev.addressForDisplay
-              : formattedAddress,
-          };
-        });
+              : address,
+        }));
+      } catch (error) {
+        console.error("Failed to geocode address", error);
+        window.alert("Failed to geocode address. Please try again.");
       }
-    } catch (error) {
-      console.error("Error geocoding address:", error);
-    }
-  };
+    },
+    [isSubjectTailPinned, subjectPinnedTailTipPosition],
+  );
+
+  const handleMapClick = useCallback(
+    (lat: number, lng: number) => {
+      if (isRepositioningSubjectTail) {
+        setSubjectPinnedTailTipPosition({ lat, lng });
+        setIsRepositioningSubjectTail(false);
+        setIsSubjectTailPinned(true);
+        return;
+      }
+
+      if (isDrawingCircle) {
+        const newCircle: Circle = {
+          center: { lat, lng },
+          radius: circleRadius * 1609.34,
+          id: `circle-${Date.now()}-${Math.random()}`,
+        };
+        setCircles((prev) => [...prev, newCircle]);
+        return;
+      }
+
+      if (isDrawing) {
+        setPolygonPath((prev) => [...prev, { lat, lng }]);
+        return;
+      }
+
+      if (!markerPositionRef.current) {
+        setMarkerPosition({ lat, lng });
+        setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
+        if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+          setSubjectPinnedTailTipPosition({ lat, lng });
+        }
+      }
+    },
+    [
+      circleRadius,
+      isDrawing,
+      isDrawingCircle,
+      isRepositioningSubjectTail,
+      isSubjectTailPinned,
+      subjectPinnedTailTipPosition,
+    ],
+  );
+
+  const activeComparableLabel = useMemo(() => {
+    if (!comparable) return "Land Comparable";
+    if (comparable.addressForDisplay) return comparable.addressForDisplay;
+    if (comparable.address) return comparable.address;
+    return "Land Comparable";
+  }, [comparable]);
+
+  if (!compId) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+        <div className="rounded-md border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-gray-700">
+            Missing <code>compId</code> query parameter. Use the Projects page or the
+            Comparables Map to open a land comparable map.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">
-      {/* Sidebar for property information */}
       <PropertyInfoPanel
+        heading="Land Comparable Map"
         projectName={projectName}
         onProjectNameEdit={handleProjectNameEdit}
         onProjectSwitch={handleProjectSwitch}
@@ -559,8 +646,6 @@ export default function LocationMapPage() {
         onTailDirectionChange={setTailDirection}
         hideUI={hideUI}
         onHideUIChange={setHideUI}
-        showDocumentOverlay={showDocumentOverlay}
-        onShowDocumentOverlayChange={setShowDocumentOverlay}
         isTailPinned={isSubjectTailPinned}
         onIsTailPinnedChange={setIsSubjectTailPinned}
         pinnedTailTipPosition={subjectPinnedTailTipPosition}
@@ -575,8 +660,13 @@ export default function LocationMapPage() {
         onShare={handleShare}
       />
 
-      {/* Map container */}
       <div className="relative flex-1">
+        {loadError && (
+          <div className="absolute inset-x-0 top-4 z-20 mx-auto w-[420px] rounded-md border border-yellow-500 bg-yellow-50 p-4 text-sm text-yellow-800 shadow-lg">
+            {loadError}
+          </div>
+        )}
+
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -586,110 +676,70 @@ export default function LocationMapPage() {
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
-            onCenterChanged={(e) => {
-              const center = e.detail.center;
+            onCenterChanged={(event) => {
+              const center = event.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
             }}
-            onZoomChanged={(e) => {
-              const zoom = e.detail.zoom;
+            onZoomChanged={(event) => {
+              const zoom = event.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
               }
             }}
-            onClick={(e) => {
-              if (e.detail.latLng) {
-                const lat = e.detail.latLng.lat;
-                const lng = e.detail.latLng.lng;
-
-                // If repositioning subject tail, place or reposition the tail tip
-                if (isRepositioningSubjectTail) {
-                  setSubjectPinnedTailTipPosition({ lat, lng });
-                  setIsRepositioningSubjectTail(false);
-                  setIsSubjectTailPinned(true);
-                  return;
-                }
-
-                // If circle drawing mode is active, create a circle
-                if (isDrawingCircle) {
-                  const newCircle: Circle = {
-                    center: { lat, lng },
-                    radius: circleRadius * 1609.34, // Convert miles to meters
-                    id: `circle-${Date.now()}-${Math.random()}`,
-                  };
-                  setCircles((prev) => [...prev, newCircle]);
-                } else if (isDrawing) {
-                  // If polygon drawing mode is active, add point to polygon
-                  setPolygonPath((prev) => [...prev, { lat, lng }]);
-                } else if (!markerPosition) {
-                  // Otherwise, set marker if not set
-                  setMarkerPosition({ lat, lng });
-                  setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
-                  // Set default pinned tail tip position if pinned but not set yet
-                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
-                    setSubjectPinnedTailTipPosition({ lat, lng });
-                  }
-                }
+            onClick={(event) => {
+              if (event.detail.latLng) {
+                handleMapClick(
+                  event.detail.latLng.lat,
+                  event.detail.latLng.lng,
+                );
               }
             }}
           >
-            {/* Polygon Drawing Tool */}
-            <PolygonDrawingTool
-              isDrawing={isDrawing}
-              onIsDrawingChange={setIsDrawing}
-              polygonPath={polygonPath}
-              onPolygonPathChange={setPolygonPath}
-            />
-
-            {/* Circle Drawing Tool */}
-            <CircleDrawingTool circles={circles} onCirclesChange={setCircles} />
-
-            {/* Subject marker */}
             {markerPosition && !hideUI && (
               <AdvancedMarker
                 position={markerPosition}
                 draggable
-                onDragEnd={(e) => {
-                  if (e.latLng) {
-                    const newPosition = {
-                      lat: e.latLng.lat(),
-                      lng: e.latLng.lng(),
-                    };
-
-                    // Use refs to get current values synchronously
-                    const currentMarkerPos = markerPositionRef.current;
-                    const currentBubblePos = bubblePositionRef.current;
-
-                    if (currentMarkerPos && currentBubblePos) {
-                      // Calculate offset from current positions
-                      const latDiff =
-                        currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff =
-                        currentBubblePos.lng - currentMarkerPos.lng;
-
-                      // Update both positions
-                      setMarkerPosition(newPosition);
-                      setBubblePosition({
-                        lat: newPosition.lat + latDiff,
-                        lng: newPosition.lng + lngDiff,
-                      });
-                    } else {
-                      // Fallback if refs aren't set yet
-                      setMarkerPosition(newPosition);
+                onDragEnd={(event) => {
+                  if (event.latLng) {
+                    const lat = event.latLng.lat();
+                    const lng = event.latLng.lng();
+                    const newPosition = { lat, lng };
+                    setMarkerPosition(newPosition);
+                    if (!bubblePositionRef.current) {
+                      setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
+                    }
+                    if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+                      setSubjectPinnedTailTipPosition(newPosition);
                     }
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div className="h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg" />
               </AdvancedMarker>
             )}
 
-            {/* Pinned tail overlay for subject (drawn as polygon) */}
+            {bubblePosition && (
+              <SubjectLocationMarker
+                position={bubblePosition}
+                markerPosition={markerPosition ?? undefined}
+                propertyInfo={{
+                  address: activeComparableLabel,
+                  legalDescription: propertyInfo.legalDescription ?? "",
+                  acres: propertyInfo.acres ?? "",
+                }}
+                onPositionChange={(next) => setBubblePosition(next)}
+                sizeMultiplier={bubbleSize}
+                tailDirection={tailDirection}
+                isTailPinned={isSubjectTailPinned}
+                pinnedTailTipPosition={subjectPinnedTailTipPosition}
+              />
+            )}
+
             {isSubjectTailPinned &&
               subjectPinnedTailTipPosition &&
-              bubblePosition &&
-              markerPosition && (
+              bubblePosition && (
                 <PinnedTailOverlay
                   bubblePosition={bubblePosition}
                   pinnedTailTipPosition={subjectPinnedTailTipPosition}
@@ -700,53 +750,40 @@ export default function LocationMapPage() {
                 />
               )}
 
-            {/* Custom SVG bubble marker */}
-            {bubblePosition && markerPosition && (
-              <SubjectLocationMarker
-                position={bubblePosition}
-                markerPosition={markerPosition}
-                propertyInfo={propertyInfo}
-                onPositionChange={setBubblePosition}
-                sizeMultiplier={bubbleSize}
-                tailDirection={tailDirection}
-                isTailPinned={isSubjectTailPinned}
-                pinnedTailTipPosition={subjectPinnedTailTipPosition}
-              />
-            )}
-
-            {/* Street Labels */}
             {streetLabels.map((label) => (
               <StreetLabel
                 key={label.id}
                 position={label.position}
                 text={label.text}
                 rotation={label.rotation}
-                onPositionChange={(newPosition) => {
+                onPositionChange={(position) => {
                   setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, position: newPosition } : l,
+                    prev.map((entry) =>
+                      entry.id === label.id ? { ...entry, position } : entry,
                     ),
                   );
                 }}
-                onRotationChange={(newRotation) => {
+                onRotationChange={(rotation) => {
                   setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, rotation: newRotation } : l,
+                    prev.map((entry) =>
+                      entry.id === label.id ? { ...entry, rotation } : entry,
                     ),
                   );
                 }}
-                onTextChange={(newText) => {
+                onTextChange={(text) => {
                   setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, text: newText } : l,
+                    prev.map((entry) =>
+                      entry.id === label.id ? { ...entry, text } : entry,
                     ),
                   );
                 }}
                 isEditing={label.isEditing}
                 onEditToggle={() => {
                   setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
+                    prev.map((entry) =>
+                      entry.id === label.id
+                        ? { ...entry, isEditing: !entry.isEditing }
+                        : entry,
                     ),
                   );
                 }}
@@ -754,11 +791,18 @@ export default function LocationMapPage() {
                 sizeMultiplier={labelSize}
               />
             ))}
+
+            <PolygonDrawingTool
+              isDrawing={isDrawing}
+              onIsDrawingChange={setIsDrawing}
+              polygonPath={polygonPath}
+              onPolygonPathChange={setPolygonPath}
+            />
+
+            <CircleDrawingTool circles={circles} onCirclesChange={setCircles} />
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} />
 
-        {/* Drawing controls */}
         {!hideUI && (
           <div className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 flex-col gap-2">
             <div className="flex gap-2">
@@ -792,11 +836,11 @@ export default function LocationMapPage() {
                 {isDrawingCircle && (
                   <select
                     value={circleRadius}
-                    onChange={(e) =>
-                      setCircleRadius(Number(e.target.value) as 1 | 2 | 3 | 5)
+                    onChange={(event) =>
+                      setCircleRadius(Number(event.target.value) as 1 | 2 | 3 | 5)
                     }
                     className="rounded-lg border-2 border-gray-300 bg-white px-4 py-2 text-sm shadow-lg transition-colors hover:bg-gray-50 focus:border-blue-500 focus:outline-none"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <option value={1}>1 mile</option>
                     <option value={2}>2 miles</option>
@@ -828,3 +872,4 @@ export default function LocationMapPage() {
     </div>
   );
 }
+

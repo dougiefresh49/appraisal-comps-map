@@ -230,12 +230,14 @@ interface TailProps {
   bubblePosition: Position;
   markerPosition: Position;
   color: string;
+  compNumber: string;
 }
 
 const TailAtMarker: React.FC<TailProps> = ({
   bubblePosition,
   markerPosition,
   color,
+  compNumber,
 }) => {
   const map = useMap();
 
@@ -286,13 +288,116 @@ const TailAtMarker: React.FC<TailProps> = ({
     // Base of triangle extends toward the bubble at the calculated distance
     const baseWidth = 25; // Width of triangle base
 
-    // Simple approach: just aim directly at the bubble center
-    const baseX = tipX + dirX * tailLength;
-    const baseY = tipY + dirY * tailLength;
+    // Calculate where the tail direction intersects the bubble's edge
+    // We need to use the actual SVG coordinate system dimensions, not the physical pixel dimensions
+    // SVG viewBox is "0 0 437 200" and the rectangle is 396x194, so we need to scale accordingly
+    const svgScaleX = 437 / 220; // viewBox width / physical width
+    const svgScaleY = 200 / 100; // viewBox height / physical height
+    const bubbleWidthInSvg = 396; // Actual rectangle width in SVG coordinates
+    const bubbleHeightInSvg = 194; // Actual rectangle height in SVG coordinates
+
+    // Work directly in SVG coordinates
+    // The bubble center in SVG coordinates (where we want the tail to point)
+    const bubbleOffsetX = 37.5352;
+    const bubbleOffsetY = 2.5;
+    const bubbleCenterXInSvg = bubbleOffsetX + bubbleWidthInSvg / 2; // Center of the actual rectangle (235.5352)
+    const bubbleCenterYInSvg = bubbleOffsetY + bubbleHeightInSvg / 2; // Center of the actual rectangle (99.5)
+
+    // Use the actual direction from the Google Maps calculation (from marker to bubble)
+    // dirX and dirY already point from marker to bubble, which is what we want
+    const normalizedDir = {
+      x: dirX,
+      y: dirY,
+    };
+
+    // Calculate where the bubble would be in SVG coordinates based on the direction and distance
+    // Use a more reasonable scaling to keep within SVG bounds
+    const maxTailLengthInSvg = Math.min(tailLength * svgScaleX, 300); // Cap at 300 SVG units
+    const bubbleCenterInTailCoords = {
+      x: tipX + dirX * maxTailLengthInSvg,
+      y: tipY + dirY * maxTailLengthInSvg,
+    };
+
+    // Calculate the bubble's edges in SVG coordinates
+    const bubbleLeft = bubbleOffsetX;
+    const bubbleRight = bubbleOffsetX + bubbleWidthInSvg;
+    const bubbleTop = bubbleOffsetY;
+    const bubbleBottom = bubbleOffsetY + bubbleHeightInSvg;
+
+    // Find which edge to connect to based on direction
+    let edgeX: number, edgeY: number;
+
+    // Calculate the bubble's position relative to its static SVG center
+    const bubbleOffsetFromCenter = {
+      x: bubbleCenterInTailCoords.x - bubbleCenterXInSvg,
+      y: bubbleCenterInTailCoords.y - bubbleCenterYInSvg,
+    };
+
+    // Adjust the bubble edges based on where the bubble actually is
+    const actualBubbleLeft = bubbleLeft + bubbleOffsetFromCenter.x;
+    const actualBubbleRight = bubbleRight + bubbleOffsetFromCenter.x;
+    const actualBubbleTop = bubbleTop + bubbleOffsetFromCenter.y;
+    const actualBubbleBottom = bubbleBottom + bubbleOffsetFromCenter.y;
+    const actualBubbleCenterX = bubbleCenterXInSvg + bubbleOffsetFromCenter.x;
+    const actualBubbleCenterY = bubbleCenterYInSvg + bubbleOffsetFromCenter.y;
+
+    if (Math.abs(normalizedDir.x) > Math.abs(normalizedDir.y)) {
+      // Connect to left or right edge
+      if (normalizedDir.x > 0) {
+        // Bubble is to the right - connect to left edge
+        edgeX = actualBubbleLeft;
+        edgeY = actualBubbleCenterY;
+      } else {
+        // Bubble is to the left - connect to right edge
+        edgeX = actualBubbleRight;
+        edgeY = actualBubbleCenterY;
+      }
+    } else {
+      // Connect to top or bottom edge
+      if (normalizedDir.y > 0) {
+        // Bubble is below - connect to top edge
+        edgeX = actualBubbleCenterX;
+        edgeY = actualBubbleTop;
+      } else {
+        // Bubble is above - connect to bottom edge
+        edgeX = actualBubbleCenterX;
+        edgeY = actualBubbleBottom;
+      }
+    }
+
+    // Debug for Comp 1
+    if (compNumber === "COMPARABLE No. 1") {
+      console.log(`${compNumber} edge detection:`, {
+        normalizedDir,
+        absX: Math.abs(normalizedDir.x),
+        absY: Math.abs(normalizedDir.y),
+        horizontalConnection:
+          Math.abs(normalizedDir.x) > Math.abs(normalizedDir.y),
+        directionRight: normalizedDir.x > 0,
+        edgeChoice:
+          Math.abs(normalizedDir.x) > Math.abs(normalizedDir.y)
+            ? normalizedDir.x > 0
+              ? "left edge"
+              : "right edge"
+            : normalizedDir.y > 0
+              ? "top edge"
+              : "bottom edge",
+        actualBubbleLeft,
+        actualBubbleRight,
+        actualBubbleCenterY,
+        selectedEdgeX: edgeX,
+        selectedEdgeY: edgeY,
+      });
+    }
+
+    // Extend the tail a bit further inside the bubble for better connection
+    const extensionDistance = 15; // pixels to extend into the bubble
+    const baseX = edgeX + normalizedDir.x * extensionDistance;
+    const baseY = edgeY + normalizedDir.y * extensionDistance;
 
     // Perpendicular vector for triangle width
-    const perpX = (-dirY * baseWidth) / 2;
-    const perpY = (dirX * baseWidth) / 2;
+    const perpX = (-normalizedDir.y * baseWidth) / 2;
+    const perpY = (normalizedDir.x * baseWidth) / 2;
 
     const base1X = baseX + perpX;
     const base1Y = baseY + perpY;
@@ -300,13 +405,9 @@ const TailAtMarker: React.FC<TailProps> = ({
     const base2Y = baseY - perpY;
 
     // Debug for different bubble positions
-    if (
-      bubblePosition.lat.toString().includes("31.8468") || // Comp 1
-      bubblePosition.lat.toString().includes("31.8428") || // Comp 2
-      bubblePosition.lat.toString().includes("31.8408")
-    ) {
+    if (compNumber === "COMPARABLE No. 3") {
       // Comp 3
-      console.log(`Debug tail for lat ${bubblePosition.lat.toFixed(4)}:`, {
+      console.log(`Debug tail for #${compNumber}:`, {
         bubblePoint: { x: bubblePoint.x, y: bubblePoint.y },
         markerPoint: { x: markerPoint.x, y: markerPoint.y },
         deltaX,
@@ -321,12 +422,14 @@ const TailAtMarker: React.FC<TailProps> = ({
     const result = `M${tipX},${tipY} L${base1X},${base1Y} L${base2X},${base2Y} Z`;
 
     // Debug logging for tail 1
-    if (bubblePosition.lat.toString().includes("31.8478")) {
+    if (compNumber === "COMPARABLE No. 1") {
       // Comp 1 position
-      console.log("Comp 1 tail debug:", {
+      console.log(`${compNumber} tail debug:`, {
         distance,
         pixelDistance,
         tailLength,
+        deltaX,
+        deltaY,
         tipX,
         tipY,
         baseX,
@@ -469,6 +572,7 @@ export default function CompMapSvg() {
                 bubblePosition={bubblePositions[property.id]!}
                 markerPosition={markerPositions[property.id]!}
                 color={borderColor}
+                compNumber={property.compNumber}
               />
             );
           })}

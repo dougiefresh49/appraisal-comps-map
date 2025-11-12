@@ -4,6 +4,7 @@ import { AdvancedMarker } from "@vis.gl/react-google-maps";
 
 interface PropertyInfo {
   address: string;
+  addressForDisplay?: string;
   legalDescription: string;
   acres?: string;
 }
@@ -15,6 +16,8 @@ interface SubjectLocationMarkerProps {
   onPositionChange: (position: { lat: number; lng: number }) => void;
   sizeMultiplier?: number; // 1.0 = 100% (400x200 base)
   tailDirection?: "left" | "right";
+  isTailPinned?: boolean;
+  pinnedTailTipPosition?: { lat: number; lng: number };
 }
 
 // Base dimensions (reference: 400x200px)
@@ -32,6 +35,8 @@ export function SubjectLocationMarker({
   onPositionChange,
   sizeMultiplier = 1.0,
   tailDirection = "right",
+  isTailPinned = false,
+  pinnedTailTipPosition,
 }: SubjectLocationMarkerProps) {
   // Apply size multiplier to base dimensions
   const bubbleWidth = BASE_WIDTH * sizeMultiplier;
@@ -47,15 +52,29 @@ export function SubjectLocationMarker({
   // Build content
   const hasAcres = Boolean(propertyInfo.acres);
   const hasLegalDescription = Boolean(propertyInfo.legalDescription);
-  const address = propertyInfo.address || "Enter address";
-  const legalLine = hasAcres
-    ? `Acres: ${propertyInfo.acres}${propertyInfo.legalDescription ? `, ${propertyInfo.legalDescription}` : ""}`
-    : propertyInfo.legalDescription || "";
+  const addressLine =
+    propertyInfo.addressForDisplay && propertyInfo.addressForDisplay.trim()
+      ? propertyInfo.addressForDisplay
+      : propertyInfo.address;
+  const address = addressLine || "Enter address";
+
+  // Format legal line: Acres always comes first if present, then legal description
+  let legalLine = "";
+  if (hasAcres && hasLegalDescription) {
+    legalLine = `Acres: ${propertyInfo.acres}, ${propertyInfo.legalDescription}`;
+  } else if (hasAcres) {
+    legalLine = `Acres: ${propertyInfo.acres}`;
+  } else if (hasLegalDescription) {
+    legalLine = propertyInfo.legalDescription;
+  }
 
   // Calculate line spacing
   const lineHeightTitle = fontSizeTitle * 1.2;
   const lineHeightText = fontSizeText * 1.4;
   const lineGap = fontSizeText * 1;
+
+  // When tail is pinned, don't render the tail in SVG - it's handled by PinnedTailOverlay
+  const shouldShowTail = !isTailPinned;
 
   // Tail dimensions from original SVG (scaled with size multiplier)
   // Original SVG is 438px wide, bubble height is 198px, tail extends from y=195 to y=256
@@ -124,32 +143,36 @@ export function SubjectLocationMarker({
         className="relative cursor-move select-none"
         style={{
           width: `${bubbleWidth}px`,
-          height: `${bubbleHeight + tailHeight}px`,
+          height: `${shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}px`,
         }}
       >
         {/* SVG Bubble */}
         <svg
           width={bubbleWidth}
-          height={bubbleHeight + tailHeight}
-          viewBox={`0 0 ${bubbleWidth} ${bubbleHeight + tailHeight}`}
+          height={shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}
+          viewBox={`0 0 ${bubbleWidth} ${shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}`}
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
           className="absolute inset-0"
         >
-          {/* Tail - using original SVG shape exactly */}
-          {/* Fill path: M183.032 256.007L97.0014 195.184L167.97 197.308L183.032 256.007Z */}
-          <path
-            d={`M${tailTipX} ${tailTipY} L${tailLeftX} ${tailBaseYLeft} L${tailLeftMidX} ${tailMidYLeft} L${tailTipX} ${tailTipY} Z`}
-            fill="white"
-          />
-          {/* Stroke path: M98.6449 195.734L167.579 197.797L182.21 254.814L98.6449 195.734Z */}
-          <path
-            d={`M${tailStrokeLeftX} ${tailBaseYStroke} L${tailStrokeLeftMidX} ${tailMidYStroke} L${tailStrokeRightMidX} ${tailTipYStroke} L${tailStrokeLeftX} ${tailBaseYStroke} Z`}
-            stroke="black"
-            strokeOpacity="0.8"
-            strokeWidth={1 * sizeMultiplier}
-            fill="none"
-          />
+          {/* Tail - using original SVG shape exactly - only show when not pinned */}
+          {shouldShowTail && (
+            <>
+              {/* Fill path: M183.032 256.007L97.0014 195.184L167.97 197.308L183.032 256.007Z */}
+              <path
+                d={`M${tailTipX} ${tailTipY} L${tailLeftX} ${tailBaseYLeft} L${tailLeftMidX} ${tailMidYLeft} L${tailTipX} ${tailTipY} Z`}
+                fill="white"
+              />
+              {/* Stroke path: M98.6449 195.734L167.579 197.797L182.21 254.814L98.6449 195.734Z */}
+              <path
+                d={`M${tailStrokeLeftX} ${tailBaseYStroke} L${tailStrokeLeftMidX} ${tailMidYStroke} L${tailStrokeRightMidX} ${tailTipYStroke} L${tailStrokeLeftX} ${tailBaseYStroke} Z`}
+                stroke="black"
+                strokeOpacity="0.8"
+                strokeWidth={1 * sizeMultiplier}
+                fill="none"
+              />
+            </>
+          )}
           {/* Bubble rectangle */}
           <rect
             x={0.5 * sizeMultiplier}
