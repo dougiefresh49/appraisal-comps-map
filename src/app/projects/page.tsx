@@ -403,6 +403,13 @@ export default function ProjectsPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
+              href={`/cover?project=${encodeURIComponent(selectedProjectName)}`}
+              target="_blank"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+            >
+              Cover Page
+            </Link>
+            <Link
               href="/location-map"
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
             >
@@ -508,6 +515,108 @@ export default function ProjectsPage() {
                     disabled={isSubjectDisabled}
                     placeholder="9.834"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Google Drive Folder ID
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedProject.googleDriveFolderId ?? ""}
+                    onChange={(event) => {
+                      updateProject((project) => ({
+                        ...project,
+                        googleDriveFolderId: event.target.value,
+                      }));
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={isSubjectDisabled}
+                    placeholder="1a2b3c4d5e6f7g8h9i0j"
+                  />
+                  {selectedProject.googleDriveFolderId && (
+                    <Link
+                      href={`/photos?folderId=${encodeURIComponent(selectedProject.googleDriveFolderId)}`}
+                      target="_blank"
+                      className="mt-2 inline-block rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                    >
+                      View Photos
+                    </Link>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Client Company
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedProject.clientCompany ?? ""}
+                    onChange={(event) => {
+                      updateProject((project) => ({
+                        ...project,
+                        clientCompany: event.target.value,
+                      }));
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={isSubjectDisabled}
+                    placeholder="Winkler County Hospital District"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Client Name
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedProject.clientName ?? ""}
+                    onChange={(event) => {
+                      updateProject((project) => ({
+                        ...project,
+                        clientName: event.target.value,
+                      }));
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={isSubjectDisabled}
+                    placeholder="Lorenzo Serrano"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Property Type
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedProject.propertyType ?? ""}
+                    onChange={(event) => {
+                      updateProject((project) => ({
+                        ...project,
+                        propertyType: event.target.value,
+                      }));
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={isSubjectDisabled}
+                    placeholder="Commercial Office Building"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Project Folder ID
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedProject.projectFolderId ?? ""}
+                    onChange={(event) => {
+                      updateProject((project) => ({
+                        ...project,
+                        projectFolderId: event.target.value,
+                      }));
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={isSubjectDisabled}
+                    placeholder="Project folder ID for cover data"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Used to fetch cover page data from webhook
+                  </p>
                 </div>
               </div>
             </section>

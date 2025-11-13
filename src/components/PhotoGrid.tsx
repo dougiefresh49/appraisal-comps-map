@@ -22,9 +22,14 @@ import type { PhotoInput } from "~/server/photos/actions";
 interface PhotoGridProps {
   initialPhotos: PhotoInput[];
   fileId: string;
+  folderId: string;
 }
 
-export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
+export default function PhotoGrid({
+  initialPhotos,
+  fileId,
+  folderId,
+}: PhotoGridProps) {
   const [photos, setPhotos] = useState<PhotoInput[]>(initialPhotos);
   const [isSaving, setIsSaving] = useState(false);
   const [isDenseGrid, setIsDenseGrid] = useState(false);
@@ -98,6 +103,7 @@ export default function PhotoGrid({ initialPhotos, fileId }: PhotoGridProps) {
         },
         body: JSON.stringify({
           photos: updatedPhotos,
+          folderId: folderId,
           fileId: fileId,
         }),
       });

@@ -16,17 +16,16 @@ export type PhotoInput = z.infer<typeof PhotoInputSchema>;
 export type PhotoInputs = z.infer<typeof PhotoInputsSchema>;
 
 // Google Drive API configuration
-const GOOGLE_DRIVE_FOLDER_ID = env.GOOGLE_DRIVE_FOLDER_ID; // TODO: make form field for this
 const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 
 // Debug function to list all files in the folder
-export async function listAllFilesInFolder(): Promise<any> {
+export async function listAllFilesInFolder(folderId: string): Promise<any> {
   try {
     // Try different query approaches
     const queries = [
-      `'${GOOGLE_DRIVE_FOLDER_ID}' in parents`,
-      `'${GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed=false`,
-      `'${GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType!='application/vnd.google-apps.folder'`,
+      `'${folderId}' in parents`,
+      `'${folderId}' in parents and trashed=false`,
+      `'${folderId}' in parents and mimeType!='application/vnd.google-apps.folder'`,
     ];
 
     for (const query of queries) {
@@ -47,7 +46,7 @@ export async function listAllFilesInFolder(): Promise<any> {
 
     // If all queries return empty, return the last result
     const response = await fetch(
-      `${GOOGLE_DRIVE_API_BASE}/files?q='${GOOGLE_DRIVE_FOLDER_ID}' in parents&key=${env.GOOGLE_DRIVE_API_KEY}`,
+      `${GOOGLE_DRIVE_API_BASE}/files?q='${folderId}' in parents&key=${env.GOOGLE_DRIVE_API_KEY}`,
     );
 
     const data = await response.json();
@@ -59,7 +58,7 @@ export async function listAllFilesInFolder(): Promise<any> {
 }
 
 // Fetch input.json from Google Drive API
-export async function fetchInputsJson(): Promise<{
+export async function fetchInputsJson(folderId: string): Promise<{
   photos: PhotoInputs;
   fileId: string;
 }> {
@@ -69,7 +68,10 @@ export async function fetchInputsJson(): Promise<{
       throw new Error("GOOGLE_DRIVE_API_KEY is not set");
     }
 
-    const folderId = GOOGLE_DRIVE_FOLDER_ID;
+    if (!folderId) {
+      throw new Error("Folder ID is required");
+    }
+
     const [inputData, imageFiles] = await Promise.all([
       fetchInputJsonFromDrive(folderId),
       fetchImageFilesFromDrive(folderId),
@@ -102,6 +104,7 @@ export async function fetchInputsJson(): Promise<{
 // Save changes back to Google Drive via n8n webhook or return JSON for manual update
 export async function saveChanges(
   updatedPhotos: PhotoInputs,
+  folderId: string,
   fileId?: string,
 ): Promise<{ success: boolean; data?: string; error?: string }> {
   try {
@@ -114,7 +117,7 @@ export async function saveChanges(
         },
         body: JSON.stringify({
           photos: updatedPhotos,
-          folderId: GOOGLE_DRIVE_FOLDER_ID,
+          folderId,
           fileId: fileId || "unknown",
         }),
       });

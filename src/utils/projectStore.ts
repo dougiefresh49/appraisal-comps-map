@@ -91,6 +91,11 @@ export interface ProjectData {
   subject: ProjectSubjectState;
   comparables: ProjectComparablesState;
   location: LocationMapState;
+  googleDriveFolderId?: string;
+  projectFolderId?: string;
+  clientCompany?: string;
+  clientName?: string;
+  propertyType?: string;
 }
 
 export type ProjectsMap = Record<string, ProjectData>;
@@ -481,7 +486,16 @@ export function normalizeProjectData(data?: Partial<ProjectData>): ProjectData {
   const subject = normalizeSubjectState(data?.subject);
   const comparables = normalizeProjectComparables(subject, data?.comparables);
   const location = normalizeLocationState(subject, data?.location);
-  return { subject, comparables, location };
+  return {
+    subject,
+    comparables,
+    location,
+    googleDriveFolderId: data?.googleDriveFolderId,
+    projectFolderId: data?.projectFolderId,
+    clientCompany: data?.clientCompany,
+    clientName: data?.clientName,
+    propertyType: data?.propertyType,
+  };
 }
 
 export function cloneProject(project: ProjectData): ProjectData {
