@@ -270,7 +270,7 @@ export default function ComparablesMapPage() {
 
     const currentMapState: ComparablesMapState = {
       ...previousState,
-      subjectInfo: { ...subject.info },
+      // subjectInfo removed - use subject.info instead
       subjectMarkerPosition: subject.markerPosition,
       subjectBubblePosition: subject.bubblePosition,
       comparables: comparables.map((comp) => ({
@@ -288,8 +288,7 @@ export default function ComparablesMapPage() {
       mapZoom,
       bubbleSize,
       hideUI,
-      isSubjectTailPinned: subject.isTailPinned,
-      subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
       landLocationMaps:
         activeType === "Land"
           ? { ...(previousState.landLocationMaps ?? {}) }
@@ -306,11 +305,10 @@ export default function ComparablesMapPage() {
 
     const locationState: LocationMapState = {
       ...baseProject.location,
-      propertyInfo: { ...subject.info },
+      // propertyInfo removed - use subject.info instead
       markerPosition: subject.markerPosition,
       bubblePosition: subject.bubblePosition,
-      isSubjectTailPinned: subject.isTailPinned,
-      subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     };
 
     const snapshot: ProjectData = {
@@ -438,7 +436,7 @@ export default function ComparablesMapPage() {
       const url = new URL(`${window.location.origin}/land-comp-map`);
       url.searchParams.set("project", projectName);
       url.searchParams.set("compId", compId);
-      window.open(url.toString(), "_blank", "noopener");
+      window.location.href = url.toString();
     },
     [projectName],
   );
@@ -595,11 +593,13 @@ export default function ComparablesMapPage() {
             if (comp.id !== compId) return comp;
 
             // Calculate distance from subject if subject exists
+            // Use subject.pinnedTailTipPosition for distance calculation
             let distance = "";
-            if (subjectMarkerPosition) {
+            const subjectRefPoint = subjectPinnedTailTipPosition ?? subjectMarkerPosition;
+            if (subjectRefPoint) {
               distance = formatDistanceAndDirection(
-                subjectMarkerPosition.lat,
-                subjectMarkerPosition.lng,
+                subjectRefPoint.lat,
+                subjectRefPoint.lng,
                 newPosition.lat,
                 newPosition.lng,
               );
@@ -833,11 +833,13 @@ export default function ComparablesMapPage() {
               if (!comp.markerPosition || !comp.position) return null;
 
               // Calculate distance from subject
+              // Use subject.pinnedTailTipPosition for distance calculation
               let distance = "";
-              if (subjectMarkerPosition) {
+              const subjectRefPoint = subjectPinnedTailTipPosition ?? subjectMarkerPosition;
+              if (subjectRefPoint && comp.markerPosition) {
                 distance = formatDistanceAndDirection(
-                  subjectMarkerPosition.lat,
-                  subjectMarkerPosition.lng,
+                  subjectRefPoint.lat,
+                  subjectRefPoint.lng,
                   comp.markerPosition.lat,
                   comp.markerPosition.lng,
                 );

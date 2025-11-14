@@ -7,9 +7,11 @@ import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
 import { PolygonDrawingTool } from "~/components/PolygonDrawingTool";
 import { CircleDrawingTool } from "~/components/CircleDrawingTool";
+import { PolylineDrawingTool } from "~/components/PolylineDrawingTool";
 import { PropertyInfoPanel } from "~/components/PropertyInfoPanel";
 import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
+import { LandCompDocumentOverlay } from "~/components/LandCompDocumentOverlay";
 import {
   createDefaultProject,
   normalizeProjectData,
@@ -29,6 +31,7 @@ import type {
   StreetLabelData,
   Circle,
   PolygonPath,
+  Polyline,
   ProjectSubjectState,
   LocationMapState,
   ComparablesMapState,
@@ -56,26 +59,38 @@ export default function LandCompMapPage() {
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
     addressForDisplay: "",
-    legalDescription: "",
-    acres: "",
   });
-  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
-  const [bubblePosition, setBubblePosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [markerPosition, setMarkerPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [bubblePosition, setBubblePosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [polygonPath, setPolygonPath] = useState<PolygonPath[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDrawingCircle, setIsDrawingCircle] = useState(false);
-  const [circleRadius, setCircleRadius] = useState<1 | 2 | 3 | 5>(DEFAULT_CIRCLE_RADIUS);
+  const [isDrawingLine, setIsDrawingLine] = useState(false);
+  const [polylines, setPolylines] = useState<Polyline[]>([]);
+  const [circleRadius, setCircleRadius] = useState<1 | 2 | 3 | 5>(
+    DEFAULT_CIRCLE_RADIUS,
+  );
   const [circles, setCircles] = useState<Circle[]>([]);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ ...DEFAULT_MAP_CENTER });
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
+    ...DEFAULT_MAP_CENTER,
+  });
   const [mapZoom, setMapZoom] = useState(17);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
+  const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
+  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true);
-  const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] = useState<
-    { lat: number; lng: number } | undefined
-  >(undefined);
-  const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] = useState(false);
+  const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] =
+    useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] =
+    useState(false);
   const [streetLabels, setStreetLabels] = useState<StreetLabelData[]>([]);
   const [labelSize, setLabelSize] = useState(DEFAULT_LABEL_SIZE);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
@@ -120,31 +135,15 @@ export default function LandCompMapPage() {
         landState.landLocationMaps?.[compId] ??
         (undefined as LocationMapState | undefined);
 
-      const resolvedPropertyInfo =
-        landMapState?.propertyInfo ?? {
-          address: targetComparable.address ?? "",
-          addressForDisplay:
-            targetComparable.addressForDisplay ??
-            targetComparable.address ??
-            "",
-          legalDescription: "",
-          acres: "",
-        };
-
+      // Use comparable address directly (propertyInfo removed from LocationMapState)
       setPropertyInfo({
-        address: resolvedPropertyInfo.address ?? "",
+        address: targetComparable.address ?? "",
         addressForDisplay:
-          resolvedPropertyInfo.addressForDisplay ??
-          resolvedPropertyInfo.address ??
-          "",
-        legalDescription: resolvedPropertyInfo.legalDescription ?? "",
-        acres: resolvedPropertyInfo.acres ?? "",
+          targetComparable.addressForDisplay ?? targetComparable.address ?? "",
       });
 
       const resolvedMarker =
-        landMapState?.markerPosition ??
-        targetComparable.markerPosition ??
-        null;
+        landMapState?.markerPosition ?? targetComparable.markerPosition ?? null;
       setMarkerPosition(resolvedMarker ? { ...resolvedMarker } : null);
 
       const resolvedBubble =
@@ -167,6 +166,14 @@ export default function LandCompMapPage() {
             }))
           : [],
       );
+      setPolylines(
+        landMapState?.polylines
+          ? landMapState.polylines.map((polyline) => ({
+              ...polyline,
+              path: polyline.path.map((point) => ({ ...point })),
+            }))
+          : [],
+      );
       const resolvedCenter =
         landMapState?.mapCenter ??
         resolvedMarker ??
@@ -177,15 +184,10 @@ export default function LandCompMapPage() {
       setBubbleSize(landMapState?.bubbleSize ?? 1.0);
       setTailDirection(landMapState?.tailDirection ?? "right");
       setHideUI(landMapState?.hideUI ?? false);
-      setIsSubjectTailPinned(
-        landMapState?.isSubjectTailPinned ??
-          targetComparable.isTailPinned ??
-          true,
-      );
+      // Use comparable's tail pinning state (isSubjectTailPinned and subjectPinnedTailTipPosition removed from LocationMapState)
+      setIsSubjectTailPinned(targetComparable.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        landMapState?.subjectPinnedTailTipPosition ??
-          targetComparable.pinnedTailTipPosition ??
-          undefined,
+        targetComparable.pinnedTailTipPosition ?? undefined,
       );
       setStreetLabels(
         landMapState?.streetLabels
@@ -212,7 +214,10 @@ export default function LandCompMapPage() {
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
+        const parsed = JSON.parse(stored) as Record<
+          string,
+          Partial<ProjectData>
+        >;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -244,7 +249,8 @@ export default function LandCompMapPage() {
       finalProjectName = storedCurrent;
     } else if (!projectStore[finalProjectName]) {
       finalProjectName =
-        Object.keys(projectStore)[0] ?? getNextProjectName(Object.keys(projectStore));
+        Object.keys(projectStore)[0] ??
+        getNextProjectName(Object.keys(projectStore));
     }
 
     if (!projectStore[finalProjectName]) {
@@ -254,8 +260,11 @@ export default function LandCompMapPage() {
     projectStoreRef.current = projectStore;
     setProjectName(finalProjectName);
 
-    applyProjectState(projectStore[finalProjectName]);
-    serializedProjectRef.current = projectStore[finalProjectName];
+    const project = projectStore[finalProjectName];
+    if (project) {
+      applyProjectState(project);
+      serializedProjectRef.current = project;
+    }
 
     try {
       window.localStorage.setItem(
@@ -303,13 +312,7 @@ export default function LandCompMapPage() {
     );
 
     const landLocationSnapshot: LocationMapState = {
-      propertyInfo: {
-        address: propertyInfo.address ?? "",
-        addressForDisplay:
-          propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
-        legalDescription: propertyInfo.legalDescription ?? "",
-        acres: propertyInfo.acres ?? "",
-      },
+      // propertyInfo removed - use subject.info instead (for land comps, use comparable address)
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
       polygonPath: polygonPath.map((point) => ({ ...point })),
@@ -317,15 +320,16 @@ export default function LandCompMapPage() {
         ...circle,
         center: { ...circle.center },
       })),
+      polylines: polylines.map((polyline) => ({
+        ...polyline,
+        path: polyline.path.map((point) => ({ ...point })),
+      })),
       mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
       mapZoom,
       bubbleSize,
       tailDirection,
       hideUI,
-      isSubjectTailPinned,
-      subjectPinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
+      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
       streetLabels: streetLabels.map((label) => ({
         ...label,
         position: { ...label.position },
@@ -352,6 +356,7 @@ export default function LandCompMapPage() {
     };
 
     const snapshot: ProjectData = {
+      ...baseProject, // Preserve all top-level fields (subjectPhotosFolderId, projectFolderId, clientCompany, etc.)
       subject,
       comparables: comparablesState,
       location: baseProject.location,
@@ -371,6 +376,7 @@ export default function LandCompMapPage() {
     mapZoom,
     markerPosition,
     polygonPath,
+    polylines,
     projectName,
     propertyInfo,
     streetLabels,
@@ -386,10 +392,7 @@ export default function LandCompMapPage() {
         PROJECTS_STORAGE_KEY,
         JSON.stringify(projectStoreRef.current),
       );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        currentName,
-      );
+      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
     } catch (error) {
       console.error("Failed to save projects", error);
     }
@@ -397,13 +400,13 @@ export default function LandCompMapPage() {
 
   const handleProjectNameEdit = useCallback(() => {
     if (typeof window === "undefined") return;
-    const input = window
-      .prompt("Rename project", projectName)
-      ?.trim();
+    const input = window.prompt("Rename project", projectName)?.trim();
     if (!input || input === projectName) return;
 
     if (projectStoreRef.current[input]) {
-      window.alert("A project with that name already exists. Choose another name.");
+      window.alert(
+        "A project with that name already exists. Choose another name.",
+      );
       return;
     }
 
@@ -534,12 +537,12 @@ export default function LandCompMapPage() {
           },
         );
 
-        if (results.length === 0) {
+        if (results.length === 0 || !results[0]) {
           window.alert("No results found for that address.");
           return;
         }
 
-        const location = results[0].geometry.location;
+        const location = results[0]!.geometry.location;
         const lat = location.lat();
         const lng = location.lng();
 
@@ -622,8 +625,8 @@ export default function LandCompMapPage() {
       <div className="flex h-screen w-full items-center justify-center bg-gray-50">
         <div className="rounded-md border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-700">
-            Missing <code>compId</code> query parameter. Use the Projects page or the
-            Comparables Map to open a land comparable map.
+            Missing <code>compId</code> query parameter. Use the Projects page
+            or the Comparables Map to open a land comparable map.
           </p>
         </div>
       </div>
@@ -635,8 +638,6 @@ export default function LandCompMapPage() {
       <PropertyInfoPanel
         heading="Land Comparable Map"
         projectName={projectName}
-        onProjectNameEdit={handleProjectNameEdit}
-        onProjectSwitch={handleProjectSwitch}
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
         onAddressSearch={handleAddressSearch}
@@ -646,6 +647,8 @@ export default function LandCompMapPage() {
         onTailDirectionChange={setTailDirection}
         hideUI={hideUI}
         onHideUIChange={setHideUI}
+        showDocumentOverlay={showDocumentOverlay}
+        onShowDocumentOverlayChange={setShowDocumentOverlay}
         isTailPinned={isSubjectTailPinned}
         onIsTailPinnedChange={setIsSubjectTailPinned}
         pinnedTailTipPosition={subjectPinnedTailTipPosition}
@@ -658,6 +661,9 @@ export default function LandCompMapPage() {
         onLabelSizeChange={setLabelSize}
         mapCenter={mapCenter}
         onShare={handleShare}
+        apn={comparable?.apn}
+        documentFrameSize={documentFrameSize}
+        onDocumentFrameSizeChange={setDocumentFrameSize}
       />
 
       <div className="relative flex-1">
@@ -720,14 +726,12 @@ export default function LandCompMapPage() {
               </AdvancedMarker>
             )}
 
-            {bubblePosition && (
+            {bubblePosition && markerPosition && !hideUI && (
               <SubjectLocationMarker
                 position={bubblePosition}
-                markerPosition={markerPosition ?? undefined}
+                markerPosition={markerPosition}
                 propertyInfo={{
                   address: activeComparableLabel,
-                  legalDescription: propertyInfo.legalDescription ?? "",
-                  acres: propertyInfo.acres ?? "",
                 }}
                 onPositionChange={(next) => setBubblePosition(next)}
                 sizeMultiplier={bubbleSize}
@@ -739,7 +743,8 @@ export default function LandCompMapPage() {
 
             {isSubjectTailPinned &&
               subjectPinnedTailTipPosition &&
-              bubblePosition && (
+              bubblePosition &&
+              !hideUI && (
                 <PinnedTailOverlay
                   bubblePosition={bubblePosition}
                   pinnedTailTipPosition={subjectPinnedTailTipPosition}
@@ -800,8 +805,19 @@ export default function LandCompMapPage() {
             />
 
             <CircleDrawingTool circles={circles} onCirclesChange={setCircles} />
+            <PolylineDrawingTool
+              isDrawing={isDrawingLine}
+              onIsDrawingChange={setIsDrawingLine}
+              polylines={polylines}
+              onPolylinesChange={setPolylines}
+            />
           </Map>
         </APIProvider>
+        <LandCompDocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+          onSizeChange={setDocumentFrameSize}
+        />
 
         {!hideUI && (
           <div className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 flex-col gap-2">
@@ -810,6 +826,7 @@ export default function LandCompMapPage() {
                 onClick={() => {
                   setIsDrawing(!isDrawing);
                   setIsDrawingCircle(false);
+                  setIsDrawingLine(false);
                 }}
                 className={`rounded-lg border-2 border-gray-300 bg-white px-4 py-2 shadow-lg transition-colors ${
                   isDrawing ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"
@@ -818,11 +835,27 @@ export default function LandCompMapPage() {
               >
                 {isDrawing ? "Finish Drawing" : "Draw Polygon"}
               </button>
+              <button
+                onClick={() => {
+                  setIsDrawingLine(!isDrawingLine);
+                  setIsDrawing(false);
+                  setIsDrawingCircle(false);
+                }}
+                className={`rounded-lg border-2 border-gray-300 bg-white px-4 py-2 shadow-lg transition-colors ${
+                  isDrawingLine
+                    ? "border-blue-500 bg-blue-50"
+                    : "hover:bg-gray-50"
+                }`}
+                title="Draw a line"
+              >
+                {isDrawingLine ? "Finish Drawing" : "Draw Line"}
+              </button>
               <div className="relative flex items-center gap-2">
                 <button
                   onClick={() => {
                     setIsDrawingCircle(!isDrawingCircle);
                     setIsDrawing(false);
+                    setIsDrawingLine(false);
                   }}
                   className={`rounded-lg border-2 border-gray-300 bg-white px-4 py-2 shadow-lg transition-colors ${
                     isDrawingCircle
@@ -837,7 +870,9 @@ export default function LandCompMapPage() {
                   <select
                     value={circleRadius}
                     onChange={(event) =>
-                      setCircleRadius(Number(event.target.value) as 1 | 2 | 3 | 5)
+                      setCircleRadius(
+                        Number(event.target.value) as 1 | 2 | 3 | 5,
+                      )
                     }
                     className="rounded-lg border-2 border-gray-300 bg-white px-4 py-2 text-sm shadow-lg transition-colors hover:bg-gray-50 focus:border-blue-500 focus:outline-none"
                     onClick={(event) => event.stopPropagation()}
@@ -866,10 +901,17 @@ export default function LandCompMapPage() {
                 Clear Circles
               </button>
             )}
+            {polylines.length > 0 && (
+              <button
+                onClick={() => setPolylines([])}
+                className="rounded-lg border-2 border-gray-300 bg-white px-4 py-2 shadow-lg transition-colors hover:border-red-500 hover:bg-red-50"
+              >
+                Clear Lines
+              </button>
+            )}
           </div>
         )}
       </div>
     </div>
   );
 }
-

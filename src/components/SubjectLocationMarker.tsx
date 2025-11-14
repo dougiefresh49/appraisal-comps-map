@@ -5,7 +5,7 @@ import { AdvancedMarker } from "@vis.gl/react-google-maps";
 interface PropertyInfo {
   address: string;
   addressForDisplay?: string;
-  legalDescription: string;
+  legalDescription?: string;
   acres?: string;
 }
 

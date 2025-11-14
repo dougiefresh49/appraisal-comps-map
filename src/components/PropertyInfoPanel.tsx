@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface PropertyInfo {
   address: string;
   addressForDisplay?: string;
-  legalDescription: string;
+  legalDescription?: string;
   acres?: string;
 }
 
@@ -47,6 +48,9 @@ interface PropertyInfoPanelProps {
   onLabelSizeChange: (size: number) => void;
   mapCenter: { lat: number; lng: number };
   onShare?: () => void;
+  apn?: string[]; // APN numbers for land comparables
+  documentFrameSize?: number; // For land comp document frame size
+  onDocumentFrameSizeChange?: (size: number) => void; // For land comp document frame size
 }
 
 export function PropertyInfoPanel({
@@ -77,6 +81,9 @@ export function PropertyInfoPanel({
   onLabelSizeChange,
   mapCenter,
   onShare,
+  apn,
+  documentFrameSize,
+  onDocumentFrameSizeChange,
 }: PropertyInfoPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
 
@@ -136,27 +143,37 @@ export function PropertyInfoPanel({
               {projectName}
             </span>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onProjectNameEdit}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Rename project"
-              disabled={!onProjectNameEdit}
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              onClick={onProjectSwitch}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Switch project"
-              disabled={!onProjectSwitch}
-            >
-              🔁
-            </button>
-          </div>
+          {(onProjectNameEdit || onProjectSwitch) && (
+            <div className="flex gap-2">
+              {onProjectNameEdit && (
+                <button
+                  type="button"
+                  onClick={onProjectNameEdit}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Rename project"
+                >
+                  ✏️
+                </button>
+              )}
+              {onProjectSwitch && (
+                <button
+                  type="button"
+                  onClick={onProjectSwitch}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Switch project"
+                >
+                  🔁
+                </button>
+              )}
+            </div>
+          )}
         </div>
+        <Link
+          href="/projects"
+          className="mt-3 inline-block text-sm text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          ← Back to Projects
+        </Link>
       </div>
 
       {/* Address Search */}
@@ -206,63 +223,56 @@ export function PropertyInfoPanel({
       </div>
 
       {/* Acres */}
-      <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          Acres
-        </label>
-        <input
-          type="text"
-          value={propertyInfo.acres || ""}
-          onChange={(e) => handleAcresChange(e.target.value)}
-          placeholder="9.834"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-        />
-      </div>
+      {propertyInfo.acres !== undefined && propertyInfo.acres !== "" && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Acres
+          </label>
+          <input
+            type="text"
+            value={propertyInfo.acres || ""}
+            onChange={(e) => handleAcresChange(e.target.value)}
+            placeholder="9.834"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
+      )}
+
+      {/* APN (for land comparables) */}
+      {apn && apn.length > 0 && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            APN
+          </label>
+          <div className="space-y-1">
+            {apn.map((apnValue, idx) => (
+              <div
+                key={idx}
+                className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+              >
+                {apnValue}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Legal Description */}
-      <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          Legal Description
-        </label>
-        <textarea
-          value={propertyInfo.legalDescription}
-          onChange={(e) => handleLegalDescriptionChange(e.target.value)}
-          placeholder="GUNSMOKE SUB BLOCK 1 LOT 1 & 2"
-          rows={4}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-        />
-      </div>
-
-      {/* Bubble Size Controls */}
-      <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          Bubble Size
-        </label>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onBubbleSizeChange(Math.max(0.5, bubbleSize - 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            title="Decrease bubble size"
-          >
-            −
-          </button>
-          <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
-            {Math.round(bubbleSize * 100)}%
-          </span>
-          <button
-            onClick={() =>
-              onBubbleSizeChange(Math.min(1.667, bubbleSize + 0.1))
-            }
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            title="Increase bubble size"
-          >
-            +
-          </button>
-        </div>
-        <div className="mt-2 text-xs text-gray-500">
-          Base: 400×200px (100%) | Max: ~667×333px (167%)
-        </div>
-      </div>
+      {propertyInfo.legalDescription !== undefined &&
+        propertyInfo.legalDescription !== "" && (
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Legal Description
+            </label>
+            <textarea
+              value={propertyInfo.legalDescription}
+              onChange={(e) => handleLegalDescriptionChange(e.target.value)}
+              placeholder="GUNSMOKE SUB BLOCK 1 LOT 1 & 2"
+              rows={4}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+        )}
 
       {/* Tail Pin Control */}
       <div className="mb-4">
@@ -320,37 +330,6 @@ export function PropertyInfoPanel({
             : "Tail pinning is disabled."}
         </div>
       </div>
-
-      {/* Tail Direction Control - only show when tail is not pinned */}
-      {!isTailPinned && (
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Tail Direction
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onTailDirectionChange("left")}
-              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-                tailDirection === "left"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              ← Left
-            </button>
-            <button
-              onClick={() => onTailDirectionChange("right")}
-              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-                tailDirection === "right"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              Right →
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Labels Section */}
       <div className="mb-4">
@@ -411,6 +390,68 @@ export function PropertyInfoPanel({
         </button>
       </div>
 
+      {/* Bubble Size Controls */}
+      <div className="mb-4">
+        <label className="mb-2 block text-sm font-medium text-gray-700">
+          Bubble Size
+        </label>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => onBubbleSizeChange(Math.max(0.5, bubbleSize - 0.1))}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            title="Decrease bubble size"
+          >
+            −
+          </button>
+          <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+            {Math.round(bubbleSize * 100)}%
+          </span>
+          <button
+            onClick={() =>
+              onBubbleSizeChange(Math.min(1.667, bubbleSize + 0.1))
+            }
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            title="Increase bubble size"
+          >
+            +
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          Base: 400×200px (100%) | Max: ~667×333px (167%)
+        </div>
+      </div>
+
+      {/* Tail Direction Control - only show when tail is not pinned */}
+      {!isTailPinned && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Tail Direction
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onTailDirectionChange("left")}
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tailDirection === "left"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              ← Left
+            </button>
+            <button
+              onClick={() => onTailDirectionChange("right")}
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tailDirection === "right"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Right →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Label Size Controls */}
       <div className="mb-4">
         <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -458,38 +499,71 @@ export function PropertyInfoPanel({
             : "Hide UI for Screenshot"}
         </button>
         {onShowDocumentOverlayChange && (
-          <button
-            onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
-            className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
-              showDocumentOverlay
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            {showDocumentOverlay
-              ? "✓ Document Frame Visible"
-              : "Show 8.5×11\" Document Frame"}
-          </button>
+          <>
+            <button
+              onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
+              className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+                showDocumentOverlay
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {showDocumentOverlay
+                ? "✓ Document Frame Visible"
+                : heading === "Land Comparable Map"
+                  ? "Show 1.57:1 Document Frame"
+                  : "Show 8.5×11\" Document Frame"}
+            </button>
+            {showDocumentOverlay &&
+              documentFrameSize !== undefined &&
+              onDocumentFrameSizeChange && (
+                <div className="mt-3">
+                  <label className="mb-2 block text-xs font-medium text-gray-700">
+                    Frame Size
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() =>
+                        onDocumentFrameSizeChange(
+                          Math.max(0.5, documentFrameSize - 0.1),
+                        )
+                      }
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                      title="Decrease frame size"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                      {Math.round(documentFrameSize * 100)}%
+                    </span>
+                    <button
+                      onClick={() =>
+                        onDocumentFrameSizeChange(
+                          Math.min(2.0, documentFrameSize + 0.1),
+                        )
+                      }
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                      title="Increase frame size"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
+          </>
         )}
         <div className="mt-2 text-xs text-gray-500">
           {hideUI
             ? "All buttons and controls are hidden. Ready to take a screenshot!"
             : "Toggle to hide all UI elements for clean screenshots"}
           {showDocumentOverlay &&
-            " The document frame shows the 8.5×11\" area that will fit on a Google Doc page."}
+            (heading === "Land Comparable Map"
+              ? " The document frame shows a 1.57:1 aspect ratio area."
+              : " The document frame shows the 8.5×11\" area that will fit on a Google Doc page.")}
         </div>
       </div>
 
-      {/* Instructions */}
-      <div className="mt-6 rounded-md bg-blue-50 p-4 text-sm text-blue-900">
-        <p className="mb-2 font-semibold">Instructions:</p>
-        <ul className="list-inside list-disc space-y-1">
-          <li>Search for an address or click on the map to set marker</li>
-          <li>Click "Draw Polygon" to draw property boundaries</li>
-          <li>Drag the bubble marker to reposition it</li>
-          <li>Fill in address and legal description above</li>
-        </ul>
-      </div>
     </div>
   );
 }
+

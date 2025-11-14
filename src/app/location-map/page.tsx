@@ -280,7 +280,7 @@ export default function LocationMapPage() {
 
     const locationState: LocationMapState = {
       ...baseProject.location,
-      propertyInfo: { ...subject.info },
+      // propertyInfo removed - use subject.info instead
       markerPosition: subject.markerPosition,
       bubblePosition: subject.bubblePosition,
       polygonPath: polygonPath.map((point) => ({ ...point })),
@@ -293,8 +293,7 @@ export default function LocationMapPage() {
       bubbleSize,
       tailDirection,
       hideUI,
-      isSubjectTailPinned: subject.isTailPinned,
-      subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
       streetLabels: streetLabels.map((label) => ({
         ...label,
         position: { ...label.position },
@@ -312,11 +311,10 @@ export default function LocationMapPage() {
           createDefaultProject().comparables.byType[type];
         acc[type] = {
           ...currentState,
-          subjectInfo: { ...subject.info },
+          // subjectInfo removed - use subject.info instead
           subjectMarkerPosition: subject.markerPosition,
           subjectBubblePosition: subject.bubblePosition,
-          isSubjectTailPinned: subject.isTailPinned,
-          subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+          // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
         };
         return acc;
       },
@@ -329,6 +327,7 @@ export default function LocationMapPage() {
     };
 
     const snapshot: ProjectData = {
+      ...baseProject, // Preserve all top-level fields (subjectPhotosFolderId, projectFolderId, clientCompany, etc.)
       subject,
       location: locationState,
       comparables: comparablesState,
@@ -548,8 +547,6 @@ export default function LocationMapPage() {
       {/* Sidebar for property information */}
       <PropertyInfoPanel
         projectName={projectName}
-        onProjectNameEdit={handleProjectNameEdit}
-        onProjectSwitch={handleProjectSwitch}
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
         onAddressSearch={handleAddressSearch}

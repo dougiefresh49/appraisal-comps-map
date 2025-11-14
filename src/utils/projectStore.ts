@@ -10,7 +10,7 @@ export const COMPARABLE_TYPES: readonly ComparableType[] = [
 export interface SubjectInfo {
   address: string;
   addressForDisplay?: string;
-  legalDescription: string;
+  legalDescription?: string;
   acres?: string;
 }
 
@@ -32,19 +32,20 @@ export interface ComparableInfo {
   position?: LatLng;
   markerPosition?: LatLng;
   distance?: string;
+  apn?: string[]; // Array of APN numbers
+  instrumentNumber?: string; // Recording number
 }
 
 export interface ComparablesMapState {
-  subjectInfo?: SubjectInfo;
-  subjectMarkerPosition?: LatLng | null;
-  subjectBubblePosition?: LatLng | null;
+  // subjectInfo removed - use subject.info instead
+  subjectMarkerPosition?: LatLng | null; // Can be different per comp map
+  subjectBubblePosition?: LatLng | null; // Can be different per comp map
   comparables?: ComparableInfo[];
   mapCenter?: LatLng;
   mapZoom?: number;
   bubbleSize?: number;
   hideUI?: boolean;
-  isSubjectTailPinned?: boolean;
-  subjectPinnedTailTipPosition?: LatLng | null;
+  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
   landLocationMaps?: Record<string, LocationMapState>;
 }
 
@@ -69,19 +70,24 @@ export interface Circle {
   id: string;
 }
 
+export interface Polyline {
+  id: string;
+  path: PolygonPath[];
+}
+
 export interface LocationMapState {
-  propertyInfo?: SubjectInfo;
+  // propertyInfo removed - use subject.info instead
   markerPosition?: LatLng | null;
   bubblePosition?: LatLng | null;
   polygonPath?: PolygonPath[];
   circles?: Circle[];
+  polylines?: Polyline[];
   mapCenter?: LatLng;
   mapZoom?: number;
   bubbleSize?: number;
   tailDirection?: "left" | "right";
   hideUI?: boolean;
-  isSubjectTailPinned?: boolean;
-  subjectPinnedTailTipPosition?: LatLng | null;
+  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
   streetLabels?: StreetLabelData[];
   labelSize?: number;
   circleRadius?: 1 | 2 | 3 | 5;
@@ -91,7 +97,7 @@ export interface ProjectData {
   subject: ProjectSubjectState;
   comparables: ProjectComparablesState;
   location: LocationMapState;
-  googleDriveFolderId?: string;
+  subjectPhotosFolderId?: string;
   projectFolderId?: string;
   clientCompany?: string;
   clientName?: string;
@@ -111,8 +117,6 @@ const SUBJECT_DEFAULT: ProjectSubjectState = {
   info: {
     address: "",
     addressForDisplay: "",
-    legalDescription: "",
-    acres: "",
   },
   markerPosition: null,
   bubblePosition: null,
@@ -121,7 +125,7 @@ const SUBJECT_DEFAULT: ProjectSubjectState = {
 };
 
 const LOCATION_DEFAULT: LocationMapState = {
-  propertyInfo: { ...SUBJECT_DEFAULT.info },
+  // propertyInfo removed - use subject.info instead
   markerPosition: SUBJECT_DEFAULT.markerPosition,
   bubblePosition: SUBJECT_DEFAULT.bubblePosition,
   polygonPath: [],
@@ -131,8 +135,7 @@ const LOCATION_DEFAULT: LocationMapState = {
   bubbleSize: 1.0,
   tailDirection: "right",
   hideUI: false,
-  isSubjectTailPinned: SUBJECT_DEFAULT.isTailPinned,
-  subjectPinnedTailTipPosition: SUBJECT_DEFAULT.pinnedTailTipPosition,
+  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
   streetLabels: [],
   labelSize: DEFAULT_LABEL_SIZE,
   circleRadius: DEFAULT_CIRCLE_RADIUS,
@@ -177,17 +180,8 @@ function cloneCircle(circle: Circle): Circle {
 function cloneLandLocationState(
   input?: LocationMapState,
 ): LocationMapState {
-  const propertyInfo = input?.propertyInfo ?? {};
+  // propertyInfo removed - use subject.info instead
   return {
-    propertyInfo: {
-      address: propertyInfo.address ?? "",
-      addressForDisplay:
-        propertyInfo.addressForDisplay ??
-        propertyInfo.address ??
-        "",
-      legalDescription: propertyInfo.legalDescription ?? "",
-      acres: propertyInfo.acres ?? "",
-    },
     markerPosition: cloneLatLng(
       input?.markerPosition ?? null,
     ),
@@ -199,6 +193,12 @@ function cloneLandLocationState(
       : [],
     circles: Array.isArray(input?.circles)
       ? input!.circles!.map(cloneCircle)
+      : [],
+    polylines: Array.isArray(input?.polylines)
+      ? input!.polylines!.map((polyline) => ({
+          ...polyline,
+          path: polyline.path.map((point) => ({ lat: point.lat, lng: point.lng })),
+        }))
       : [],
     mapCenter:
       cloneLatLng(input?.mapCenter ?? null) ?? { ...DEFAULT_MAP_CENTER },
@@ -214,13 +214,7 @@ function cloneLandLocationState(
         : "right",
     hideUI:
       typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    isSubjectTailPinned:
-      typeof input?.isSubjectTailPinned === "boolean"
-        ? input.isSubjectTailPinned
-        : true,
-    subjectPinnedTailTipPosition: cloneLatLng(
-      input?.subjectPinnedTailTipPosition ?? null,
-    ),
+    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     streetLabels: Array.isArray(input?.streetLabels)
       ? input!.streetLabels!.map(cloneStreetLabel)
       : [],
@@ -238,7 +232,7 @@ function createEmptyComparablesMapState(
   type: ComparableType,
 ): ComparablesMapState {
   return {
-    subjectInfo: { ...subject.info },
+    // subjectInfo removed - use subject.info instead
     subjectMarkerPosition: subject.markerPosition,
     subjectBubblePosition: subject.bubblePosition,
     comparables: [],
@@ -246,8 +240,7 @@ function createEmptyComparablesMapState(
     mapZoom: 17,
     bubbleSize: 1.0,
     hideUI: false,
-    isSubjectTailPinned: subject.isTailPinned,
-    subjectPinnedTailTipPosition: subject.pinnedTailTipPosition,
+    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     landLocationMaps: type === "Land" ? {} : undefined,
   };
 }
@@ -282,6 +275,15 @@ function normalizeComparable(
     position: cloneLatLng(comparable.position ?? null) ?? undefined,
     markerPosition: cloneLatLng(comparable.markerPosition ?? null) ?? undefined,
     distance: comparable.distance,
+    apn:
+      Array.isArray(comparable.apn) && comparable.apn.length > 0
+        ? comparable.apn
+        : undefined,
+    instrumentNumber:
+      typeof comparable.instrumentNumber === "string" &&
+      comparable.instrumentNumber.trim().length > 0
+        ? comparable.instrumentNumber
+        : undefined,
   };
 }
 
@@ -324,7 +326,7 @@ function normalizeComparablesMapState(
     : [];
 
   return {
-    subjectInfo: { ...subject.info },
+    // subjectInfo removed - use subject.info instead
     subjectMarkerPosition:
       input?.subjectMarkerPosition !== undefined
         ? cloneLatLng(input.subjectMarkerPosition)
@@ -348,14 +350,7 @@ function normalizeComparablesMapState(
         : 1.0,
     hideUI:
       typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    isSubjectTailPinned:
-      typeof input?.isSubjectTailPinned === "boolean"
-        ? input.isSubjectTailPinned
-        : subject.isTailPinned,
-    subjectPinnedTailTipPosition:
-      input?.subjectPinnedTailTipPosition !== undefined
-        ? cloneLatLng(input.subjectPinnedTailTipPosition)
-        : subject.pinnedTailTipPosition,
+    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     landLocationMaps:
       fallbackType === "Land"
         ? Object.entries(input?.landLocationMaps ?? {}).reduce<
@@ -424,7 +419,7 @@ function normalizeLocationState(
   input?: LocationMapState,
 ): LocationMapState {
   return {
-    propertyInfo: { ...subject.info },
+    // propertyInfo removed - use subject.info instead
     markerPosition:
       input?.markerPosition !== undefined
         ? cloneLatLng(input.markerPosition)
@@ -438,6 +433,12 @@ function normalizeLocationState(
       : [],
     circles: Array.isArray(input?.circles)
       ? input!.circles!.map(cloneCircle)
+      : [],
+    polylines: Array.isArray(input?.polylines)
+      ? input!.polylines!.map((polyline) => ({
+          ...polyline,
+          path: polyline.path.map((point) => ({ lat: point.lat, lng: point.lng })),
+        }))
       : [],
     mapCenter:
       input?.mapCenter !== undefined
@@ -455,14 +456,7 @@ function normalizeLocationState(
         : "right",
     hideUI:
       typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    isSubjectTailPinned:
-      typeof input?.isSubjectTailPinned === "boolean"
-        ? input.isSubjectTailPinned
-        : subject.isTailPinned,
-    subjectPinnedTailTipPosition:
-      input?.subjectPinnedTailTipPosition !== undefined
-        ? cloneLatLng(input.subjectPinnedTailTipPosition)
-        : subject.pinnedTailTipPosition,
+    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     streetLabels: Array.isArray(input?.streetLabels)
       ? input!.streetLabels!.map(cloneStreetLabel)
       : [],
@@ -490,7 +484,7 @@ export function normalizeProjectData(data?: Partial<ProjectData>): ProjectData {
     subject,
     comparables,
     location,
-    googleDriveFolderId: data?.googleDriveFolderId,
+    subjectPhotosFolderId: data?.subjectPhotosFolderId,
     projectFolderId: data?.projectFolderId,
     clientCompany: data?.clientCompany,
     clientName: data?.clientName,

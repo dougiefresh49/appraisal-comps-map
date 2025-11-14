@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createDefaultProject,
@@ -18,11 +19,13 @@ import type {
   SubjectInfo,
   ComparableType,
   LocationMapState,
+  ComparablesMapState,
 } from "~/utils/projectStore";
 
 type EditableSubjectFields = keyof SubjectInfo;
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectsMap>({});
   const [selectedProjectName, setSelectedProjectName] = useState<string>("");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -50,36 +53,30 @@ export default function ProjectsPage() {
       const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
       let initialProjects: ProjectsMap = {};
       if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
+        const parsed = JSON.parse(stored) as Record<
+          string,
+          Partial<ProjectData>
+        >;
         initialProjects = normalizeProjectsMap(parsed);
       }
       const storedCurrent = window.localStorage.getItem(
         CURRENT_PROJECT_STORAGE_KEY,
       );
-      let initialName = storedCurrent && initialProjects[storedCurrent]
-        ? storedCurrent
-        : "";
+      let initialName =
+        storedCurrent && initialProjects[storedCurrent] ? storedCurrent : "";
       if (!initialName) {
         const names = Object.keys(initialProjects);
         if (names.length > 0) {
           initialName = names[0]!;
         }
       }
-      if (!initialName) {
-        const defaultName = getNextProjectName([]);
-        initialProjects = {
-          [defaultName]: createDefaultProject(),
-        };
-        initialName = defaultName;
-      }
       setProjects(initialProjects);
       setSelectedProjectName(initialName);
       setIsHydrated(true);
     } catch (error) {
       console.error("Failed to load projects", error);
-      const fallbackName = getNextProjectName([]);
-      setProjects({ [fallbackName]: createDefaultProject() });
-      setSelectedProjectName(fallbackName);
+      setProjects({});
+      setSelectedProjectName("");
       setIsHydrated(true);
     }
   }, []);
@@ -127,13 +124,7 @@ export default function ProjectsPage() {
   };
 
   const handleCreateProject = () => {
-    const existingNames = Object.keys(projects);
-    const newName = getNextProjectName(existingNames);
-    setProjects((prev) => ({
-      ...prev,
-      [newName]: createDefaultProject(),
-    }));
-    setSelectedProjectName(newName);
+    router.push("/projects/new");
   };
 
   const handleRenameProject = () => {
@@ -142,7 +133,9 @@ export default function ProjectsPage() {
     const input = window.prompt("Rename project", selectedProjectName)?.trim();
     if (!input || input === selectedProjectName) return;
     if (projects[input]) {
-      window.alert("A project with that name already exists. Choose another name.");
+      window.alert(
+        "A project with that name already exists. Choose another name.",
+      );
       return;
     }
     setProjects((prev) => {
@@ -155,6 +148,33 @@ export default function ProjectsPage() {
       };
     });
     setSelectedProjectName(input);
+  };
+
+  const handleDeleteProject = () => {
+    if (!selectedProjectName) return;
+    if (typeof window === "undefined") return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${selectedProjectName}"? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    // Get remaining project names before deletion
+    const remainingNames = Object.keys(projects).filter(
+      (name) => name !== selectedProjectName,
+    );
+
+    setProjects((prev) => {
+      const { [selectedProjectName]: _removed, ...rest } = prev;
+      return rest;
+    });
+
+    // Select another project if available
+    if (remainingNames.length > 0) {
+      setSelectedProjectName(remainingNames[0]!);
+    } else {
+      setSelectedProjectName("");
+    }
   };
 
   const updateProject = useCallback(
@@ -179,19 +199,19 @@ export default function ProjectsPage() {
       const updatedInfo = { ...project.subject.info, [field]: value };
       const updatedByType = COMPARABLE_TYPES.reduce<
         Record<ComparableType, ComparablesMapState>
-      >((acc, type) => {
-        const currentState =
-          project.comparables.byType[type] ??
-          createDefaultProject().comparables.byType[type];
-        acc[type] = {
-          ...currentState,
-          subjectInfo: {
-            ...(currentState.subjectInfo ?? project.subject.info),
-            ...updatedInfo,
-          },
-        };
-        return acc;
-      }, {} as Record<ComparableType, ComparablesMapState>);
+      >(
+        (acc, type) => {
+          const currentState =
+            project.comparables.byType[type] ??
+            createDefaultProject().comparables.byType[type];
+          acc[type] = {
+            ...currentState,
+            // subjectInfo removed - use project.subject.info instead
+          };
+          return acc;
+        },
+        {} as Record<ComparableType, ComparablesMapState>,
+      );
 
       return {
         subject: {
@@ -231,10 +251,7 @@ export default function ProjectsPage() {
             ...project.comparables.byType,
             [type]: {
               ...currentState,
-              comparables: [
-                ...(currentState.comparables ?? []),
-                newComparable,
-              ],
+              comparables: [...(currentState.comparables ?? []), newComparable],
             },
           },
         },
@@ -375,19 +392,57 @@ export default function ProjectsPage() {
           </button>
         </div>
         <nav className="space-y-2">
-          {projectNames.map((name) => (
-            <button
-              key={name}
-              onClick={() => handleSelectProject(name)}
-              className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                name === selectedProjectName
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-transparent bg-gray-100 text-gray-700 hover:border-gray-300 hover:bg-white"
-              }`}
-            >
-              {name}
-            </button>
-          ))}
+          {projectNames.map((name) => {
+            const isSelected = name === selectedProjectName;
+            const project = projects[name];
+            const normalizedProject = project
+              ? normalizeProjectData(project)
+              : null;
+            return (
+              <div key={name} className="space-y-1">
+                <button
+                  onClick={() => handleSelectProject(name)}
+                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-transparent bg-gray-100 text-gray-700 hover:border-gray-300 hover:bg-white"
+                  }`}
+                >
+                  {name}
+                </button>
+                {isSelected && normalizedProject && (
+                  <div className="ml-4 space-y-1 border-l-2 border-blue-200 pl-3">
+                    <Link
+                      href={`/cover?project=${encodeURIComponent(name)}`}
+                      className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Cover Page
+                    </Link>
+                    <Link
+                      href="/location-map"
+                      className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Location Map
+                    </Link>
+                    <Link
+                      href="/comps-map"
+                      className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Comparables Map
+                    </Link>
+                    {normalizedProject.subjectPhotosFolderId && (
+                      <Link
+                        href={`/photos?folderId=${encodeURIComponent(normalizedProject.subjectPhotosFolderId)}`}
+                        className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Photos
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
       </aside>
 
@@ -402,25 +457,6 @@ export default function ProjectsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href={`/cover?project=${encodeURIComponent(selectedProjectName)}`}
-              target="_blank"
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-            >
-              Cover Page
-            </Link>
-            <Link
-              href="/location-map"
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-            >
-              Location Map
-            </Link>
-            <Link
-              href="/comps-map"
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-            >
-              Comparables Map
-            </Link>
             <button
               onClick={() => setIsJsonMode((prev) => !prev)}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
@@ -434,12 +470,31 @@ export default function ProjectsPage() {
             >
               Rename
             </button>
+            <button
+              onClick={handleDeleteProject}
+              className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
+              disabled={!selectedProjectName}
+            >
+              Delete
+            </button>
           </div>
         </div>
 
         {!selectedProject && (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center text-gray-500">
-            Create or select a project to get started.
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
+            <p className="mb-4 text-gray-500">
+              {projectNames.length === 0
+                ? "No projects yet. Create your first project to get started."
+                : "Select a project to view or edit its details."}
+            </p>
+            {projectNames.length === 0 && (
+              <button
+                onClick={handleCreateProject}
+                className="rounded-md border border-blue-500 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+              >
+                Create New Project
+              </button>
+            )}
           </div>
         )}
 
@@ -451,7 +506,7 @@ export default function ProjectsPage() {
               </h3>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Address
                   </label>
                   <input
@@ -460,13 +515,13 @@ export default function ProjectsPage() {
                     onChange={(event) =>
                       handleSubjectChange("address", event.target.value)
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="123 Main St, Odessa, TX 79761"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Address (Display)
                   </label>
                   <input
@@ -478,13 +533,13 @@ export default function ProjectsPage() {
                         event.target.value,
                       )
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Display name for subject..."
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Legal Description
                   </label>
                   <input
@@ -496,13 +551,13 @@ export default function ProjectsPage() {
                         event.target.value,
                       )
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Legal description..."
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Acres
                   </label>
                   <input
@@ -511,32 +566,31 @@ export default function ProjectsPage() {
                     onChange={(event) =>
                       handleSubjectChange("acres", event.target.value)
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="9.834"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-                    Google Drive Folder ID
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                    Subject Photos Folder ID
                   </label>
                   <input
                     type="text"
-                    value={selectedProject.googleDriveFolderId ?? ""}
+                    value={selectedProject.subjectPhotosFolderId ?? ""}
                     onChange={(event) => {
                       updateProject((project) => ({
                         ...project,
-                        googleDriveFolderId: event.target.value,
+                        subjectPhotosFolderId: event.target.value,
                       }));
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="1a2b3c4d5e6f7g8h9i0j"
                   />
-                  {selectedProject.googleDriveFolderId && (
+                  {selectedProject.subjectPhotosFolderId && (
                     <Link
-                      href={`/photos?folderId=${encodeURIComponent(selectedProject.googleDriveFolderId)}`}
-                      target="_blank"
+                      href={`/photos?folderId=${encodeURIComponent(selectedProject.subjectPhotosFolderId)}`}
                       className="mt-2 inline-block rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
                     >
                       View Photos
@@ -544,7 +598,7 @@ export default function ProjectsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Client Company
                   </label>
                   <input
@@ -556,13 +610,13 @@ export default function ProjectsPage() {
                         clientCompany: event.target.value,
                       }));
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Winkler County Hospital District"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Client Name
                   </label>
                   <input
@@ -574,13 +628,13 @@ export default function ProjectsPage() {
                         clientName: event.target.value,
                       }));
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Lorenzo Serrano"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Property Type
                   </label>
                   <input
@@ -592,13 +646,13 @@ export default function ProjectsPage() {
                         propertyType: event.target.value,
                       }));
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Commercial Office Building"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Project Folder ID
                   </label>
                   <input
@@ -610,7 +664,7 @@ export default function ProjectsPage() {
                         projectFolderId: event.target.value,
                       }));
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     disabled={isSubjectDisabled}
                     placeholder="Project folder ID for cover data"
                   />
@@ -644,7 +698,8 @@ export default function ProjectsPage() {
               </div>
 
               <p className="mb-4 text-xs text-gray-500">
-                Each comparable type maintains its own markers, shapes, and map settings.
+                Each comparable type maintains its own markers, shapes, and map
+                settings.
               </p>
 
               <div className="space-y-6">
@@ -686,7 +741,6 @@ export default function ProjectsPage() {
                                   {type === "Land" && selectedProjectName && (
                                     <Link
                                       href={`/land-comp-map?project=${encodeURIComponent(selectedProjectName)}&compId=${comparable.id}`}
-                                      target="_blank"
                                       className="rounded-md border border-green-600 bg-green-50 px-2 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100"
                                     >
                                       Land Map
@@ -694,7 +748,10 @@ export default function ProjectsPage() {
                                   )}
                                   <button
                                     onClick={() =>
-                                      handleRemoveComparable(type, comparable.id)
+                                      handleRemoveComparable(
+                                        type,
+                                        comparable.id,
+                                      )
                                     }
                                     className="text-xs font-medium text-red-600 hover:text-red-700"
                                   >
@@ -704,7 +761,7 @@ export default function ProjectsPage() {
                               </div>
                               <div className="grid gap-3 md:grid-cols-2">
                                 <div>
-                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                                     Address
                                   </label>
                                   <input
@@ -718,12 +775,12 @@ export default function ProjectsPage() {
                                         event.target.value,
                                       )
                                     }
-                                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     placeholder="Comparable address..."
                                   />
                                 </div>
                                 <div>
-                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                                     Address (Display)
                                   </label>
                                   <input
@@ -737,11 +794,44 @@ export default function ProjectsPage() {
                                         event.target.value,
                                       )
                                     }
-                                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     placeholder="Display name..."
                                   />
                                 </div>
                               </div>
+                              {(comparable.apn && comparable.apn.length > 0) ||
+                              comparable.instrumentNumber ? (
+                                <div className="mt-3 space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3">
+                                  {comparable.apn &&
+                                    comparable.apn.length > 0 && (
+                                      <div>
+                                        <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                                          APN
+                                        </label>
+                                        <div className="space-y-1">
+                                          {comparable.apn.map((apn, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                            >
+                                              {apn}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  {comparable.instrumentNumber && (
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                                        Recording
+                                      </label>
+                                      <div className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700">
+                                        {comparable.instrumentNumber}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -770,7 +860,7 @@ export default function ProjectsPage() {
             <textarea
               value={jsonValue}
               onChange={(event) => setJsonValue(event.target.value)}
-              className="h-96 w-full rounded-md border border-gray-300 bg-gray-900 p-4 font-mono text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-96 w-full rounded-md border border-gray-300 bg-gray-900 p-4 font-mono text-sm text-gray-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
             {jsonError && (
               <p className="mt-2 text-sm text-red-600">
@@ -790,5 +880,3 @@ export default function ProjectsPage() {
     </div>
   );
 }
-
-

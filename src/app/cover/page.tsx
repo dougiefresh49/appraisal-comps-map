@@ -6,7 +6,6 @@ import {
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   normalizeProjectsMap,
-  normalizeProjectData,
   getNextProjectName,
   createDefaultProject,
   type ProjectData,
@@ -29,23 +28,27 @@ export default function CoverPage() {
   const [coverSize, setCoverSize] = useState(1.5);
   const [subjectPhotoUrl, setSubjectPhotoUrl] = useState<string | null>(null);
   const [isLoadingCoverData, setIsLoadingCoverData] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const applyProjectState = useCallback((data: ProjectData) => {
     setProjectData(data);
     setClientCompany(data.clientCompany ?? "");
     setClientName(data.clientName ?? "");
     setPropertyType(data.propertyType ?? "");
+    setHasInitialized(true);
   }, []);
 
   const persistCurrentProjectState = useCallback(() => {
-    if (!projectName || !projectData) return;
+    if (!projectName || !projectData || !hasInitialized) return;
     if (typeof window === "undefined") return;
 
+    // Only update fields that have been explicitly changed by the user
+    // Preserve all other fields from projectData
     const updatedProject: ProjectData = {
-      ...projectData,
-      clientCompany,
-      clientName,
-      propertyType,
+      ...projectData, // Preserve all existing fields
+      clientCompany: clientCompany || projectData.clientCompany,
+      clientName: clientName || projectData.clientName,
+      propertyType: propertyType || projectData.propertyType,
     };
 
     projectStoreRef.current[projectName] = updatedProject;
@@ -71,9 +74,9 @@ export default function CoverPage() {
     return () => clearInterval(interval);
   }, [isStateHydrated, persistCurrentProjectState]);
 
-  // Save on field changes
+  // Save on field changes (only after initialization)
   useEffect(() => {
-    if (!isStateHydrated) return;
+    if (!isStateHydrated || !hasInitialized) return;
     const timeoutId = setTimeout(() => {
       persistCurrentProjectState();
     }, 1000);
@@ -83,6 +86,7 @@ export default function CoverPage() {
     clientName,
     propertyType,
     isStateHydrated,
+    hasInitialized,
     persistCurrentProjectState,
   ]);
 
@@ -146,117 +150,22 @@ export default function CoverPage() {
     setIsStateHydrated(true);
   }, [applyProjectState, isStateHydrated, projectParam]);
 
-  // Fetch cover data from webhook when projectFolderId is available
+  // Initialize cover data from project data (no initial webhook fetch needed)
   useEffect(() => {
-    if (!isStateHydrated || !projectData?.projectFolderId) return;
+    if (!isStateHydrated || !projectData) return;
 
-    const fetchCoverData = async () => {
-      setIsLoadingCoverData(true);
-      try {
-        const response = await fetch(
-          "https://dougiefreshdesigns.app.n8n.cloud/webhook/cover-data",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              projectFolderId: projectData.projectFolderId,
-            }),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch cover data: ${response.statusText}`);
-        }
-
-        const coverData = (await response.json()) as {
-          subjectPhotoUrl?: string;
-          subjectPhotoAlt?: string;
-          subjectPhotoBase64?: string; // Base64 encoded image data
-          propertyType: string;
-          clientName: string;
-          clientCompany: string;
-        };
-
-        if (coverData) {
-          // Update state with fetched data
-          if (coverData.propertyType) {
-            setPropertyType(coverData.propertyType);
-          }
-          if (coverData.clientName) {
-            setClientName(coverData.clientName);
-          }
-          if (coverData.clientCompany) {
-            setClientCompany(coverData.clientCompany);
-          }
-
-          // Prioritize base64 image data (most reliable, no rate limiting or permission issues)
-          if (coverData.subjectPhotoBase64) {
-            const dataUrl = `data:image/jpeg;base64,${coverData.subjectPhotoBase64}`;
-            console.log("Setting image from base64 data");
-            setSubjectPhotoUrl(dataUrl);
-          } else if (coverData.subjectPhotoAlt) {
-            // Fall back to subjectPhotoAlt if base64 is not available
-            console.log(
-              "Using image URL from subjectPhotoAlt:",
-              coverData.subjectPhotoAlt,
-            );
-            setSubjectPhotoUrl(coverData.subjectPhotoAlt);
-          } else if (coverData.subjectPhotoUrl) {
-            // Last resort: try to extract file ID from subjectPhotoUrl
-            const fileIdMatch = coverData.subjectPhotoUrl.match(
-              /\/d\/([a-zA-Z0-9_-]+)/,
-            );
-            if (fileIdMatch && fileIdMatch[1]) {
-              const fileId = fileIdMatch[1];
-              // Try thumbnail format as last resort
-              const thumbnailUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-              console.log(
-                "Using thumbnail URL from subjectPhotoUrl:",
-                thumbnailUrl,
-              );
-              setSubjectPhotoUrl(thumbnailUrl);
-            } else {
-              console.warn(
-                "Could not extract file ID from subjectPhotoUrl:",
-                coverData.subjectPhotoUrl,
-              );
-            }
-          } else {
-            console.warn("No image data found in cover data");
-          }
-
-          // Persist the fetched data
-          const updatedProject: ProjectData = {
-            ...projectData,
-            propertyType: coverData.propertyType || projectData.propertyType,
-            clientName: coverData.clientName || projectData.clientName,
-            clientCompany: coverData.clientCompany || projectData.clientCompany,
-          };
-
-          projectStoreRef.current[projectName] = updatedProject;
-          setProjectData(updatedProject);
-
-          try {
-            window.localStorage.setItem(
-              PROJECTS_STORAGE_KEY,
-              JSON.stringify(projectStoreRef.current),
-            );
-          } catch (error) {
-            console.error("Failed to persist fetched cover data", error);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching cover data:", error);
-      } finally {
-        setIsLoadingCoverData(false);
-      }
-    };
-
-    fetchCoverData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStateHydrated, projectData?.projectFolderId]);
+    // Set initial values from project data
+    if (projectData.propertyType) {
+      setPropertyType(projectData.propertyType);
+    }
+    if (projectData.clientName) {
+      setClientName(projectData.clientName);
+    }
+    if (projectData.clientCompany) {
+      setClientCompany(projectData.clientCompany);
+    }
+    // Note: subjectPhotoUrl is not stored in project data, it's fetched on demand
+  }, [isStateHydrated, projectData]);
 
   if (!projectData) {
     return (
@@ -348,7 +257,9 @@ export default function CoverPage() {
                     {subjectPhotoUrl && (
                       <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
                         <div className="font-semibold">Image URL:</div>
-                        <div className="mt-1">{subjectPhotoUrl}</div>
+                        <div className="mt-1 line-clamp-2 break-all">
+                          {subjectPhotoUrl}
+                        </div>
                       </div>
                     )}
                     {!subjectPhotoUrl && (
@@ -364,7 +275,7 @@ export default function CoverPage() {
                     setIsLoadingCoverData(true);
                     try {
                       const response = await fetch(
-                        "https://dougiefreshdesigns.app.n8n.cloud/webhook/cover-data",
+                        "https://dougiefreshdesigns.app.n8n.cloud/webhook/subject-photo-data",
                         {
                           method: "POST",
                           headers: {
@@ -378,90 +289,49 @@ export default function CoverPage() {
 
                       if (!response.ok) {
                         throw new Error(
-                          `Failed to fetch cover data: ${response.statusText}`,
+                          `Failed to fetch subject photo data: ${response.statusText}`,
                         );
                       }
 
-                      const coverData = (await response.json()) as {
-                        subjectPhotoUrl?: string;
-                        subjectPhotoAlt?: string;
-                        subjectPhotoBase64?: string; // Base64 encoded image data
-                        propertyType: string;
-                        clientName: string;
-                        clientCompany: string;
+                      const photoData = (await response.json()) as {
+                        subjectPhotoBase64?: string;
+                        subjectPhotosFolderId?: string;
                       };
 
-                      if (coverData) {
-                        if (coverData.propertyType)
-                          setPropertyType(coverData.propertyType);
-                        if (coverData.clientName)
-                          setClientName(coverData.clientName);
-                        if (coverData.clientCompany)
-                          setClientCompany(coverData.clientCompany);
+                      if (photoData) {
+                        // Update subjectPhotosFolderId if provided
+                        if (photoData.subjectPhotosFolderId) {
+                          const updatedProject: ProjectData = {
+                            ...projectData, // Preserve all existing fields
+                            subjectPhotosFolderId:
+                              photoData.subjectPhotosFolderId,
+                          };
+                          projectStoreRef.current[projectName] = updatedProject;
+                          setProjectData(updatedProject);
 
-                        // Prioritize base64 image data (most reliable, no rate limiting or permission issues)
-                        if (coverData.subjectPhotoBase64) {
-                          const dataUrl = `data:image/jpeg;base64,${coverData.subjectPhotoBase64}`;
+                          try {
+                            window.localStorage.setItem(
+                              PROJECTS_STORAGE_KEY,
+                              JSON.stringify(projectStoreRef.current),
+                            );
+                          } catch (error) {
+                            console.error(
+                              "Failed to persist subjectPhotosFolderId",
+                              error,
+                            );
+                          }
+                        }
+
+                        // Update image from base64 data
+                        if (photoData.subjectPhotoBase64) {
+                          const dataUrl = `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`;
                           console.log(
                             "Refresh - Setting image from base64 data",
                           );
                           setSubjectPhotoUrl(dataUrl);
-                        } else if (coverData.subjectPhotoAlt) {
-                          // Fall back to subjectPhotoAlt if base64 is not available
-                          console.log(
-                            "Refresh - Using image URL from subjectPhotoAlt:",
-                            coverData.subjectPhotoAlt,
-                          );
-                          setSubjectPhotoUrl(coverData.subjectPhotoAlt);
-                        } else if (coverData.subjectPhotoUrl) {
-                          // Last resort: try to extract file ID from subjectPhotoUrl
-                          const fileIdMatch = coverData.subjectPhotoUrl.match(
-                            /\/d\/([a-zA-Z0-9_-]+)/,
-                          );
-                          if (fileIdMatch && fileIdMatch[1]) {
-                            const fileId = fileIdMatch[1];
-                            // Try thumbnail format as last resort
-                            const thumbnailUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-                            console.log(
-                              "Refresh - Using thumbnail URL from subjectPhotoUrl:",
-                              thumbnailUrl,
-                            );
-                            setSubjectPhotoUrl(thumbnailUrl);
-                          } else {
-                            console.warn(
-                              "Refresh - Could not extract file ID from subjectPhotoUrl:",
-                              coverData.subjectPhotoUrl,
-                            );
-                          }
                         } else {
                           console.warn(
-                            "Refresh - No image data found in cover data",
-                          );
-                        }
-
-                        const updatedProject: ProjectData = {
-                          ...projectData,
-                          propertyType:
-                            coverData.propertyType || projectData.propertyType,
-                          clientName:
-                            coverData.clientName || projectData.clientName,
-                          clientCompany:
-                            coverData.clientCompany ||
-                            projectData.clientCompany,
-                        };
-
-                        projectStoreRef.current[projectName] = updatedProject;
-                        setProjectData(updatedProject);
-
-                        try {
-                          window.localStorage.setItem(
-                            PROJECTS_STORAGE_KEY,
-                            JSON.stringify(projectStoreRef.current),
-                          );
-                        } catch (error) {
-                          console.error(
-                            "Failed to persist fetched cover data",
-                            error,
+                            "Refresh - No image data found in photo data",
                           );
                         }
                       }
