@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
@@ -48,8 +48,8 @@ export default function ComparablesMapPage() {
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo>({
     address: "",
     addressForDisplay: "",
-    legalDescription: "",
-    acres: "",
+    legalDescription: undefined,
+    acres: undefined,
   });
   const [subjectMarkerPosition, setSubjectMarkerPosition] = useState<{
     lat: number;
@@ -67,6 +67,7 @@ export default function ComparablesMapPage() {
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
+  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [activeType, setActiveType] = useState<ComparableType>("Land");
   const [pinningTailForCompId, setPinningTailForCompId] = useState<
     string | null
@@ -94,7 +95,8 @@ export default function ComparablesMapPage() {
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
       const snapshot = normalizeProjectData(project);
-      const nextType = typeOverride ?? snapshot.comparables.activeType ?? "Land";
+      const nextType =
+        typeOverride ?? snapshot.comparables.activeType ?? "Land";
       const mapState =
         snapshot.comparables.byType[nextType] ??
         createDefaultProject().comparables.byType[nextType];
@@ -122,17 +124,41 @@ export default function ComparablesMapPage() {
           : null,
       );
       setComparables(
-        (mapState.comparables ?? []).map((comp) => ({
-          ...comp,
-          type: comp.type ?? nextType,
-          pinnedTailTipPosition: comp.pinnedTailTipPosition
-            ? { ...comp.pinnedTailTipPosition }
-            : undefined,
-          position: comp.position ? { ...comp.position } : undefined,
-          markerPosition: comp.markerPosition
-            ? { ...comp.markerPosition }
-            : undefined,
-        })),
+        (mapState.comparables ?? []).map((comp) => {
+          // For Land comparables, check if there's a landLocationMap entry
+          // and use positions from there if available
+          let resolvedMarkerPosition = comp.markerPosition;
+          let resolvedPosition = comp.position;
+          let resolvedPinnedTailTipPosition = comp.pinnedTailTipPosition;
+
+          if (nextType === "Land" && mapState.landLocationMaps?.[comp.id]) {
+            const landMapState = mapState.landLocationMaps[comp.id];
+            if (landMapState) {
+              // Use markerPosition from landLocationMap if available
+              if (landMapState.markerPosition) {
+                resolvedMarkerPosition = { ...landMapState.markerPosition };
+              }
+              // Use bubblePosition from landLocationMap as the bubble position
+              if (landMapState.bubblePosition) {
+                resolvedPosition = { ...landMapState.bubblePosition };
+              }
+            }
+            // Note: pinnedTailTipPosition is not stored in LocationMapState,
+            // so we keep the one from the comparable itself
+          }
+
+          return {
+            ...comp,
+            type: comp.type ?? nextType,
+            pinnedTailTipPosition: resolvedPinnedTailTipPosition
+              ? { ...resolvedPinnedTailTipPosition }
+              : undefined,
+            position: resolvedPosition ? { ...resolvedPosition } : undefined,
+            markerPosition: resolvedMarkerPosition
+              ? { ...resolvedMarkerPosition }
+              : undefined,
+          };
+        }),
       );
       setMapCenter(
         mapState.mapCenter
@@ -142,6 +168,7 @@ export default function ComparablesMapPage() {
       setMapZoom(mapState.mapZoom ?? 17);
       setBubbleSize(mapState.bubbleSize ?? 1.0);
       setHideUI(mapState.hideUI ?? false);
+      setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
       setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
         subjectSnapshot.pinnedTailTipPosition ?? undefined,
@@ -184,7 +211,10 @@ export default function ComparablesMapPage() {
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
+        const parsed = JSON.parse(stored) as Record<
+          string,
+          Partial<ProjectData>
+        >;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -288,6 +318,7 @@ export default function ComparablesMapPage() {
       mapZoom,
       bubbleSize,
       hideUI,
+      documentFrameSize,
       // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
       landLocationMaps:
         activeType === "Land"
@@ -312,6 +343,7 @@ export default function ComparablesMapPage() {
     };
 
     const snapshot: ProjectData = {
+      ...baseProject, // Preserve all top-level fields (subjectPhotosFolderId, projectFolderId, clientCompany, etc.)
       subject,
       comparables: comparablesState,
       location: locationState,
@@ -322,6 +354,7 @@ export default function ComparablesMapPage() {
   }, [
     activeType,
     comparables,
+    documentFrameSize,
     hideUI,
     isSubjectTailPinned,
     mapCenter,
@@ -334,34 +367,28 @@ export default function ComparablesMapPage() {
     subjectPinnedTailTipPosition,
   ]);
 
-  const writeProjectsToStorage = useCallback(
-    (currentName: string) => {
-      if (typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(
-          PROJECTS_STORAGE_KEY,
-          JSON.stringify(projectStoreRef.current),
-        );
-        window.localStorage.setItem(
-          CURRENT_PROJECT_STORAGE_KEY,
-          currentName,
-        );
-      } catch (error) {
-        console.error("Failed to save projects", error);
-      }
-    },
-    [],
-  );
+  const writeProjectsToStorage = useCallback((currentName: string) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        PROJECTS_STORAGE_KEY,
+        JSON.stringify(projectStoreRef.current),
+      );
+      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
+    } catch (error) {
+      console.error("Failed to save projects", error);
+    }
+  }, []);
 
   const handleProjectNameEdit = useCallback(() => {
     if (typeof window === "undefined") return;
-    const input = window
-      .prompt("Rename project", projectName)
-      ?.trim();
+    const input = window.prompt("Rename project", projectName)?.trim();
     if (!input || input === projectName) return;
 
     if (projectStoreRef.current[input]) {
-      window.alert("A project with that name already exists. Choose another name.");
+      window.alert(
+        "A project with that name already exists. Choose another name.",
+      );
       return;
     }
 
@@ -385,12 +412,7 @@ export default function ComparablesMapPage() {
       if (!project) return;
       applyProjectState(project, type);
     },
-    [
-      activeType,
-      applyProjectState,
-      persistCurrentProjectState,
-      projectName,
-    ],
+    [activeType, applyProjectState, persistCurrentProjectState, projectName],
   );
 
   const handleProjectSwitch = useCallback(() => {
@@ -494,16 +516,40 @@ export default function ComparablesMapPage() {
 
     try {
       await navigator.clipboard.writeText(url.toString());
-      window.alert(
-        `Shareable link for ${projectName} copied to clipboard!`,
-      );
+      window.alert(`Shareable link for ${projectName} copied to clipboard!`);
     } catch (error) {
       console.error("Failed to copy share link", error);
       window.prompt("Copy this share link", url.toString());
     }
   }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
 
-  // Calculate distances and directions for comparables - this is handled in render
+  // Calculate distances and directions for comparables
+  // Use useMemo to recalculate when subject tail tip or marker position changes
+  // Use tail tip positions for both subject and comparables (where they've been placed)
+  const comparablesWithDistance = useMemo(() => {
+    // Use subject's pinned tail tip position if available, otherwise marker position
+    const subjectRefPoint =
+      subjectPinnedTailTipPosition ?? subjectMarkerPosition;
+
+    return comparables.map((comp) => {
+      let distance = "";
+      // Use comparable's pinned tail tip position if available, otherwise marker position
+      const compRefPoint = comp.pinnedTailTipPosition ?? comp.markerPosition;
+
+      if (subjectRefPoint && compRefPoint) {
+        distance = formatDistanceAndDirection(
+          subjectRefPoint.lat,
+          subjectRefPoint.lng,
+          compRefPoint.lat,
+          compRefPoint.lng,
+        );
+      }
+      return {
+        ...comp,
+        distance,
+      };
+    });
+  }, [comparables, subjectPinnedTailTipPosition, subjectMarkerPosition]);
 
   // Handle subject address search
   const handleSubjectAddressSearch = async (address: string) => {
@@ -592,18 +638,8 @@ export default function ComparablesMapPage() {
           prev.map((comp) => {
             if (comp.id !== compId) return comp;
 
-            // Calculate distance from subject if subject exists
-            // Use subject.pinnedTailTipPosition for distance calculation
-            let distance = "";
-            const subjectRefPoint = subjectPinnedTailTipPosition ?? subjectMarkerPosition;
-            if (subjectRefPoint) {
-              distance = formatDistanceAndDirection(
-                subjectRefPoint.lat,
-                subjectRefPoint.lng,
-                newPosition.lat,
-                newPosition.lng,
-              );
-            }
+            // Distance will be calculated by useMemo when component re-renders
+            // No need to calculate it here since it depends on subjectPinnedTailTipPosition
 
             return {
               ...comp,
@@ -682,6 +718,8 @@ export default function ComparablesMapPage() {
         onHideUIChange={setHideUI}
         showDocumentOverlay={showDocumentOverlay}
         onShowDocumentOverlayChange={setShowDocumentOverlay}
+        documentFrameSize={documentFrameSize}
+        onDocumentFrameSizeChange={setDocumentFrameSize}
         activeType={activeType}
         onActiveTypeChange={handleActiveTypeChange}
         pinningTailForCompId={pinningTailForCompId}
@@ -829,21 +867,8 @@ export default function ComparablesMapPage() {
             )}
 
             {/* Comparable markers */}
-            {comparables.map((comp, index) => {
+            {comparablesWithDistance.map((comp, index) => {
               if (!comp.markerPosition || !comp.position) return null;
-
-              // Calculate distance from subject
-              // Use subject.pinnedTailTipPosition for distance calculation
-              let distance = "";
-              const subjectRefPoint = subjectPinnedTailTipPosition ?? subjectMarkerPosition;
-              if (subjectRefPoint && comp.markerPosition) {
-                distance = formatDistanceAndDirection(
-                  subjectRefPoint.lat,
-                  subjectRefPoint.lng,
-                  comp.markerPosition.lat,
-                  comp.markerPosition.lng,
-                );
-              }
 
               // Get color based on property types filter
               const comparableColor = TYPE_COLORS[activeType];
@@ -880,7 +905,7 @@ export default function ComparablesMapPage() {
                     comparableInfo={{
                       address: comp.address,
                       addressForDisplay: comp.addressForDisplay || comp.address,
-                      distance,
+                      distance: comp.distance,
                     }}
                     comparableNumber={index + 1}
                     onPositionChange={(newPos) => {
@@ -902,7 +927,10 @@ export default function ComparablesMapPage() {
             })}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} />
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+        />
       </div>
     </div>
   );

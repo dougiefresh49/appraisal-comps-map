@@ -45,6 +45,7 @@ export interface ComparablesMapState {
   mapZoom?: number;
   bubbleSize?: number;
   hideUI?: boolean;
+  documentFrameSize?: number; // Scale factor for document overlay
   // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
   landLocationMaps?: Record<string, LocationMapState>;
 }
@@ -350,6 +351,10 @@ function normalizeComparablesMapState(
         : 1.0,
     hideUI:
       typeof input?.hideUI === "boolean" ? input.hideUI : false,
+    documentFrameSize:
+      typeof input?.documentFrameSize === "number"
+        ? input.documentFrameSize
+        : 1.0,
     // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     landLocationMaps:
       fallbackType === "Land"

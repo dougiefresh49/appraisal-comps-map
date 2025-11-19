@@ -26,6 +26,7 @@ export default function CoverPage() {
   const [clientName, setClientName] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [coverSize, setCoverSize] = useState(1.5);
+  const [imageSize, setImageSize] = useState(1.0); // Multiplier for image size (1.0 = 320x204, larger = 450x264)
   const [subjectPhotoUrl, setSubjectPhotoUrl] = useState<string | null>(null);
   const [isLoadingCoverData, setIsLoadingCoverData] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -181,9 +182,42 @@ export default function CoverPage() {
     "";
 
   return (
-    <div className="flex h-screen w-full bg-white">
-      {/* Side Panel */}
-      <aside className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm">
+    <>
+      {/* Print styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            /* Hide sidebar when printing */
+            aside {
+              display: none !important;
+            }
+            
+            /* Make main content full width */
+            main {
+              width: 100% !important;
+              max-width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            
+            /* Ensure cover page is centered and properly sized */
+            body {
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            
+            /* Hide any other UI elements */
+            .no-print {
+              display: none !important;
+            }
+          }
+        `
+      }} />
+      
+      <div className="flex h-screen w-full bg-white">
+        {/* Side Panel */}
+        <aside className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">
             Cover Page
@@ -349,6 +383,36 @@ export default function CoverPage() {
               </div>
             )}
 
+            {/* Image Size Controls */}
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Image Size
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setImageSize(Math.max(0.5, imageSize - 0.1))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Decrease image size"
+                >
+                  −
+                </button>
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                  {Math.round(imageSize * 100)}%
+                </span>
+                <button
+                  onClick={() => setImageSize(Math.min(2.0, imageSize + 0.1))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Increase image size"
+                >
+                  +
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                Base: 320×204px | Large: 450×264px | Current:{" "}
+                {Math.round(320 * imageSize)}×{Math.round(204 * imageSize)}px
+              </div>
+            </div>
+
             {/* Cover Size Controls */}
             <div className="mt-6 border-t border-gray-200 pt-6">
               <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -377,6 +441,21 @@ export default function CoverPage() {
                 Base: 612×792px (100%) | Current: {Math.round(612 * coverSize)}×
                 {Math.round(792 * coverSize)}px
               </div>
+            </div>
+
+            {/* Print to PDF Button */}
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <button
+                onClick={() => {
+                  window.print();
+                }}
+                className="w-full rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Print to PDF
+              </button>
+              <p className="mt-2 text-xs text-gray-500">
+                Opens browser print dialog. Select "Save as PDF" as destination.
+              </p>
             </div>
           </div>
         </div>
@@ -432,8 +511,15 @@ export default function CoverPage() {
             className="flex flex-1 flex-col items-center justify-center"
             style={{ padding: "56px 100px 100px 100px" }}
           >
-            {/* Photo - 320x204 */}
-            <div className="mb-10 h-[204px] w-[320px] overflow-hidden rounded-lg border border-gray-300 shadow-sm">
+            {/* Photo - Dynamic size based on imageSize multiplier */}
+            <div
+              className="overflow-hidden rounded-lg border border-gray-300 shadow-sm"
+              style={{
+                width: imageSize >= 1.40625 ? "450px" : `${320 * imageSize}px`,
+                height: imageSize >= 1.40625 ? "264px" : `${204 * imageSize}px`,
+                marginBottom: imageSize >= 1.40625 ? "16px" : "40px",
+              }}
+            >
               {subjectPhotoUrl ? (
                 <img
                   src={subjectPhotoUrl}
@@ -464,7 +550,7 @@ export default function CoverPage() {
               {/* Appraisal Report Label */}
               <p
                 className="font-sans text-[11px] tracking-wider text-[#5A5463] uppercase"
-                style={{ marginBottom: "16px" }}
+                style={{ marginBottom: imageSize >= 1.40625 ? "8px" : "16px" }}
               >
                 APPRAISAL REPORT
               </p>
@@ -472,7 +558,7 @@ export default function CoverPage() {
               {/* Property Type */}
               <h1
                 className="text-center font-sans text-[21px] font-bold tracking-wide text-[#0E0D0D] uppercase"
-                style={{ marginBottom: "16px" }}
+                style={{ marginBottom: imageSize >= 1.40625 ? "12px" : "16px" }}
               >
                 {propertyType || "COMMERCIAL OFFICE BUILDING"}
               </h1>
@@ -540,5 +626,6 @@ export default function CoverPage() {
         </div>
       </main>
     </div>
+    </>
   );
 }

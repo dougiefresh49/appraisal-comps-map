@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface DocumentOverlayProps {
   enabled: boolean;
+  size?: number; // Scale factor (defaults to 1.0)
 }
 
 /**
@@ -11,7 +12,7 @@ interface DocumentOverlayProps {
  * to help users understand if their screenshot will fit on a Google document page.
  * Similar to Mac screenshot tool - darkens the area outside the document frame.
  */
-export function DocumentOverlay({ enabled }: DocumentOverlayProps) {
+export function DocumentOverlay({ enabled, size = 1.0 }: DocumentOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({
     width: 0,
@@ -42,13 +43,13 @@ export function DocumentOverlay({ enabled }: DocumentOverlayProps) {
       const documentAspectRatio = 8.5 / 11; // ≈ 0.7727
 
       // Calculate document frame size to fit within container
-      // Try fitting by width first
-      let docWidth = containerWidth * 0.9; // Use 90% of container width
+      // Apply the size multiplier
+      let docWidth = containerWidth * 0.9 * size;
       let docHeight = docWidth / documentAspectRatio;
 
       // If height exceeds container, fit by height instead
-      if (docHeight > containerHeight * 0.9) {
-        docHeight = containerHeight * 0.9;
+      if (docHeight > containerHeight * 0.9 * size) {
+        docHeight = containerHeight * 0.9 * size;
         docWidth = docHeight * documentAspectRatio;
       }
 
@@ -95,7 +96,7 @@ export function DocumentOverlay({ enabled }: DocumentOverlayProps) {
       if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", updateDimensions);
     };
-  }, [enabled]);
+  }, [enabled, size]);
 
   if (!enabled) return null;
 
@@ -190,7 +191,7 @@ export function DocumentOverlay({ enabled }: DocumentOverlayProps) {
       >
         {/* Size label */}
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-medium text-white drop-shadow-lg">
-          8.5" × 11"
+          {Math.round(dimensions.width)}px × {Math.round(dimensions.height)}px ({Math.round(size * 100)}%)
         </div>
       </div>
     </div>

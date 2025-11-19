@@ -9,7 +9,7 @@ import {
 interface SubjectInfo {
   address: string;
   addressForDisplay?: string;
-  legalDescription: string;
+  legalDescription?: string;
   acres?: string;
 }
 
@@ -38,6 +38,8 @@ interface ComparablesPanelProps {
   onHideUIChange: (hide: boolean) => void;
   showDocumentOverlay?: boolean;
   onShowDocumentOverlayChange?: (show: boolean) => void;
+  documentFrameSize?: number;
+  onDocumentFrameSizeChange?: (size: number) => void;
   activeType: ComparableType;
   onActiveTypeChange: (type: ComparableType) => void;
   pinningTailForCompId: string | null;
@@ -70,6 +72,8 @@ export function ComparablesPanel({
     onHideUIChange,
     showDocumentOverlay,
     onShowDocumentOverlayChange,
+    documentFrameSize,
+    onDocumentFrameSizeChange,
     activeType,
   onActiveTypeChange,
   pinningTailForCompId,
@@ -559,6 +563,42 @@ export function ComparablesPanel({
               : "Show 8.5×11\" Document Frame"}
           </button>
         )}
+        {showDocumentOverlay &&
+          documentFrameSize !== undefined &&
+          onDocumentFrameSizeChange && (
+            <div className="mt-3">
+              <label className="mb-2 block text-xs font-medium text-gray-700">
+                Frame Size
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    onDocumentFrameSizeChange(
+                      Math.max(0.5, documentFrameSize - 0.1),
+                    )
+                  }
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Decrease frame size"
+                >
+                  −
+                </button>
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                  {Math.round(documentFrameSize * 100)}%
+                </span>
+                <button
+                  onClick={() =>
+                    onDocumentFrameSizeChange(
+                      Math.min(2.0, documentFrameSize + 0.1),
+                    )
+                  }
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  title="Increase frame size"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
         <div className="mt-2 text-xs text-gray-500">
           {hideUI
             ? "All buttons and controls are hidden. Ready to take a screenshot!"

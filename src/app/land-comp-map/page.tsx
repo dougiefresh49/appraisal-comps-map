@@ -307,6 +307,14 @@ export default function LandCompMapPage() {
             address: propertyInfo.address ?? "",
             addressForDisplay:
               propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
+            // Update positions from landLocationMap state
+            markerPosition: markerPosition ? { ...markerPosition } : comp.markerPosition,
+            position: bubblePosition ? { ...bubblePosition } : comp.position,
+            // Update pinned tail tip position if it was set
+            pinnedTailTipPosition: subjectPinnedTailTipPosition
+              ? { ...subjectPinnedTailTipPosition }
+              : comp.pinnedTailTipPosition,
+            isTailPinned: isSubjectTailPinned,
           }
         : comp,
     );
