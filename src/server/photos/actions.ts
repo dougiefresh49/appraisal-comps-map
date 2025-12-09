@@ -101,6 +101,49 @@ export async function fetchInputsJson(folderId: string): Promise<{
   }
 }
 
+// Process images via webhook to create input.json
+// This function triggers the webhook but doesn't wait for completion (fire-and-forget)
+export async function processImages(
+  projectFolderId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!projectFolderId) {
+      return {
+        success: false,
+        error: "Project Folder ID is required",
+      };
+    }
+
+    // Fire-and-forget: trigger the webhook but don't wait for response
+    fetch(
+      "https://dougiefreshdesigns.app.n8n.cloud/webhook/subject-process-photos",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectFolderId,
+        }),
+      },
+    ).catch((error) => {
+      // Log errors but don't block the response
+      console.error("Error triggering image processing webhook:", error);
+    });
+
+    // Return immediately with success
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error processing images:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+}
+
 // Save changes back to Google Drive via n8n webhook or return JSON for manual update
 export async function saveChanges(
   updatedPhotos: PhotoInputs,
@@ -109,8 +152,8 @@ export async function saveChanges(
 ): Promise<{ success: boolean; data?: string; error?: string }> {
   try {
     // Option 1: Try to save via n8n webhook if configured
-    if (env.N8N_WEBHOOK_URL) {
-      const response = await fetch(env.N8N_WEBHOOK_URL, {
+    if (env.N8N_WEBHOOK_PHOTOS_UPDATE) {
+      const response = await fetch(env.N8N_WEBHOOK_PHOTOS_UPDATE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

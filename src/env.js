@@ -9,7 +9,7 @@ export const env = createEnv({
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
     GOOGLE_DRIVE_API_KEY: z.string().optional(),
-    N8N_WEBHOOK_URL: z.string().optional(),
+    N8N_WEBHOOK_PHOTOS_UPDATE: z.string().optional(),
     N8N_INPUT_WEBHOOK_URL: z.string().optional(),
   },
 
@@ -31,7 +31,7 @@ export const env = createEnv({
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     GOOGLE_DRIVE_API_KEY: process.env.GOOGLE_DRIVE_API_KEY,
-    N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL,
+    N8N_WEBHOOK_PHOTOS_UPDATE: process.env.N8N_WEBHOOK_PHOTOS_UPDATE,
     N8N_INPUT_WEBHOOK_URL: process.env.N8N_INPUT_WEBHOOK_URL,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:

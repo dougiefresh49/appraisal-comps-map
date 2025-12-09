@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   closestCenter,
@@ -23,16 +24,20 @@ interface PhotoGridProps {
   initialPhotos: PhotoInput[];
   fileId: string;
   folderId: string;
+  projectFolderId?: string;
 }
 
 export default function PhotoGrid({
   initialPhotos,
   fileId,
   folderId,
+  projectFolderId,
 }: PhotoGridProps) {
+  const router = useRouter();
   const [photos, setPhotos] = useState<PhotoInput[]>(initialPhotos);
   const [isSaving, setIsSaving] = useState(false);
   const [isDenseGrid, setIsDenseGrid] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     success: boolean;
     data?: string;
@@ -134,6 +139,58 @@ export default function PhotoGrid({
     }
   };
 
+  const handleProcessImages = async () => {
+    if (!projectFolderId) {
+      setSaveResult({
+        success: false,
+        error: "Project Folder ID is required to process images",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    setSaveResult(null);
+
+    try {
+      const response = await fetch("/api/photos/process", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectFolderId,
+        }),
+      });
+
+      const result = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
+
+      if (result.success) {
+        // Show success message - processing is in progress
+        // Keep processing state true to show the in-progress message
+        // Don't refresh yet - polling logic will be added later
+        setSaveResult({
+          success: true,
+        });
+      } else {
+        setSaveResult({
+          success: false,
+          error: result.error || "Failed to trigger image processing",
+        });
+        setIsProcessing(false);
+      }
+    } catch (error) {
+      setSaveResult({
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      });
+      setIsProcessing(false);
+    }
+  };
+
   if (photos.length === 0) {
     return (
       <div className="py-12 text-center">
@@ -155,9 +212,56 @@ export default function PhotoGrid({
         <h3 className="mb-2 text-lg font-medium text-gray-900">
           No photos found
         </h3>
-        <p className="text-gray-600">
+        <p className="mb-4 text-gray-600">
           Try refreshing the page or check your Google Drive folder.
         </p>
+        {projectFolderId && !isProcessing && (
+          <button
+            onClick={handleProcessImages}
+            disabled={isProcessing}
+            className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Process Images
+          </button>
+        )}
+        {isProcessing && (
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center gap-3">
+              <svg
+                className="h-5 w-5 animate-spin text-blue-600"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <p className="text-sm font-medium text-blue-800">
+                Image processing has been triggered and is in progress...
+              </p>
+            </div>
+            <p className="mt-2 text-xs text-blue-600">
+              Polling logic will be added later to automatically refresh when
+              processing is complete.
+            </p>
+          </div>
+        )}
+        {saveResult && !saveResult.success && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-800">{saveResult.error}</p>
+          </div>
+        )}
       </div>
     );
   }

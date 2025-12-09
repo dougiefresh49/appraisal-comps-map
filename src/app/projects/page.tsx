@@ -590,7 +590,7 @@ export default function ProjectsPage() {
                   />
                   {selectedProject.subjectPhotosFolderId && (
                     <Link
-                      href={`/photos?folderId=${encodeURIComponent(selectedProject.subjectPhotosFolderId)}`}
+                      href={`/photos?folderId=${encodeURIComponent(selectedProject.subjectPhotosFolderId)}${selectedProject.projectFolderId ? `&projectFolderId=${encodeURIComponent(selectedProject.projectFolderId)}` : ""}`}
                       className="mt-2 inline-block rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
                     >
                       View Photos
