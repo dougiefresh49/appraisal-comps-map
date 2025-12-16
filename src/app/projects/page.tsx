@@ -425,6 +425,12 @@ export default function ProjectsPage() {
                       Location Map
                     </Link>
                     <Link
+                      href="/neighborhood-map"
+                      className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Neighborhood Map
+                    </Link>
+                    <Link
                       href="/comps-map"
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >

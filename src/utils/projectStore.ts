@@ -94,10 +94,13 @@ export interface LocationMapState {
   circleRadius?: 1 | 2 | 3 | 5;
 }
 
+export interface NeighborhoodMapState extends LocationMapState {}
+
 export interface ProjectData {
   subject: ProjectSubjectState;
   comparables: ProjectComparablesState;
   location: LocationMapState;
+  neighborhood: NeighborhoodMapState;
   subjectPhotosFolderId?: string;
   projectFolderId?: string;
   clientCompany?: string;
@@ -142,6 +145,10 @@ const LOCATION_DEFAULT: LocationMapState = {
   circleRadius: DEFAULT_CIRCLE_RADIUS,
 };
 
+const NEIGHBORHOOD_DEFAULT: NeighborhoodMapState = {
+  ...LOCATION_DEFAULT,
+};
+
 function isComparableType(value: unknown): value is ComparableType {
   return (
     typeof value === "string" &&
@@ -178,17 +185,11 @@ function cloneCircle(circle: Circle): Circle {
   };
 }
 
-function cloneLandLocationState(
-  input?: LocationMapState,
-): LocationMapState {
+function cloneLandLocationState(input?: LocationMapState): LocationMapState {
   // propertyInfo removed - use subject.info instead
   return {
-    markerPosition: cloneLatLng(
-      input?.markerPosition ?? null,
-    ),
-    bubblePosition: cloneLatLng(
-      input?.bubblePosition ?? null,
-    ),
+    markerPosition: cloneLatLng(input?.markerPosition ?? null),
+    bubblePosition: cloneLatLng(input?.bubblePosition ?? null),
     polygonPath: Array.isArray(input?.polygonPath)
       ? input!.polygonPath!.map((point) => ({ lat: point.lat, lng: point.lng }))
       : [],
@@ -198,23 +199,22 @@ function cloneLandLocationState(
     polylines: Array.isArray(input?.polylines)
       ? input!.polylines!.map((polyline) => ({
           ...polyline,
-          path: polyline.path.map((point) => ({ lat: point.lat, lng: point.lng })),
+          path: polyline.path.map((point) => ({
+            lat: point.lat,
+            lng: point.lng,
+          })),
         }))
       : [],
-    mapCenter:
-      cloneLatLng(input?.mapCenter ?? null) ?? { ...DEFAULT_MAP_CENTER },
-    mapZoom:
-      typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize:
-      typeof input?.bubbleSize === "number"
-        ? input.bubbleSize
-        : 1.0,
+    mapCenter: cloneLatLng(input?.mapCenter ?? null) ?? {
+      ...DEFAULT_MAP_CENTER,
+    },
+    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
+    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
     tailDirection:
       input?.tailDirection === "left" || input?.tailDirection === "right"
         ? input.tailDirection
         : "right",
-    hideUI:
-      typeof input?.hideUI === "boolean" ? input.hideUI : false,
+    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
     // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     streetLabels: Array.isArray(input?.streetLabels)
       ? input!.streetLabels!.map(cloneStreetLabel)
@@ -223,8 +223,7 @@ function cloneLandLocationState(
       typeof input?.labelSize === "number"
         ? input.labelSize
         : DEFAULT_LABEL_SIZE,
-    circleRadius:
-      input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
   };
 }
 
@@ -262,10 +261,7 @@ function normalizeComparable(
         ? comparable.id
         : `comp-${Date.now()}-${Math.random()}`,
     address: comparable.address ?? "",
-    addressForDisplay:
-      comparable.addressForDisplay ??
-      comparable.address ??
-      "",
+    addressForDisplay: comparable.addressForDisplay ?? comparable.address ?? "",
     isTailPinned:
       typeof comparable.isTailPinned === "boolean"
         ? comparable.isTailPinned
@@ -341,16 +337,11 @@ function normalizeComparablesMapState(
     ),
     mapCenter:
       input?.mapCenter !== undefined
-        ? cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER }
+        ? (cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER })
         : { ...DEFAULT_MAP_CENTER },
-    mapZoom:
-      typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize:
-      typeof input?.bubbleSize === "number"
-        ? input.bubbleSize
-        : 1.0,
-    hideUI:
-      typeof input?.hideUI === "boolean" ? input.hideUI : false,
+    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
+    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
+    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
     documentFrameSize:
       typeof input?.documentFrameSize === "number"
         ? input.documentFrameSize
@@ -390,16 +381,18 @@ function normalizeProjectComparables(
     return {
       byType: {
         Land: normalizeComparablesMapState(subject, byTypeInput.Land, "Land"),
-        Sales: normalizeComparablesMapState(subject, byTypeInput.Sales, "Sales"),
+        Sales: normalizeComparablesMapState(
+          subject,
+          byTypeInput.Sales,
+          "Sales",
+        ),
         Rentals: normalizeComparablesMapState(
           subject,
           byTypeInput.Rentals,
           "Rentals",
         ),
       },
-      activeType: isComparableType(activeTypeInput)
-        ? activeTypeInput
-        : "Land",
+      activeType: isComparableType(activeTypeInput) ? activeTypeInput : "Land",
     };
   }
 
@@ -442,25 +435,23 @@ function normalizeLocationState(
     polylines: Array.isArray(input?.polylines)
       ? input!.polylines!.map((polyline) => ({
           ...polyline,
-          path: polyline.path.map((point) => ({ lat: point.lat, lng: point.lng })),
+          path: polyline.path.map((point) => ({
+            lat: point.lat,
+            lng: point.lng,
+          })),
         }))
       : [],
     mapCenter:
       input?.mapCenter !== undefined
-        ? cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER }
+        ? (cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER })
         : { ...DEFAULT_MAP_CENTER },
-    mapZoom:
-      typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize:
-      typeof input?.bubbleSize === "number"
-        ? input.bubbleSize
-        : 1.0,
+    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
+    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
     tailDirection:
       input?.tailDirection === "left" || input?.tailDirection === "right"
         ? input.tailDirection
         : "right",
-    hideUI:
-      typeof input?.hideUI === "boolean" ? input.hideUI : false,
+    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
     // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     streetLabels: Array.isArray(input?.streetLabels)
       ? input!.streetLabels!.map(cloneStreetLabel)
@@ -469,26 +460,38 @@ function normalizeLocationState(
       typeof input?.labelSize === "number"
         ? input.labelSize
         : DEFAULT_LABEL_SIZE,
-    circleRadius:
-      input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
   };
+}
+
+function normalizeNeighborhoodState(
+  subject: ProjectSubjectState,
+  input?: NeighborhoodMapState,
+): NeighborhoodMapState {
+  return normalizeLocationState(subject, input);
 }
 
 export function createDefaultProject(): ProjectData {
   const subject = normalizeSubjectState(SUBJECT_DEFAULT);
   const comparables = normalizeProjectComparables(subject, undefined);
   const location = normalizeLocationState(subject, LOCATION_DEFAULT);
-  return { subject, comparables, location };
+  const neighborhood = normalizeNeighborhoodState(
+    subject,
+    NEIGHBORHOOD_DEFAULT,
+  );
+  return { subject, comparables, location, neighborhood };
 }
 
 export function normalizeProjectData(data?: Partial<ProjectData>): ProjectData {
   const subject = normalizeSubjectState(data?.subject);
   const comparables = normalizeProjectComparables(subject, data?.comparables);
   const location = normalizeLocationState(subject, data?.location);
+  const neighborhood = normalizeNeighborhoodState(subject, data?.neighborhood);
   return {
     subject,
     comparables,
     location,
+    neighborhood,
     subjectPhotosFolderId: data?.subjectPhotosFolderId,
     projectFolderId: data?.projectFolderId,
     clientCompany: data?.clientCompany,
@@ -515,4 +518,3 @@ export function normalizeProjectsMap(
     return acc;
   }, {});
 }
-

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/reports/neighborhood", label: "Neighborhood" },
+  { href: "/neighborhood-map", label: "Neighborhood Map" },
   { href: "/reports/zoning", label: "Zoning" },
   { href: "/reports/subject-site-summary", label: "Subject Site Summary" },
   { href: "/reports/highest-best-use", label: "Highest and Best Use" },
