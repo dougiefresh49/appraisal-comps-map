@@ -145,16 +145,25 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
             }
           }
 
+          // Calculate defaults if needed
+          const finalMarkerPosition = resolvedMarkerPosition ? { ...resolvedMarkerPosition } : undefined;
+          
+          let finalPosition = resolvedPosition ? { ...resolvedPosition } : undefined;
+          if (!finalPosition && finalMarkerPosition) {
+             finalPosition = { lat: finalMarkerPosition.lat + 0.001, lng: finalMarkerPosition.lng + 0.001 };
+          }
+
+          let finalPinnedTailTipPosition = resolvedPinnedTailTipPosition ? { ...resolvedPinnedTailTipPosition } : undefined;
+          if (comp.isTailPinned && !finalPinnedTailTipPosition && finalMarkerPosition) {
+            finalPinnedTailTipPosition = { ...finalMarkerPosition };
+          }
+
           return {
             ...comp,
             type: comp.type ?? nextType,
-            pinnedTailTipPosition: resolvedPinnedTailTipPosition
-              ? { ...resolvedPinnedTailTipPosition }
-              : undefined,
-            position: resolvedPosition ? { ...resolvedPosition } : undefined,
-            markerPosition: resolvedMarkerPosition
-              ? { ...resolvedMarkerPosition }
-              : undefined,
+            pinnedTailTipPosition: finalPinnedTailTipPosition,
+            position: finalPosition,
+            markerPosition: finalMarkerPosition,
           };
         }),
       );
@@ -469,25 +478,13 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
       if (results && results.length > 0) {
            const location = results[0]!.geometry.location;
            const newPosition = { lat: location.lat(), lng: location.lng() };
-           setComparables((prev) => prev.map((comp) => {
+            setComparables((prev) => prev.map((comp) => {
              if (comp.id !== compId) return comp;
              return { ...comp, type: comp.type ?? activeType, address, addressForDisplay: comp.addressForDisplay || address, markerPosition: newPosition, position: comp.position ?? { lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 }, pinnedTailTipPosition: comp.pinnedTailTipPosition ?? (comp.isTailPinned ? newPosition : undefined) };
            }));
       }
     } catch (error) { console.error("Error geocoding comparable address:", error); }
-  };
-
-  useEffect(() => {
-    setComparables((prev) =>
-      prev.map((comp) => {
-        if (!comp.markerPosition) return comp;
-        const updates: Partial<ComparableInfo> = {};
-        if (!comp.position) { updates.position = { lat: comp.markerPosition.lat + 0.001, lng: comp.markerPosition.lng + 0.001 }; }
-        if (comp.isTailPinned && !comp.pinnedTailTipPosition) { updates.pinnedTailTipPosition = comp.markerPosition; }
-        return Object.keys(updates).length > 0 ? { ...comp, ...updates } : comp;
-      }),
-    );
-  }, [comparables]); // Simplified dependency to avoid linter error
+  }; // Simplified dependency to avoid linter error
 
 
   return (
@@ -635,13 +632,13 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
               />
             )}
             
-            {comparablesWithDistance.map((comp) => (
+            {comparablesWithDistance.map((comp, index) => (
                 <ComparableMarker
                     key={comp.id}
                     position={comp.position!}
                     markerPosition={comp.markerPosition!}
                     comparableInfo={comp}
-                    comparableNumber={comparables.indexOf(comp) + 1}
+                    comparableNumber={index + 1}
                     onPositionChange={(newPos) => {
                         setComparables((prev) => prev.map((c) => c.id === comp.id ? { ...c, position: newPos } : c));
                     }}

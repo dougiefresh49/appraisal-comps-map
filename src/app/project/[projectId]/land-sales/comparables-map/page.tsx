@@ -148,16 +148,25 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             }
           }
 
+          // Calculate defaults if needed
+          const finalMarkerPosition = resolvedMarkerPosition ? { ...resolvedMarkerPosition } : undefined;
+          
+          let finalPosition = resolvedPosition ? { ...resolvedPosition } : undefined;
+          if (!finalPosition && finalMarkerPosition) {
+             finalPosition = { lat: finalMarkerPosition.lat + 0.001, lng: finalMarkerPosition.lng + 0.001 };
+          }
+
+          let finalPinnedTailTipPosition = resolvedPinnedTailTipPosition ? { ...resolvedPinnedTailTipPosition } : undefined;
+          if (comp.isTailPinned && !finalPinnedTailTipPosition && finalMarkerPosition) {
+            finalPinnedTailTipPosition = { ...finalMarkerPosition };
+          }
+
           return {
             ...comp,
             type: comp.type ?? nextType,
-            pinnedTailTipPosition: resolvedPinnedTailTipPosition
-              ? { ...resolvedPinnedTailTipPosition }
-              : undefined,
-            position: resolvedPosition ? { ...resolvedPosition } : undefined,
-            markerPosition: resolvedMarkerPosition
-              ? { ...resolvedMarkerPosition }
-              : undefined,
+            pinnedTailTipPosition: finalPinnedTailTipPosition,
+            position: finalPosition,
+            markerPosition: finalMarkerPosition,
           };
         }),
       );
@@ -499,18 +508,6 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     } catch (error) { console.error("Error geocoding comparable address:", error); }
   };
 
-  useEffect(() => {
-    setComparables((prev) =>
-      prev.map((comp) => {
-        if (!comp.markerPosition) return comp;
-        const updates: Partial<ComparableInfo> = {};
-        if (!comp.position) { updates.position = { lat: comp.markerPosition.lat + 0.001, lng: comp.markerPosition.lng + 0.001 }; }
-        if (comp.isTailPinned && !comp.pinnedTailTipPosition) { updates.pinnedTailTipPosition = comp.markerPosition; }
-        return Object.keys(updates).length > 0 ? { ...comp, ...updates } : comp;
-      }),
-    );
-  }, [comparables]);
-
 
   return (
     <div className="flex h-screen w-full">
@@ -663,13 +660,13 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             )}
             
             {/* Comparables Markers */}
-            {comparablesWithDistance.map((comp) => (
+            {comparablesWithDistance.map((comp, index) => (
                 <ComparableMarker
                     key={comp.id}
                     position={comp.position!}
                     markerPosition={comp.markerPosition!}
                     comparableInfo={comp}
-                    comparableNumber={comparables.indexOf(comp) + 1}
+                    comparableNumber={index + 1}
                     onPositionChange={(newPos: { lat: number; lng: number }) => {
                         setComparables((prev) => prev.map((c) => c.id === comp.id ? { ...c, position: newPos } : c));
                     }}
