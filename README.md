@@ -1,15 +1,46 @@
 # Appraisal Report Management Tool
 
-A Next.js application for managing commercial appraisal reports, connecting Google drive and n8n
+A comprehensive Next.js application for managing commercial appraisal reports, visualizing property data on maps, and streamlining the appraisal workflow.
 
 ## Features
 
-- 📸 Fetch photos from Google Drive folder
-- 📝 Edit photo labels inline
-- 🎯 Drag and drop to reorder photos
-- 💾 Save changes back to Google Drive (via n8n webhook or manual JSON export)
-- 📱 Responsive 2-column grid layout
-- ⚡ Optimized with Next.js 15 and React 19
+### 🗺️ Interactive Maps
+
+- **Comparables Map**: Visualize Subject property and Comparables (Land, Sales, Rentals) on a Google Map.
+- **Custom Markers & Bubbles**: Drag-and-drop informational "bubbles" with adjustable tails pointing to exact property locations.
+- **Drawing Tools**: Draw polygons, circles, and polylines to highlight areas or features.
+- **Geocoding**: Integrated address search for quick property location.
+- **Visual Customization**: Toggle UI elements, adjust bubble sizes, and use overlay guides for report screenshots.
+
+### 📁 Project Management
+
+- **Dashboard**: Create, rename, and manage multiple appraisal projects.
+- **Data Management**: centralized storage for Subject details and Comparable properties.
+- **JSON Editor**: Direct access to project data for advanced editing or backup.
+- **Local Persistence**: Projects are automatically saved to your browser's local storage.
+
+### 📸 Photo Management
+
+- **Google Drive Integration**: Fetch property photos directly from a Google Drive folder.
+- **Organization**: Drag and drop to reorder photos for the report.
+- **Labeling**: Inline editing of photo labels.
+- **Sync**: Save changes back to Google Drive via n8n webhook or manual JSON export.
+
+### 📝 Report Generation
+
+- **Markdown Support**: Write and format report sections (Neighborhood, Zoning, Highest & Best Use, etc.) using a rich markdown editor.
+- **Structured Sections**: Dedicated pages for various standard appraisal report sections.
+
+## Tech Stack
+
+- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Maps**: [@vis.gl/react-google-maps](https://visgl.github.io/react-google-maps/) & Google Maps JavaScript API
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **State Management**: React Hooks & Local Storage
+- **Drag & Drop**: [@dnd-kit](https://dndkit.com/) & [react-draggable](https://github.com/react-grid-layout/react-draggable)
+- **Editor**: [@uiw/react-md-editor](https://github.com/uiwjs/react-md-editor)
+- **Validation**: [Zod](https://zod.dev/)
 
 ## Setup
 
@@ -18,65 +49,41 @@ A Next.js application for managing commercial appraisal reports, connecting Goog
 Create a `.env.local` file in the root directory with the following variables:
 
 ```bash
-# Google Drive API Key (required for fetching photos)
-GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
-
-# n8n Webhook URL (optional - for automatic saving)
-N8N_WEBHOOK_BASE_URL=https://your-n8n-instance.com/webhook/
-
-# Existing Google Maps variables (if using maps features)
+# Google Maps (Required for Map Features)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=your_google_maps_map_id
+
+# Google Drive API (Required for Photo Features)
+GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
+
+# n8n Webhook (Optional - for saving photo data)
+N8N_WEBHOOK_BASE_URL=https://your-n8n-instance.com/webhook/
 ```
 
-### 2. Google Drive API Setup
+### 2. Google Maps Setup
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google Drive API
-4. Create credentials (API Key)
-5. Add the API key to your `.env.local` file
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable **Maps JavaScript API**, **Places API**, and **Geocoding API**.
+3. Create an API Key.
+4. Create a **Map ID** (Vector map type recommended) in the Google Maps Platform > Map Management.
 
-### 3. Google Drive Folder Structure
+### 3. Google Drive Setup (For Photos)
 
-Your Google Drive folder should contain:
+Your Google Drive folder for a project should contain:
 
-- `input.json` - Array of photo metadata with image names and labels
-- Image files referenced in `input.json`
+- `input.json`: Array of photo metadata.
+- Image files referenced in the JSON.
 
 Example `input.json`:
 
 ```json
 [
   {
-    "image": "PXL_20250822_172142122.jpg",
-    "label": "Conference Room"
-  },
-  {
-    "image": "PXL_20250822_172054088.jpg",
-    "label": "Restroom"
+    "image": "photo1.jpg",
+    "label": "Front View"
   }
 ]
 ```
-
-### 4. n8n Integration (Optional)
-
-If you want automatic saving back to Google Drive:
-
-1. Set up an n8n workflow with a webhook trigger
-2. Configure the workflow to:
-   - Receive the updated photo data
-   - Update the `input.json` file in Google Drive
-   - Handle Google Drive authentication
-3. Add the webhook URL to your environment variables
-
-## Usage
-
-1. Navigate to `/photos` in your application
-2. Photos will be loaded from your Google Drive folder
-3. Drag and drop photos to reorder them
-4. Click "Edit" on any photo label to modify it
-5. Click "Save Changes" to persist your modifications
 
 ## Development
 
@@ -86,53 +93,36 @@ pnpm install
 
 # Start development server
 pnpm dev
-
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
 ```
 
-## Technical Details
+The application will be available at `http://localhost:3000`.
 
-- **Framework**: Next.js 15 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Drag & Drop**: @dnd-kit/core and @dnd-kit/sortable
-- **Validation**: Zod schema validation
-- **Environment**: t3-env for type-safe environment variables
-
-## File Structure
+## Project Structure
 
 ```
 src/
 ├── app/
-│   └── photos/
-│       └── page.tsx          # Main photo management page
-├── components/
-│   └── PhotoCard.tsx         # Individual photo card component
-├── server/
-│   └── photos/
-│       └── actions.ts         # Server actions for Google Drive integration
-└── env.js                    # Environment variable configuration
+│   ├── comps-map/       # Interactive Comparables Map
+│   ├── land-comp-map/   # Specific map for Land Comparables
+│   ├── location-map/    # Subject Location Map
+│   ├── photos/          # Photo Management Interface
+│   ├── projects/        # Project Dashboard
+│   └── reports/         # Report Section Editors
+├── components/          # Reusable UI Components
+│   ├── CompMap.tsx      # Main Map Component
+│   ├── DrawingTools/    # Map Drawing Tools
+│   └── ...
+├── utils/
+│   ├── mapUtils.ts      # Geocoding & Map Helpers
+│   └── projectStore.ts  # State Management Logic
+└── server/              # Server Actions (Drive/n8n)
 ```
 
-## Troubleshooting
+## Usage Guide
 
-### Photos not loading
-
-- Check that your Google Drive API key is correct
-- Verify the folder ID in `actions.ts` matches your Google Drive folder
-- Ensure `input.json` exists in the specified folder
-
-### Drag and drop not working
-
-- Make sure `@dnd-kit/sortable` is installed
-- Check browser console for JavaScript errors
-
-### Save functionality not working
-
-- If using n8n, verify the webhook URL is correct
-- Check that your n8n workflow is properly configured
-- Use the "Copy JSON to Clipboard" option for manual updates
+1. **Start a Project**: Go to the home page (redirects to `/projects`) and create a new project.
+2. **Enter Data**: Fill in Subject property details.
+3. **Add Comparables**: Add Land, Sales, or Rental comparables.
+4. **Visualize**: Navigate to the **Comparables Map** to place markers and adjust bubbles.
+5. **Manage Photos**: Link a Google Drive folder ID to fetch and organize photos.
+6. **Write Reports**: Use the Reports section to draft narrative content.
