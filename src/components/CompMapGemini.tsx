@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   APIProvider,
@@ -9,8 +9,6 @@ import {
   Pin,
   useMap,
 } from "@vis.gl/react-google-maps";
-import { DndContext, useDraggable } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
 import { env } from "~/env";
 
 // --- Hardcoded Data based on your previous input ---
@@ -122,176 +120,406 @@ const CustomBubble = ({ property }: { property: Property }) => {
   );
 };
 
-// --- DraggableBubblesOverlay Component ---
-// This component now handles all the dragging logic and renders bubbles + tails.
-function DraggableBubblesOverlay({
-  properties,
-  bubblePositions,
-  setBubblePositions,
-  setIsDragging,
-}: {
-  properties: Property[];
-  bubblePositions: { [id: number]: { lat: number; lng: number } };
-  setBubblePositions: React.Dispatch<
-    React.SetStateAction<{ [id: number]: { lat: number; lng: number } }>
-  >;
-  setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const map = useMap();
-  // We use a state to force re-renders when the projection changes
-  const [projection, setProjection] =
-    useState<google.maps.MapCanvasProjection | null>(null);
 
-  // Helper function to create the OverlayView instance
+// Individual bubble overlay component that creates one overlay per bubble
+function BubbleOverlay({
+  map,
+  property,
+  position,
+  onDragEnd,
+  setIsDragging,
+  setDragPositions,
+}: {
+  map: google.maps.Map;
+  property: Property;
+  position: { lat: number; lng: number };
+  onDragEnd: (newPosition: { lat: number; lng: number }) => void;
+  setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
+  setDragPositions: React.Dispatch<React.SetStateAction<Record<number, { lat: number; lng: number }>>>;
+}) {
+  const overlayRef = useRef<google.maps.OverlayView | null>(null);
+  const contentCreated = useRef(false);
+
   useEffect(() => {
     if (!map) return;
-    const overlay = new google.maps.OverlayView();
-    overlay.onAdd = () => {};
-    overlay.onRemove = () => {};
-    // The 'draw' method is called by the Maps API when the map is panned or zoomed.
-    // We update our projection state here to trigger a React re-render.
-    overlay.draw = () => {
-      const proj = overlay.getProjection();
-      // Check if the projection has actually changed to avoid unnecessary re-renders
-      if (proj) {
-        setProjection(proj);
+
+    class BubbleOverlayView extends google.maps.OverlayView {
+      private div: HTMLDivElement | null = null;
+      private position: google.maps.LatLng;
+      private contentInitialized = false;
+
+      constructor(position: google.maps.LatLng) {
+        super();
+        this.position = position;
       }
-    };
-    overlay.setMap(map);
-    return () => overlay.setMap(null);
-  }, [map]);
 
-  if (!projection) return null;
+      onAdd() {
+        this.div = document.createElement('div');
+        this.div.style.position = 'absolute';
+        this.div.style.zIndex = '1000';
+        this.div.style.pointerEvents = 'auto';
 
-  const latLngToPixel = (latLng: { lat: number; lng: number }) => {
-    return projection.fromLatLngToContainerPixel(
-      new google.maps.LatLng(latLng),
-    );
-  };
+        const panes = this.getPanes();
+        if (panes) {
+          panes.overlayMouseTarget.appendChild(this.div);
+        }
+        
+        // Create content immediately when added
+        this.createContent();
+      }
 
-  const pixelToLatLng = (pixel: { x: number; y: number }) => {
-    const latLng = projection.fromContainerPixelToLatLng(
-      new google.maps.Point(pixel.x, pixel.y),
-    );
-    return { lat: latLng!.lat(), lng: latLng!.lng() };
-  };
+      createContent() {
+        if (!this.div || this.contentInitialized) return;
+        this.contentInitialized = true;
 
-  const handleDragStart = () => {
-    setIsDragging(true);
-  };
+        // Create the bubble content directly
+        const container = document.createElement('div');
+        container.style.position = 'relative';
+        container.style.pointerEvents = 'auto';
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    setIsDragging(false);
-    const id = Number(event.active.id);
-    const currentPosition =
-      bubblePositions[id] || properties.find((p) => p.id === id)!.position;
-    const currentPixel = latLngToPixel(currentPosition);
+        // Create bubble element
+        const bubbleElement = document.createElement('div');
+        bubbleElement.style.position = 'relative';
+        bubbleElement.style.background = property.type === 'subject' ? '#c00' : '#0070d2';
+        bubbleElement.style.color = 'white';
+        bubbleElement.style.padding = '10px 15px';
+        bubbleElement.style.borderRadius = '8px';
+        bubbleElement.style.width = '200px';
+        bubbleElement.style.fontFamily = 'Arial, sans-serif';
+        bubbleElement.style.fontSize = '14px';
+        bubbleElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+        bubbleElement.style.border = `2px solid ${property.type === 'subject' ? '#a00' : '#00539e'}`;
+        bubbleElement.style.textAlign = 'center';
+        bubbleElement.style.cursor = 'move';
 
-    if (currentPixel) {
-      const newPixel = {
-        x: currentPixel.x + event.delta.x,
-        y: currentPixel.y + event.delta.y,
-      };
-      const newLatLng = pixelToLatLng(newPixel);
-      setBubblePositions((prev) => ({ ...prev, [id]: newLatLng }));
+        // Add content
+        bubbleElement.innerHTML = `
+          <strong>${property.compNumber}</strong>
+          <div style="font-size: 12px; margin-top: 5px;">${property.address}</div>
+          ${property.distance !== undefined ? `<div style="font-size: 12px; margin-top: 2px;">${property.distance.toFixed(2)} miles</div>` : ''}
+        `;
+
+        // Add tail
+        const tail = document.createElement('div');
+        tail.style.position = 'absolute';
+        tail.style.bottom = '-10px';
+        tail.style.left = '50%';
+        tail.style.transform = 'translateX(-50%)';
+        tail.style.width = '0';
+        tail.style.height = '0';
+        tail.style.borderLeft = '10px solid transparent';
+        tail.style.borderRight = '10px solid transparent';
+        tail.style.borderTop = `10px solid ${property.type === 'subject' ? '#a00' : '#00539e'}`;
+        
+        bubbleElement.appendChild(tail);
+        container.appendChild(bubbleElement);
+
+        // Add drag functionality with local state - create unique scope for each bubble
+        const dragState = {
+          startX: 0,
+          startY: 0,
+          isDragging: false,
+          lastMouseX: 0,
+          lastMouseY: 0,
+          originalPosition: new google.maps.LatLng(this.position.lat(), this.position.lng())
+        };
+
+        const handleMouseDown = (e: MouseEvent) => {
+          e.preventDefault();
+          dragState.isDragging = true;
+          setIsDragging(true);
+          if (map) map.setOptions({ draggable: false });
+          
+          dragState.startX = e.clientX;
+          dragState.startY = e.clientY;
+          dragState.lastMouseX = e.clientX;
+          dragState.lastMouseY = e.clientY;
+          dragState.originalPosition = new google.maps.LatLng(this.position.lat(), this.position.lng());
+
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+        };
+
+        const handleMouseMove = (e: MouseEvent) => {
+          if (!dragState.isDragging) return;
+          dragState.lastMouseX = e.clientX;
+          dragState.lastMouseY = e.clientY;
+          const deltaX = e.clientX - dragState.startX;
+          const deltaY = e.clientY - dragState.startY;
+          
+          // Update the overlay position immediately for smooth dragging
+          const projection = this.getProjection();
+          if (projection) {
+            const originalPoint = projection.fromLatLngToDivPixel(dragState.originalPosition);
+            if (originalPoint && this.div) {
+              const newX = originalPoint.x + deltaX;
+              const newY = originalPoint.y + deltaY;
+              
+              this.div.style.left = `${newX}px`;
+              this.div.style.top = `${newY}px`;
+              
+              // Calculate temporary lat/lng for ribbon updates
+              const tempLatLng = projection.fromDivPixelToLatLng(
+                new google.maps.Point(newX, newY)
+              );
+              if (tempLatLng) {
+                setDragPositions(prev => ({
+                  ...prev,
+                  [property.id]: { lat: tempLatLng.lat(), lng: tempLatLng.lng() }
+                }));
+              }
+            }
+          }
+        };
+
+        const handleMouseUp = () => {
+          if (!dragState.isDragging) return;
+          dragState.isDragging = false;
+          setIsDragging(false);
+          if (map) map.setOptions({ draggable: true });
+          
+          // Calculate the final position from the accumulated drag deltas
+          const projection = this.getProjection();
+          if (projection) {
+            const deltaX = dragState.lastMouseX - dragState.startX;
+            const deltaY = dragState.lastMouseY - dragState.startY;
+            
+            const originalPoint = projection.fromLatLngToDivPixel(dragState.originalPosition);
+            if (originalPoint) {
+              const newX = originalPoint.x + deltaX;
+              const newY = originalPoint.y + deltaY;
+              
+              // Convert final pixel position to lat/lng
+              const finalLatLng = projection.fromDivPixelToLatLng(
+                new google.maps.Point(newX, newY)
+              );
+              
+              if (finalLatLng) {
+                // Update the overlay's internal position
+                this.position = finalLatLng;
+                // Notify parent component with the final position
+                onDragEnd({ lat: finalLatLng.lat(), lng: finalLatLng.lng() });
+              }
+            }
+          }
+          
+          // Clear drag position
+          setDragPositions(prev => {
+            const updated = { ...prev };
+            delete updated[property.id];
+            return updated;
+          });
+
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          
+          // Force a redraw to show the final position
+          this.draw();
+        };
+
+        container.addEventListener('mousedown', handleMouseDown);
+        this.div.appendChild(container);
+      }
+
+      draw() {
+        if (!this.div) return;
+        
+        const projection = this.getProjection();
+        if (projection) {
+          const point = projection.fromLatLngToDivPixel(this.position);
+          if (point) {
+            this.div.style.left = `${point.x}px`;
+            this.div.style.top = `${point.y}px`;
+            this.div.style.transform = 'translate(-50%, -100%)';
+          }
+        }
+      }
+
+      onRemove() {
+        if (this.div?.parentNode) {
+          this.div.parentNode.removeChild(this.div);
+        }
+      }
+
+      updatePosition(newPosition: google.maps.LatLng) {
+        this.position = newPosition;
+        this.draw();
+      }
     }
-  };
 
-  // The map panes are the layers where you can render custom elements.
-  // We use `floatPane` to render our draggable bubbles.
-  const mapPanes = map?.getDiv().getElementsByClassName("gm-style")?.[0];
-  if (!mapPanes) return null;
+    const overlay = new BubbleOverlayView(
+      new google.maps.LatLng(position.lat, position.lng)
+    );
+    overlay.setMap(map);
+    overlayRef.current = overlay;
 
-  return createPortal(
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      {properties.map((prop) => {
-        const markerPixel = latLngToPixel(prop.position);
-        const bubblePixel = latLngToPixel(
-          bubblePositions[prop.id] || prop.position,
-        );
+    return () => {
+      overlay.setMap(null);
+      overlayRef.current = null;
+      contentCreated.current = false;
+    };
+  }, [map, property.id]);
 
-        if (!markerPixel || !bubblePixel) return null;
+  // Update position when prop changes
+  useEffect(() => {
+    if (overlayRef.current) {
+      (overlayRef.current as any).updatePosition(
+        new google.maps.LatLng(position.lat, position.lng)
+      );
+    }
+  }, [position]);
 
-        const getRibbonPoints = (
-          start: { x: number; y: number },
-          end: { x: number; y: number },
-          width: number,
-        ) => {
-          const dx = end.x - start.x;
-          const dy = end.y - start.y;
-          const len = Math.sqrt(dx * dx + dy * dy) || 1;
-          const nx = -dy / len;
-          const ny = dx / len;
-          const halfW = width / 2;
-          return [
-            { x: start.x + nx * halfW, y: start.y + ny * halfW },
-            { x: start.x - nx * halfW, y: start.y - ny * halfW },
-            { x: end.x - nx * halfW, y: end.y - ny * halfW },
-            { x: end.x + nx * halfW, y: end.y + ny * halfW },
-          ]
-            .map((p) => `${p.x},${p.y}`)
-            .join(" ");
-        };
+  return null;
+}
 
-        const DraggableBubble = ({ prop }: { prop: Property }) => {
-          const { attributes, listeners, setNodeRef, transform } = useDraggable(
-            { id: prop.id },
+// Ribbon overlay component for connecting pins to bubbles
+function RibbonOverlay({
+  map,
+  property,
+  bubblePosition,
+  dragPositions,
+}: {
+  map: google.maps.Map;
+  property: Property;
+  bubblePosition: { lat: number; lng: number };
+  dragPositions: Record<number, { lat: number; lng: number }>;
+}) {
+  const overlayRef = useRef<google.maps.OverlayView | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    class RibbonOverlayView extends google.maps.OverlayView {
+      private div: HTMLDivElement | null = null;
+
+      onAdd() {
+        this.div = document.createElement('div');
+        this.div.style.position = 'absolute';
+        this.div.style.left = '0';
+        this.div.style.top = '0';
+        this.div.style.width = '100%';
+        this.div.style.height = '100%';
+        this.div.style.pointerEvents = 'none';
+        this.div.style.zIndex = '500';
+
+        const panes = this.getPanes();
+        if (panes) {
+          panes.overlayLayer.appendChild(this.div);
+        }
+      }
+
+      draw() {
+        if (!this.div) return;
+        
+        const projection = this.getProjection();
+        if (projection) {
+          const markerPoint = projection.fromLatLngToDivPixel(
+            new google.maps.LatLng(property.position.lat, property.position.lng)
           );
-          const style: React.CSSProperties = {
-            position: "absolute",
-            left: bubblePixel.x,
-            top: bubblePixel.y,
-            transform: transform
-              ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-              : undefined,
-            zIndex: 10,
-            cursor: "move",
-          };
-          return (
-            <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-              <CustomBubble property={prop} />
-            </div>
+          
+          // Use drag position if bubble is being dragged, otherwise use bubble position
+          const currentBubblePosition = dragPositions[property.id] ?? bubblePosition;
+          const bubblePoint = projection.fromLatLngToDivPixel(
+            new google.maps.LatLng(currentBubblePosition.lat, currentBubblePosition.lng)
           );
-        };
 
-        return (
-          <React.Fragment key={prop.id}>
-            <svg
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-                zIndex: 5,
-              }}
-            >
-              <polygon
-                points={getRibbonPoints(markerPixel, bubblePixel, 12)}
-                fill={prop.type === "subject" ? "#c00" : "#0070d2"}
-                opacity="0.7"
-              />
-            </svg>
-            <DraggableBubble prop={prop} />
-          </React.Fragment>
-        );
-      })}
-    </DndContext>,
-    mapPanes,
-  );
+          if (markerPoint && bubblePoint) {
+            // Clear previous content
+            this.div.innerHTML = '';
+            
+            // Create SVG element
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.style.position = 'absolute';
+            svg.style.left = '0';
+            svg.style.top = '0';
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.pointerEvents = 'none';
+            svg.style.overflow = 'visible';
+
+            // Create ribbon path
+            const ribbon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            
+            // Calculate ribbon points
+            const dx = bubblePoint.x - markerPoint.x;
+            const dy = bubblePoint.y - markerPoint.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+            const halfW = 6; // ribbon width
+            
+            const points = [
+              { x: markerPoint.x + nx * halfW, y: markerPoint.y + ny * halfW },
+              { x: markerPoint.x - nx * halfW, y: markerPoint.y - ny * halfW },
+              { x: bubblePoint.x - nx * halfW, y: bubblePoint.y - ny * halfW },
+              { x: bubblePoint.x + nx * halfW, y: bubblePoint.y + ny * halfW },
+            ];
+            
+            const pointsStr = points.map(p => `${p.x},${p.y}`).join(' ');
+            ribbon.setAttribute('points', pointsStr);
+            ribbon.setAttribute('fill', property.type === 'subject' ? '#c00' : '#0070d2');
+            ribbon.setAttribute('opacity', '0.7');
+            
+            svg.appendChild(ribbon);
+            this.div.appendChild(svg);
+          }
+        }
+      }
+
+      onRemove() {
+        if (this.div?.parentNode) {
+          this.div.parentNode.removeChild(this.div);
+        }
+      }
+    }
+
+    const overlay = new RibbonOverlayView();
+    overlay.setMap(map);
+    overlayRef.current = overlay;
+
+    return () => {
+      overlay.setMap(null);
+      overlayRef.current = null;
+    };
+  }, [map, property.position.lat, property.position.lng, bubblePosition.lat, bubblePosition.lng, dragPositions]);
+
+  return null;
+}
+
+// Map wrapper component to get map reference
+function MapWrapper({
+  children,
+  onMapLoad,
+}: {
+  children: React.ReactNode;
+  onMapLoad: (map: google.maps.Map) => void;
+}) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (map) {
+      onMapLoad(map);
+    }
+  }, [map, onMapLoad]);
+
+  return <>{children}</>;
 }
 
 // --- Main App Component ---
 export default function CompMap() {
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const mapCenter = properties[0]?.position;
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   // State to hold the geographic positions of the bubbles
-  const [bubblePositions, setBubblePositions] = useState<{
-    [id: number]: { lat: number; lng: number };
-  }>({});
+  const [bubblePositions, setBubblePositions] = useState<
+    Record<number, { lat: number; lng: number }>
+  >({});
   // --- FIX: State to control map dragging ---
   const [isDragging, setIsDragging] = useState(false);
+  // Track temporary drag positions for smooth ribbon updates
+  const [dragPositions, setDragPositions] = useState<
+    Record<number, { lat: number; lng: number }>
+  >({});
 
   return (
     <APIProvider apiKey={apiKey}>
@@ -304,24 +532,43 @@ export default function CompMap() {
           // --- FIX: Dynamically handle map gestures ---
           gestureHandling={isDragging ? "none" : "cooperative"}
         >
-          {/* Render the static marker pins */}
-          {properties.map((prop) => (
-            <AdvancedMarker key={prop.id} position={prop.position}>
-              <Pin
-                background={prop.type === "subject" ? "#c00" : "#0070d2"}
-                borderColor={prop.type === "subject" ? "#a00" : "#00539e"}
-                glyphColor={"#fff"}
-              />
-            </AdvancedMarker>
-          ))}
+          <MapWrapper onMapLoad={setMap}>
+            {/* Render the static marker pins */}
+            {properties.map((prop) => (
+              <AdvancedMarker key={prop.id} position={prop.position}>
+                <Pin
+                  background={prop.type === "subject" ? "#c00" : "#0070d2"}
+                  borderColor={prop.type === "subject" ? "#a00" : "#00539e"}
+                  glyphColor={"#fff"}
+                />
+              </AdvancedMarker>
+            ))}
+            {/* Individual bubble overlays for geographically anchored bubbles */}
+            {map && properties.map((property) => (
+              <React.Fragment key={property.id}>
+                <BubbleOverlay
+                  map={map}
+                  property={property}
+                  position={bubblePositions[property.id] ?? property.position}
+                  onDragEnd={(newPosition) => {
+                    setBubblePositions((prev) => ({
+                      ...prev,
+                      [property.id]: newPosition,
+                    }));
+                  }}
+                  setIsDragging={setIsDragging}
+                  setDragPositions={setDragPositions}
+                />
+                <RibbonOverlay
+                  map={map}
+                  property={property}
+                  bubblePosition={bubblePositions[property.id] ?? property.position}
+                  dragPositions={dragPositions}
+                />
+              </React.Fragment>
+            ))}
+          </MapWrapper>
         </Map>
-        {/* The overlay handles all the custom bubble rendering and dragging */}
-        <DraggableBubblesOverlay
-          properties={properties}
-          bubblePositions={bubblePositions}
-          setBubblePositions={setBubblePositions}
-          setIsDragging={setIsDragging}
-        />
       </div>
     </APIProvider>
   );

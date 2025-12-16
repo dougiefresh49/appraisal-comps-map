@@ -1,29 +1,128 @@
-# Create T3 App
+# Appraisal Report Management Tool
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A comprehensive Next.js application for managing commercial appraisal reports, visualizing property data on maps, and streamlining the appraisal workflow.
 
-## What's next? How do I make an app with this?
+## Features
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+### 🗺️ Interactive Maps
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+- **Comparables Map**: Visualize Subject property and Comparables (Land, Sales, Rentals) on a Google Map.
+- **Custom Markers & Bubbles**: Drag-and-drop informational "bubbles" with adjustable tails pointing to exact property locations.
+- **Drawing Tools**: Draw polygons, circles, and polylines to highlight areas or features.
+- **Geocoding**: Integrated address search for quick property location.
+- **Visual Customization**: Toggle UI elements, adjust bubble sizes, and use overlay guides for report screenshots.
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+### 📁 Project Management
 
-## Learn More
+- **Dashboard**: Create, rename, and manage multiple appraisal projects.
+- **Data Management**: centralized storage for Subject details and Comparable properties.
+- **JSON Editor**: Direct access to project data for advanced editing or backup.
+- **Local Persistence**: Projects are automatically saved to your browser's local storage.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+### 📸 Photo Management
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+- **Google Drive Integration**: Fetch property photos directly from a Google Drive folder.
+- **Organization**: Drag and drop to reorder photos for the report.
+- **Labeling**: Inline editing of photo labels.
+- **Sync**: Save changes back to Google Drive via n8n webhook or manual JSON export.
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+### 📝 Report Generation
 
-## How do I deploy this?
+- **Markdown Support**: Write and format report sections (Neighborhood, Zoning, Highest & Best Use, etc.) using a rich markdown editor.
+- **Structured Sections**: Dedicated pages for various standard appraisal report sections.
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+## Tech Stack
+
+- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Maps**: [@vis.gl/react-google-maps](https://visgl.github.io/react-google-maps/) & Google Maps JavaScript API
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **State Management**: React Hooks & Local Storage
+- **Drag & Drop**: [@dnd-kit](https://dndkit.com/) & [react-draggable](https://github.com/react-grid-layout/react-draggable)
+- **Editor**: [@uiw/react-md-editor](https://github.com/uiwjs/react-md-editor)
+- **Validation**: [Zod](https://zod.dev/)
+
+## Setup
+
+### 1. Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```bash
+# Google Maps (Required for Map Features)
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=your_google_maps_map_id
+
+# Google Drive API (Required for Photo Features)
+GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
+
+# n8n Webhook (Optional - for saving photo data)
+N8N_WEBHOOK_BASE_URL=https://your-n8n-instance.com/webhook/
+```
+
+### 2. Google Maps Setup
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable **Maps JavaScript API**, **Places API**, and **Geocoding API**.
+3. Create an API Key.
+4. Create a **Map ID** (Vector map type recommended) in the Google Maps Platform > Map Management.
+
+### 3. Google Drive Setup (For Photos)
+
+Your Google Drive folder for a project should contain:
+
+- `input.json`: Array of photo metadata.
+- Image files referenced in the JSON.
+
+Example `input.json`:
+
+```json
+[
+  {
+    "image": "photo1.jpg",
+    "label": "Front View"
+  }
+]
+```
+
+## Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm dev
+```
+
+The application will be available at `http://localhost:3000`.
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── comps-map/       # Interactive Comparables Map
+│   ├── land-comp-map/   # Specific map for Land Comparables
+│   ├── location-map/    # Subject Location Map
+│   ├── photos/          # Photo Management Interface
+│   ├── projects/        # Project Dashboard
+│   └── reports/         # Report Section Editors
+├── components/          # Reusable UI Components
+│   ├── CompMap.tsx      # Main Map Component
+│   ├── DrawingTools/    # Map Drawing Tools
+│   └── ...
+├── utils/
+│   ├── mapUtils.ts      # Geocoding & Map Helpers
+│   └── projectStore.ts  # State Management Logic
+└── server/              # Server Actions (Drive/n8n)
+```
+
+## Usage Guide
+
+1. **Start a Project**: Go to the home page (redirects to `/projects`) and create a new project.
+2. **Enter Data**: Fill in Subject property details.
+3. **Add Comparables**: Add Land, Sales, or Rental comparables.
+4. **Visualize**: Navigate to the **Comparables Map** to place markers and adjust bubbles.
+5. **Manage Photos**: Link a Google Drive folder ID to fetch and organize photos.
+6. **Write Reports**: Use the Reports section to draft narrative content.
