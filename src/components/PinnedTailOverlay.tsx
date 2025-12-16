@@ -55,7 +55,7 @@ export function PinnedTailOverlay({
     const pixelsPerWorldUnitX = mapWidthPx / worldWidth;
     const pixelsPerWorldUnitY = mapHeightPx / worldHeight;
 
-    const bubbleWidthWorld = bubbleWidth / pixelsPerWorldUnitX;
+    // const bubbleWidthWorld = bubbleWidth / pixelsPerWorldUnitX;
     const bubbleHeightWorld = bubbleHeight / pixelsPerWorldUnitY;
 
     // Convert LatLng to world coordinates (normalized 0-1)

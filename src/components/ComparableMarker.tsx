@@ -1,6 +1,6 @@
 "use client";
 
-import { AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
+import { AdvancedMarker } from "@vis.gl/react-google-maps";
 
 interface ComparableInfo {
   address: string;
@@ -35,13 +35,13 @@ const TAIL_DEFAULT_LENGTH = 100; // Default length when not pinned
 
 export function ComparableMarker({
   position,
-  markerPosition,
+  markerPosition: _markerPosition,
   comparableInfo,
   comparableNumber,
   onPositionChange,
   sizeMultiplier = 1.0,
   isTailPinned = false,
-  pinnedTailTipPosition,
+  pinnedTailTipPosition: _pinnedTailTipPosition,
   color = "#10b981", // Default green
 }: ComparableMarkerProps) {
   // Apply size multiplier to base dimensions
@@ -60,11 +60,9 @@ export function ComparableMarker({
     comparableInfo.addressForDisplay ||
     comparableInfo.address ||
     "Enter address";
-  const distance = comparableInfo.distance || "";
+  const distance = comparableInfo.distance ?? "";
 
   // Calculate line spacing
-  const lineHeightTitle = fontSizeTitle * 1.2;
-  const lineHeightText = fontSizeText * 1.4;
   const lineGap = fontSizeText * 1;
 
   // When tail is pinned, don't render the tail in SVG - it's handled by PinnedTailOverlay

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, use } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
@@ -9,17 +9,14 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
-import { useSearchParams } from "next/navigation";
 import {
-  encodeState,
-  decodeState,
-  MAX_URL_STATE_LENGTH,
+  // encodeState,
+  // MAX_URL_STATE_LENGTH,
 } from "~/utils/statePersistence";
 import {
   createDefaultProject,
   normalizeProjectData,
   normalizeProjectsMap,
-  getNextProjectName,
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
@@ -35,16 +32,22 @@ import type {
   ComparableType,
 } from "~/utils/projectStore";
 
-const TYPE_COLORS: Record<ComparableType, string> = {
-  Land: "#10b981",
-  Sales: "#1447e6",
-  Rentals: "#7c2dff",
-};
+// Type specific to this page
+const PAGE_COMPARABLE_TYPE: ComparableType = "Rentals";
 
-export default function ComparablesMapPage() {
-  const searchParams = useSearchParams();
+interface ComparablesMapPageProps {
+  params: Promise<{
+    projectId: string;
+  }>;
+}
+
+export default function RentalsComparablesMapPage({ params }: ComparablesMapPageProps) {
+  const { projectId } = use(params);
+  const decodedProjectId = decodeURIComponent(projectId);
+  const projectName = decodedProjectId;
+
   const projectStoreRef = useRef<ProjectsMap>({});
-  const [projectName, setProjectName] = useState("Project 1");
+  
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo>({
     address: "",
     addressForDisplay: "",
@@ -68,11 +71,11 @@ export default function ComparablesMapPage() {
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
-  const [activeType, setActiveType] = useState<ComparableType>("Land");
+  const [activeType, setActiveType] = useState<ComparableType>(PAGE_COMPARABLE_TYPE);
   const [pinningTailForCompId, setPinningTailForCompId] = useState<
     string | null
   >(null);
-  const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true); // Enable tail pinning by default
+  const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true);
   const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] =
     useState<
       | {
@@ -92,11 +95,12 @@ export default function ComparablesMapPage() {
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
   const serializedProjectRef = useRef<ProjectData | null>(null);
+
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
       const snapshot = normalizeProjectData(project);
       const nextType =
-        typeOverride ?? snapshot.comparables.activeType ?? "Land";
+        typeOverride ?? PAGE_COMPARABLE_TYPE;
       const mapState =
         snapshot.comparables.byType[nextType] ??
         createDefaultProject().comparables.byType[nextType];
@@ -125,26 +129,20 @@ export default function ComparablesMapPage() {
       );
       setComparables(
         (mapState.comparables ?? []).map((comp) => {
-          // For Land comparables, check if there's a landLocationMap entry
-          // and use positions from there if available
           let resolvedMarkerPosition = comp.markerPosition;
           let resolvedPosition = comp.position;
-          let resolvedPinnedTailTipPosition = comp.pinnedTailTipPosition;
+          const resolvedPinnedTailTipPosition = comp.pinnedTailTipPosition;
 
           if (nextType === "Land" && mapState.landLocationMaps?.[comp.id]) {
             const landMapState = mapState.landLocationMaps[comp.id];
             if (landMapState) {
-              // Use markerPosition from landLocationMap if available
               if (landMapState.markerPosition) {
                 resolvedMarkerPosition = { ...landMapState.markerPosition };
               }
-              // Use bubblePosition from landLocationMap as the bubble position
               if (landMapState.bubblePosition) {
                 resolvedPosition = { ...landMapState.bubblePosition };
               }
             }
-            // Note: pinnedTailTipPosition is not stored in LocationMapState,
-            // so we keep the one from the comparable itself
           }
 
           return {
@@ -202,7 +200,7 @@ export default function ComparablesMapPage() {
     subjectBubblePositionRef.current = subjectBubblePosition;
   }, [subjectBubblePosition]);
 
-  // Hydrate state from URL/localStorage
+  // Hydrate state
   useEffect(() => {
     if (isStateHydrated) return;
     if (typeof window === "undefined") return;
@@ -221,36 +219,13 @@ export default function ComparablesMapPage() {
       }
     }
 
-    let selectedProjectName =
-      window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ?? undefined;
-
-    const encodedFromUrl = searchParams.get("mapState");
-    if (encodedFromUrl) {
-      const decoded = decodeState<ProjectData>(encodedFromUrl);
-      if (decoded) {
-        const normalized = normalizeProjectData(decoded);
-        const newProjectName = getNextProjectName(Object.keys(projectStore));
-        projectStore[newProjectName] = normalized;
-        selectedProjectName = newProjectName;
-      }
+    if (!projectStore[projectName]) {
+        console.warn(`Project ${projectName} not found in storage, creating default.`);
+        projectStore[projectName] = createDefaultProject();
     }
-
-    const projectKeys = Object.keys(projectStore);
-    if (!selectedProjectName || !projectStore[selectedProjectName]) {
-      if (projectKeys.length > 0) {
-        selectedProjectName = projectKeys[0];
-      } else {
-        const defaultName = getNextProjectName([]);
-        projectStore[defaultName] = createDefaultProject();
-        selectedProjectName = defaultName;
-      }
-    }
-
-    const finalProjectName = selectedProjectName as string;
 
     projectStoreRef.current = projectStore;
-    setProjectName(finalProjectName);
-    applyProjectState(projectStore[finalProjectName]);
+    applyProjectState(projectStore[projectName], PAGE_COMPARABLE_TYPE);
 
     try {
       window.localStorage.setItem(
@@ -259,14 +234,14 @@ export default function ComparablesMapPage() {
       );
       window.localStorage.setItem(
         CURRENT_PROJECT_STORAGE_KEY,
-        finalProjectName,
+        projectName,
       );
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
 
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, searchParams]);
+  }, [applyProjectState, isStateHydrated, projectName]);
 
   const persistCurrentProjectState = useCallback(() => {
     if (!projectName) return;
@@ -300,7 +275,6 @@ export default function ComparablesMapPage() {
 
     const currentMapState: ComparablesMapState = {
       ...previousState,
-      // subjectInfo removed - use subject.info instead
       subjectMarkerPosition: subject.markerPosition,
       subjectBubblePosition: subject.bubblePosition,
       comparables: comparables.map((comp) => ({
@@ -319,8 +293,7 @@ export default function ComparablesMapPage() {
       bubbleSize,
       hideUI,
       documentFrameSize,
-      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
-      landLocationMaps:
+       landLocationMaps:
         activeType === "Land"
           ? { ...(previousState.landLocationMaps ?? {}) }
           : previousState.landLocationMaps,
@@ -336,14 +309,12 @@ export default function ComparablesMapPage() {
 
     const locationState: LocationMapState = {
       ...baseProject.location,
-      // propertyInfo removed - use subject.info instead
       markerPosition: subject.markerPosition,
       bubblePosition: subject.bubblePosition,
-      // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
     };
 
     const snapshot: ProjectData = {
-      ...baseProject, // Preserve all top-level fields (subjectPhotosFolderId, projectFolderId, clientCompany, etc.)
+      ...baseProject,
       subject,
       comparables: comparablesState,
       location: locationState,
@@ -380,87 +351,15 @@ export default function ComparablesMapPage() {
     }
   }, []);
 
-  const handleProjectNameEdit = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const input = window.prompt("Rename project", projectName)?.trim();
-    if (!input || input === projectName) return;
-
-    if (projectStoreRef.current[input]) {
-      window.alert(
-        "A project with that name already exists. Choose another name.",
-      );
-      return;
-    }
-
-    persistCurrentProjectState();
-
-    const updatedStore: ProjectsMap = {};
-    Object.entries(projectStoreRef.current).forEach(([name, state]) => {
-      updatedStore[name === projectName ? input : name] = state;
-    });
-
-    projectStoreRef.current = updatedStore;
-    setProjectName(input);
-    writeProjectsToStorage(input);
-  }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
-
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
-      if (type === activeType) return;
-      persistCurrentProjectState();
-      const project = projectStoreRef.current[projectName];
-      if (!project) return;
-      applyProjectState(project, type);
+       let targetPath = "land-sales";
+      if (type === "Sales") targetPath = "sales";
+      if (type === "Rentals") targetPath = "rentals";
+      
+      window.location.href = `/project/${projectId}/${targetPath}/comparables-map`;
     },
-    [activeType, applyProjectState, persistCurrentProjectState, projectName],
-  );
-
-  const handleProjectSwitch = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const names = Object.keys(projectStoreRef.current);
-    const suggestion =
-      names.find((name) => name !== projectName) ?? getNextProjectName(names);
-    const input = window
-      .prompt(
-        names.length
-          ? `Enter project name to switch to (existing names):\n${names.join(
-              "\n",
-            )}\n\nTo create a new project, enter a new name.`
-          : "Enter project name to create",
-        suggestion,
-      )
-      ?.trim();
-
-    if (!input || input === projectName) return;
-
-    persistCurrentProjectState();
-
-    if (!projectStoreRef.current[input]) {
-      projectStoreRef.current[input] = createDefaultProject();
-    }
-
-    const targetProject = projectStoreRef.current[input];
-    setProjectName(input);
-    applyProjectState(targetProject);
-    writeProjectsToStorage(input);
-  }, [
-    applyProjectState,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
-
-  const handleOpenLandMap = useCallback(
-    (compId: string) => {
-      if (!projectName || typeof window === "undefined") {
-        return;
-      }
-      const url = new URL(`${window.location.origin}/land-comp-map`);
-      url.searchParams.set("project", projectName);
-      url.searchParams.set("compId", compId);
-      window.location.href = url.toString();
-    },
-    [projectName],
+    [projectId],
   );
 
   useEffect(() => {
@@ -492,48 +391,14 @@ export default function ComparablesMapPage() {
     writeProjectsToStorage,
   ]);
 
-  const handleShare = useCallback(async () => {
-    if (typeof window === "undefined") return;
-    persistCurrentProjectState();
-    writeProjectsToStorage(projectName);
-    const projectSnapshot =
-      serializedProjectRef.current ?? projectStoreRef.current[projectName];
-    const encoded = encodeState(projectSnapshot);
-    if (!encoded) {
-      window.alert("Unable to generate share link. Please try again.");
-      return;
-    }
 
-    if (encoded.length > MAX_URL_STATE_LENGTH) {
-      window.alert(
-        "Map state is too large to share via URL. Please simplify the map and try again.",
-      );
-      return;
-    }
 
-    const url = new URL(window.location.href);
-    url.searchParams.set("mapState", encoded);
-
-    try {
-      await navigator.clipboard.writeText(url.toString());
-      window.alert(`Shareable link for ${projectName} copied to clipboard!`);
-    } catch (error) {
-      console.error("Failed to copy share link", error);
-      window.prompt("Copy this share link", url.toString());
-    }
-  }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
-
-  // Calculate distances and directions for comparables
-  // Use useMemo to recalculate when subject tail tip or marker position changes
-  // Use tail tip positions for both subject and comparables (where they've been placed)
   const comparablesWithDistance = useMemo(() => {
-    // Use subject's pinned tail tip position if available, otherwise marker position
     const subjectRefPoint =
       subjectPinnedTailTipPosition ?? subjectMarkerPosition;
 
     return comparables.map((comp) => {
       let distance = "";
-      // Use comparable's pinned tail tip position if available, otherwise marker position
       const compRefPoint = comp.pinnedTailTipPosition ?? comp.markerPosition;
 
       if (subjectRefPoint && compRefPoint) {
@@ -551,224 +416,83 @@ export default function ComparablesMapPage() {
     });
   }, [comparables, subjectPinnedTailTipPosition, subjectMarkerPosition]);
 
-  // Handle subject address search
   const handleSubjectAddressSearch = async (address: string) => {
-    if (!address.trim()) return;
-
+     if (!address.trim()) return;
     try {
       const geocoder = new google.maps.Geocoder();
       const results = await new Promise<google.maps.GeocoderResult[]>(
         (resolve, reject) => {
-          geocoder.geocode({ address }, (results, status) => {
-            if (status === "OK" && results) {
-              resolve(results);
-            } else {
-              reject(new Error(`Geocoding failed: ${status}`));
-            }
+          void geocoder.geocode({ address }, (results, status) => {
+            if (status === google.maps.GeocoderStatus.OK && results) { resolve(results); } 
+            else { reject(new Error(`Geocoding failed: ${status}`)); }
           });
         },
       );
-
       if (results && results.length > 0) {
         const location = results[0]!.geometry.location;
-        const newPosition = {
-          lat: location.lat(),
-          lng: location.lng(),
-        };
+        const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
         setSubjectMarkerPosition(newPosition);
-        setSubjectBubblePosition({
-          lat: newPosition.lat + 0.001,
-          lng: newPosition.lng + 0.001,
-        });
-        // Set default pinned tail tip position if pinned but not set yet
+        setSubjectBubblePosition({ lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 });
         if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
           setSubjectPinnedTailTipPosition(newPosition);
         }
         setMapZoom(18);
         const formattedAddress = results[0]?.formatted_address ?? address;
         setSubjectInfo((prev) => {
-          const keepDisplay =
-            prev.addressForDisplay &&
-            prev.addressForDisplay.trim().length > 0 &&
-            prev.addressForDisplay !== prev.address;
-          return {
-            ...prev,
-            address: formattedAddress,
-            addressForDisplay: keepDisplay
-              ? prev.addressForDisplay
-              : formattedAddress,
-          };
+          const keepDisplay = prev.addressForDisplay && prev.addressForDisplay.trim().length > 0 && prev.addressForDisplay !== prev.address;
+          return { ...prev, address: formattedAddress, addressForDisplay: keepDisplay ? prev.addressForDisplay : formattedAddress };
         });
       }
-    } catch (error) {
-      console.error("Error geocoding address:", error);
-    }
+    } catch (error) { console.error("Error geocoding address:", error); }
   };
 
-  // Handle comparable address search
-  const handleComparableAddressSearch = async (
-    compId: string,
-    address: string,
-  ) => {
+  const handleComparableAddressSearch = async (compId: string, address: string) => {
     if (!address.trim()) return;
-
     try {
       const geocoder = new google.maps.Geocoder();
-
-      const decimalMatch =
-        /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(address);
+      const decimalMatch = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(address);
       if (decimalMatch) {
-        const lat = Number(decimalMatch[1]);
-        const lng = Number(decimalMatch[2]);
-        if (
-          Number.isFinite(lat) &&
-          Number.isFinite(lng) &&
-          lat >= -90 &&
-          lat <= 90 &&
-          lng >= -180 &&
-          lng <= 180
-        ) {
-          const normalized = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-
-          // Reverse geocode to get a human-friendly address for display.
-          let formattedAddress: string | undefined;
-          try {
-            const reverseResults = await new Promise<
-              google.maps.GeocoderResult[]
-            >((resolve, reject) => {
-              geocoder.geocode(
-                { location: { lat, lng } },
-                (results, status) => {
-                  if (status === "OK" && results) {
-                    resolve(results);
-                  } else {
-                    reject(new Error(`Reverse geocoding failed: ${status}`));
-                  }
-                },
-              );
-            });
-            formattedAddress = reverseResults?.[0]?.formatted_address;
-          } catch {
-            // ignore reverse-geocode errors; we still have valid coordinates
-          }
-
-          const newPosition = { lat, lng };
-
-          setComparables((prev) =>
-            prev.map((comp) => {
+          const lat = Number(decimalMatch[1]);
+          const lng = Number(decimalMatch[2]);
+           const newPosition = { lat, lng };
+          setComparables((prev) => prev.map((comp) => {
               if (comp.id !== compId) return comp;
-
-              const keepDisplay =
-                comp.addressForDisplay &&
-                comp.addressForDisplay.trim().length > 0 &&
-                comp.addressForDisplay !== comp.address;
-
-              return {
-                ...comp,
-                type: comp.type ?? activeType,
-                address: normalized,
-                addressForDisplay: keepDisplay
-                  ? comp.addressForDisplay
-                  : (formattedAddress ?? normalized),
-                markerPosition: newPosition,
-                position: comp.position || {
-                  lat: newPosition.lat + 0.001,
-                  lng: newPosition.lng + 0.001,
-                },
-                pinnedTailTipPosition:
-                  comp.pinnedTailTipPosition ||
-                  (comp.isTailPinned ? newPosition : undefined),
-              };
-            }),
-          );
-
+              return { ...comp, type: comp.type ?? activeType, address: `${lat}, ${lng}`, markerPosition: newPosition, position: comp.position ?? { lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 }, pinnedTailTipPosition: comp.pinnedTailTipPosition ?? (comp.isTailPinned ? newPosition : undefined) };
+          }));
           return;
-        }
       }
-
-      const results = await new Promise<google.maps.GeocoderResult[]>(
-        (resolve, reject) => {
-          geocoder.geocode({ address }, (results, status) => {
-            if (status === "OK" && results) {
-              resolve(results);
-            } else {
-              reject(new Error(`Geocoding failed: ${status}`));
-            }
-          });
-        },
-      );
-
+      
+      const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+          void geocoder.geocode({ address }, (results, status) => { if (status === google.maps.GeocoderStatus.OK && results) resolve(results); else reject(new Error(`Geocoding failed`)); });
+      });
       if (results && results.length > 0) {
-        const location = results[0]!.geometry.location;
-        const newPosition = {
-          lat: location.lat(),
-          lng: location.lng(),
-        };
-
-        setComparables((prev) =>
-          prev.map((comp) => {
-            if (comp.id !== compId) return comp;
-
-            // Distance will be calculated by useMemo when component re-renders
-            // No need to calculate it here since it depends on subjectPinnedTailTipPosition
-
-            return {
-              ...comp,
-              type: comp.type ?? activeType,
-              address,
-              addressForDisplay: comp.addressForDisplay || address,
-              markerPosition: newPosition,
-              // Set default position offset if not already set
-              position: comp.position || {
-                lat: newPosition.lat + 0.001,
-                lng: newPosition.lng + 0.001,
-              },
-              // Set default pinned tail tip position if pinned but not set yet
-              pinnedTailTipPosition:
-                comp.pinnedTailTipPosition ||
-                (comp.isTailPinned ? newPosition : undefined),
-            };
-          }),
-        );
+           const location = results[0]!.geometry.location;
+           const newPosition = { lat: location.lat(), lng: location.lng() };
+            setComparables((prev) => prev.map((comp) => {
+             if (comp.id !== compId) return comp;
+             return { ...comp, type: comp.type ?? activeType, address, addressForDisplay: comp.addressForDisplay ?? address, markerPosition: newPosition, position: comp.position ?? { lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 }, pinnedTailTipPosition: comp.pinnedTailTipPosition ?? (comp.isTailPinned ? newPosition : undefined) };
+           }));
       }
-    } catch (error) {
-      console.error("Error geocoding comparable address:", error);
-    }
+    } catch (error) { console.error("Error geocoding comparable address:", error); }
   };
 
-  // When a comparable is added, set default position offset from marker and pinned tail tip
   useEffect(() => {
     setComparables((prev) =>
       prev.map((comp) => {
         if (!comp.markerPosition) return comp;
         const updates: Partial<ComparableInfo> = {};
-
-        // If no position set yet, add default offset
-        if (!comp.position) {
-          updates.position = {
-            lat: comp.markerPosition.lat + 0.001,
-            lng: comp.markerPosition.lng + 0.001,
-          };
-        }
-
-        // If pinned but no pinned tail tip position set yet, use marker position
-        if (comp.isTailPinned && !comp.pinnedTailTipPosition) {
-          updates.pinnedTailTipPosition = comp.markerPosition;
-        }
-
+        if (!comp.position) { updates.position = { lat: comp.markerPosition.lat + 0.001, lng: comp.markerPosition.lng + 0.001 }; }
+        if (comp.isTailPinned && !comp.pinnedTailTipPosition) { updates.pinnedTailTipPosition = comp.markerPosition; }
         return Object.keys(updates).length > 0 ? { ...comp, ...updates } : comp;
       }),
     );
-  }, [comparables.map((c) => c.markerPosition?.lat).join(",")]);
+  }, [comparables]);
+
 
   return (
     <div className="flex h-screen w-full">
-      {/* Sidebar */}
       <ComparablesPanel
-        projectName={projectName}
-        onProjectNameEdit={handleProjectNameEdit}
-        onProjectSwitch={handleProjectSwitch}
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
           setSubjectInfo((prev) => ({ ...prev, ...info }))
@@ -802,11 +526,10 @@ export default function ComparablesMapPage() {
         onSubjectPinnedTailTipPositionChange={setSubjectPinnedTailTipPosition}
         isRepositioningSubjectTail={isRepositioningSubjectTail}
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
-        onShare={handleShare}
-        onOpenLandMap={handleOpenLandMap}
+        // No Land Map link
+        onOpenLandMap={undefined}
       />
 
-      {/* Map container */}
       <div className="relative flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
@@ -834,7 +557,6 @@ export default function ComparablesMapPage() {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
 
-                // If repositioning subject tail, place or reposition the tail tip
                 if (isRepositioningSubjectTail) {
                   setSubjectPinnedTailTipPosition({ lat, lng });
                   setIsRepositioningSubjectTail(false);
@@ -842,66 +564,45 @@ export default function ComparablesMapPage() {
                   return;
                 }
 
-                // If we're in pin tail mode for a comparable, place or reposition the tail tip
                 if (pinningTailForCompId) {
-                  setComparables((prev) =>
-                    prev.map((comp) =>
-                      comp.id === pinningTailForCompId
-                        ? {
-                            ...comp,
-                            isTailPinned: true,
-                            pinnedTailTipPosition: { lat, lng },
-                          }
-                        : comp,
-                    ),
+                   setComparables((prev) =>
+                    prev.map((comp) => {
+                      if (comp.id === pinningTailForCompId) {
+                        return { ...comp, pinnedTailTipPosition: { lat, lng }, isTailPinned: true };
+                      }
+                      return comp;
+                    })
                   );
                   setPinningTailForCompId(null);
                   return;
                 }
-
-                // If no subject marker, set it
+                
                 if (!subjectMarkerPosition) {
-                  setSubjectMarkerPosition({ lat, lng });
-                  setSubjectBubblePosition({
-                    lat: lat + 0.001,
-                    lng: lng + 0.001,
-                  });
-                  // Set default pinned tail tip position if pinned but not set yet
-                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
-                    setSubjectPinnedTailTipPosition({ lat, lng });
-                  }
+                    setSubjectMarkerPosition({ lat, lng });
+                    setSubjectBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
+                     if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+                        setSubjectPinnedTailTipPosition({ lat, lng });
+                    }
                 }
               }
             }}
           >
-            {/* Subject marker (red) */}
-            {subjectMarkerPosition && !hideUI && (
+             {subjectMarkerPosition && !hideUI && (
               <AdvancedMarker
                 position={subjectMarkerPosition}
                 draggable
                 onDragEnd={(e) => {
                   if (e.latLng) {
-                    const newPosition = {
-                      lat: e.latLng.lat(),
-                      lng: e.latLng.lng(),
-                    };
-
+                    const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
                     const currentMarkerPos = subjectMarkerPositionRef.current;
                     const currentBubblePos = subjectBubblePositionRef.current;
-
                     if (currentMarkerPos && currentBubblePos) {
-                      const latDiff =
-                        currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff =
-                        currentBubblePos.lng - currentMarkerPos.lng;
-
-                      setSubjectMarkerPosition(newPosition);
-                      setSubjectBubblePosition({
-                        lat: newPosition.lat + latDiff,
-                        lng: newPosition.lng + lngDiff,
-                      });
+                        const latDiff = currentBubblePos.lat - currentMarkerPos.lat;
+                        const lngDiff = currentBubblePos.lng - currentMarkerPos.lng;
+                        setSubjectMarkerPosition(newPosition);
+                        setSubjectBubblePosition({ lat: newPosition.lat + latDiff, lng: newPosition.lng + lngDiff });
                     } else {
-                      setSubjectMarkerPosition(newPosition);
+                        setSubjectMarkerPosition(newPosition);
                     }
                   }
                 }}
@@ -910,12 +611,8 @@ export default function ComparablesMapPage() {
               </AdvancedMarker>
             )}
 
-            {/* Pinned tail overlay for subject (drawn as polygon) */}
-            {isSubjectTailPinned &&
-              subjectPinnedTailTipPosition &&
-              subjectBubblePosition &&
-              subjectMarkerPosition && (
-                <PinnedTailOverlay
+            {isSubjectTailPinned && subjectPinnedTailTipPosition && subjectBubblePosition && subjectMarkerPosition && (
+                 <PinnedTailOverlay
                   bubblePosition={subjectBubblePosition}
                   pinnedTailTipPosition={subjectPinnedTailTipPosition}
                   bubbleWidth={400 * bubbleSize}
@@ -923,86 +620,40 @@ export default function ComparablesMapPage() {
                   color="#ffffff"
                   strokeColor="#000000"
                 />
-              )}
+            )}
 
-            {/* Subject bubble (white) */}
-            {subjectBubblePosition && subjectMarkerPosition && (
+             {subjectBubblePosition && subjectMarkerPosition && (
               <SubjectLocationMarker
                 position={subjectBubblePosition}
                 markerPosition={subjectMarkerPosition}
                 propertyInfo={subjectInfo}
                 onPositionChange={setSubjectBubblePosition}
                 sizeMultiplier={bubbleSize}
+                tailDirection="right" 
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
               />
             )}
-
-            {/* Comparable markers */}
-            {comparablesWithDistance.map((comp, index) => {
-              if (!comp.markerPosition || !comp.position) return null;
-
-              // Get color based on property types filter
-              const comparableColor = TYPE_COLORS[activeType];
-
-              return (
-                <div key={comp.id}>
-                  {/* Marker dot */}
-                  {!hideUI && (
-                    <AdvancedMarker position={comp.markerPosition}>
-                      <div
-                        className="h-4 w-4 cursor-grab rounded-full border-2 border-white shadow-lg active:cursor-grabbing"
-                        style={{ backgroundColor: comparableColor }}
-                      />
-                    </AdvancedMarker>
-                  )}
-
-                  {/* Pinned tail overlay (drawn as polygon) */}
-                  {comp.isTailPinned &&
-                    comp.pinnedTailTipPosition &&
-                    comp.position && (
-                      <PinnedTailOverlay
-                        bubblePosition={comp.position}
-                        pinnedTailTipPosition={comp.pinnedTailTipPosition}
-                        bubbleWidth={400 * bubbleSize}
-                        bubbleHeight={200 * bubbleSize}
-                        color={comparableColor}
-                      />
-                    )}
-
-                  {/* Comparable bubble */}
-                  <ComparableMarker
-                    position={comp.position}
-                    markerPosition={comp.markerPosition}
-                    comparableInfo={{
-                      address: comp.address,
-                      addressForDisplay: comp.addressForDisplay || comp.address,
-                      distance: comp.distance,
-                    }}
-                    comparableNumber={index + 1}
+            
+            {comparablesWithDistance.map((comp) => (
+                <ComparableMarker
+                    key={comp.id}
+                    position={comp.position!}
+                    markerPosition={comp.markerPosition!}
+                    comparableInfo={comp}
+                    comparableNumber={comparables.indexOf(comp) + 1}
                     onPositionChange={(newPos) => {
-                      // When pinned, tail stretches dynamically, so just update bubble position
-                      // When not pinned, just update bubble position
-                      setComparables((prev) =>
-                        prev.map((c) =>
-                          c.id === comp.id ? { ...c, position: newPos } : c,
-                        ),
-                      );
+                        setComparables((prev) => prev.map((c) => c.id === comp.id ? { ...c, position: newPos } : c));
                     }}
                     sizeMultiplier={bubbleSize}
                     isTailPinned={comp.isTailPinned}
                     pinnedTailTipPosition={comp.pinnedTailTipPosition}
-                    color={comparableColor}
-                  />
-                </div>
-              );
-            })}
+                />
+            ))}
+
           </Map>
         </APIProvider>
-        <DocumentOverlay
-          enabled={showDocumentOverlay}
-          size={documentFrameSize}
-        />
+        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
       </div>
     </div>
   );

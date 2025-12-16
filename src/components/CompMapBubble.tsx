@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   APIProvider,
   Map,
@@ -84,7 +84,7 @@ const CompBubble: React.FC<BubbleProps> = ({
   property,
   position,
   onDragEnd,
-  markerPosition,
+  markerPosition: _markerPosition,
   onSizeChange,
 }) => {
   const isSubject = property.type === "subject";
@@ -109,7 +109,7 @@ const CompBubble: React.FC<BubbleProps> = ({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [property.id]); // Remove onSizeChange from dependencies to prevent infinite loop
+  }, [property.id, onSizeChange]); // Added onSizeChange
 
   return (
     <AdvancedMarker
@@ -123,7 +123,6 @@ const CompBubble: React.FC<BubbleProps> = ({
           };
           if (property.id === 5) {
             // Debug: trace Comp 5 bubble movement
-            // eslint-disable-next-line no-console
             console.log(
               "[Comp 5] Bubble moved:",
               JSON.stringify({ lat: next.lat, lng: next.lng }, null, 2),
@@ -202,9 +201,9 @@ const CompTail: React.FC<TailProps> = ({
 }) => {
   const map = useMap();
   const polygonRef = useRef<google.maps.Polygon | null>(null);
-  const bubbleSizesRef = useRef<
-    Record<number, { width: number; height: number }>
-  >({});
+  // const bubbleSizesRef = useRef<
+  //   Record<number, { width: number; height: number }>
+  // >({});
 
   useEffect(() => {
     if (!map) return;
@@ -237,7 +236,7 @@ const CompTail: React.FC<TailProps> = ({
 
       // Get bubble dimensions for visual center calculation
       const fallback = { width: 240, height: 80 };
-      const bubbleWidthPx = bubbleSizePx?.width ?? fallback.width;
+      // const _bubbleWidthPx = bubbleSizePx?.width ?? fallback.width;
       const bubbleHeightPx = bubbleSizePx?.height ?? fallback.height;
 
       // Target the actual top edge of the bubble to ensure perfect connection

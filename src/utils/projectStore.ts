@@ -46,7 +46,8 @@ export interface ComparablesMapState {
   bubbleSize?: number;
   hideUI?: boolean;
   documentFrameSize?: number; // Scale factor for document overlay
-  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+  isSubjectTailPinned?: boolean;
+  subjectPinnedTailTipPosition?: LatLng | null;
   landLocationMaps?: Record<string, LocationMapState>;
 }
 
@@ -55,7 +56,7 @@ export interface ProjectComparablesState {
   activeType: ComparableType;
 }
 
-export interface PolygonPath extends LatLng {}
+export type PolygonPath = LatLng;
 
 export interface StreetLabelData {
   id: string;
@@ -77,7 +78,7 @@ export interface Polyline {
 }
 
 export interface LocationMapState {
-  // propertyInfo removed - use subject.info instead
+  propertyInfo?: SubjectInfo;
   markerPosition?: LatLng | null;
   bubblePosition?: LatLng | null;
   polygonPath?: PolygonPath[];
@@ -88,13 +89,14 @@ export interface LocationMapState {
   bubbleSize?: number;
   tailDirection?: "left" | "right";
   hideUI?: boolean;
-  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+  isSubjectTailPinned?: boolean;
+  subjectPinnedTailTipPosition?: LatLng | null;
   streetLabels?: StreetLabelData[];
   labelSize?: number;
   circleRadius?: 1 | 2 | 3 | 5;
 }
 
-export interface NeighborhoodMapState extends LocationMapState {}
+export type NeighborhoodMapState = LocationMapState;
 
 export interface ProjectData {
   subject: ProjectSubjectState;
@@ -117,7 +119,7 @@ export const DEFAULT_MAP_CENTER: LatLng = { lat: 31.8458, lng: -102.3676 };
 export const DEFAULT_LABEL_SIZE = 1.0;
 export const DEFAULT_CIRCLE_RADIUS: 1 | 2 | 3 | 5 = 2;
 
-const SUBJECT_DEFAULT: ProjectSubjectState = {
+export const SUBJECT_DEFAULT: ProjectSubjectState = {
   info: {
     address: "",
     addressForDisplay: "",
@@ -128,8 +130,8 @@ const SUBJECT_DEFAULT: ProjectSubjectState = {
   pinnedTailTipPosition: null,
 };
 
-const LOCATION_DEFAULT: LocationMapState = {
-  // propertyInfo removed - use subject.info instead
+export const LOCATION_DEFAULT: LocationMapState = {
+  propertyInfo: undefined,
   markerPosition: SUBJECT_DEFAULT.markerPosition,
   bubblePosition: SUBJECT_DEFAULT.bubblePosition,
   polygonPath: [],
@@ -139,7 +141,8 @@ const LOCATION_DEFAULT: LocationMapState = {
   bubbleSize: 1.0,
   tailDirection: "right",
   hideUI: false,
-  // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+  isSubjectTailPinned: true,
+  subjectPinnedTailTipPosition: null,
   streetLabels: [],
   labelSize: DEFAULT_LABEL_SIZE,
   circleRadius: DEFAULT_CIRCLE_RADIUS,
@@ -186,18 +189,24 @@ function cloneCircle(circle: Circle): Circle {
 }
 
 function cloneLandLocationState(input?: LocationMapState): LocationMapState {
-  // propertyInfo removed - use subject.info instead
+const info = input?.propertyInfo ?? SUBJECT_DEFAULT.info;
   return {
+    propertyInfo: {
+        address: info.address ?? SUBJECT_DEFAULT.info.address,
+        addressForDisplay: info.addressForDisplay ?? SUBJECT_DEFAULT.info.addressForDisplay,
+        legalDescription: info.legalDescription ?? SUBJECT_DEFAULT.info.legalDescription,
+        acres: info.acres ?? SUBJECT_DEFAULT.info.acres
+    },
     markerPosition: cloneLatLng(input?.markerPosition ?? null),
     bubblePosition: cloneLatLng(input?.bubblePosition ?? null),
     polygonPath: Array.isArray(input?.polygonPath)
-      ? input!.polygonPath!.map((point) => ({ lat: point.lat, lng: point.lng }))
+      ? input.polygonPath.map((point) => ({ lat: point.lat, lng: point.lng }))
       : [],
     circles: Array.isArray(input?.circles)
-      ? input!.circles!.map(cloneCircle)
+      ? input.circles.map(cloneCircle)
       : [],
     polylines: Array.isArray(input?.polylines)
-      ? input!.polylines!.map((polyline) => ({
+      ? input.polylines.map((polyline) => ({
           ...polyline,
           path: polyline.path.map((point) => ({
             lat: point.lat,
@@ -215,9 +224,10 @@ function cloneLandLocationState(input?: LocationMapState): LocationMapState {
         ? input.tailDirection
         : "right",
     hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+    isSubjectTailPinned: typeof input?.isSubjectTailPinned === "boolean" ? input.isSubjectTailPinned : true,
+    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
     streetLabels: Array.isArray(input?.streetLabels)
-      ? input!.streetLabels!.map(cloneStreetLabel)
+      ? input.streetLabels.map(cloneStreetLabel)
       : [],
     labelSize:
       typeof input?.labelSize === "number"
@@ -240,7 +250,9 @@ function createEmptyComparablesMapState(
     mapZoom: 17,
     bubbleSize: 1.0,
     hideUI: false,
-    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+    documentFrameSize: 1.0,
+    isSubjectTailPinned: true,
+    subjectPinnedTailTipPosition: null,
     landLocationMaps: type === "Land" ? {} : undefined,
   };
 }
@@ -284,10 +296,15 @@ function normalizeComparable(
   };
 }
 
-function normalizeSubjectState(
+export function normalizeSubjectState(
   input?: Partial<ProjectSubjectState>,
 ): ProjectSubjectState {
-  const info = input?.info ?? {};
+  const info = input?.info ?? {
+    address: SUBJECT_DEFAULT.info.address,
+    addressForDisplay: SUBJECT_DEFAULT.info.addressForDisplay,
+    legalDescription: SUBJECT_DEFAULT.info.legalDescription,
+    acres: SUBJECT_DEFAULT.info.acres,
+  };
   return {
     info: {
       address: info.address ?? SUBJECT_DEFAULT.info.address,
@@ -319,7 +336,7 @@ function normalizeComparablesMapState(
   fallbackType: ComparableType,
 ): ComparablesMapState {
   const comparablesArray = Array.isArray(input?.comparables)
-    ? input!.comparables!
+    ? input.comparables
     : [];
 
   return {
@@ -346,7 +363,11 @@ function normalizeComparablesMapState(
       typeof input?.documentFrameSize === "number"
         ? input.documentFrameSize
         : 1.0,
-    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+    isSubjectTailPinned:
+      typeof input?.isSubjectTailPinned === "boolean"
+        ? input.isSubjectTailPinned
+        : true,
+    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
     landLocationMaps:
       fallbackType === "Land"
         ? Object.entries(input?.landLocationMaps ?? {}).reduce<
@@ -363,11 +384,7 @@ function normalizeProjectComparables(
   subject: ProjectSubjectState,
   input?: ProjectComparablesState | ComparablesMapState,
 ): ProjectComparablesState {
-  const defaultByType: Record<ComparableType, ComparablesMapState> = {
-    Land: createEmptyComparablesMapState(subject, "Land"),
-    Sales: createEmptyComparablesMapState(subject, "Sales"),
-    Rentals: createEmptyComparablesMapState(subject, "Rentals"),
-  };
+
 
   if (
     input &&
@@ -376,8 +393,8 @@ function normalizeProjectComparables(
     input.byType &&
     typeof input.byType === "object"
   ) {
-    const byTypeInput = (input as ProjectComparablesState).byType ?? {};
-    const activeTypeInput = (input as ProjectComparablesState).activeType;
+    const byTypeInput = input.byType ?? {};
+    const activeTypeInput = input.activeType;
     return {
       byType: {
         Land: normalizeComparablesMapState(subject, byTypeInput.Land, "Land"),
@@ -412,12 +429,19 @@ function normalizeProjectComparables(
   };
 }
 
-function normalizeLocationState(
+export function normalizeLocationState(
   subject: ProjectSubjectState,
   input?: LocationMapState,
 ): LocationMapState {
   return {
-    // propertyInfo removed - use subject.info instead
+    propertyInfo: input?.propertyInfo
+            ? {
+                address: input.propertyInfo.address ?? SUBJECT_DEFAULT.info.address,
+                addressForDisplay: input.propertyInfo.addressForDisplay ?? SUBJECT_DEFAULT.info.addressForDisplay,
+                legalDescription: input.propertyInfo.legalDescription ?? SUBJECT_DEFAULT.info.legalDescription,
+                acres: input.propertyInfo.acres ?? SUBJECT_DEFAULT.info.acres
+            }
+            : undefined,
     markerPosition:
       input?.markerPosition !== undefined
         ? cloneLatLng(input.markerPosition)
@@ -427,13 +451,13 @@ function normalizeLocationState(
         ? cloneLatLng(input.bubblePosition)
         : subject.bubblePosition,
     polygonPath: Array.isArray(input?.polygonPath)
-      ? input!.polygonPath!.map((point) => ({ lat: point.lat, lng: point.lng }))
+      ? input.polygonPath.map((point) => ({ lat: point.lat, lng: point.lng }))
       : [],
     circles: Array.isArray(input?.circles)
-      ? input!.circles!.map(cloneCircle)
+      ? input.circles.map(cloneCircle)
       : [],
     polylines: Array.isArray(input?.polylines)
-      ? input!.polylines!.map((polyline) => ({
+      ? input.polylines.map((polyline) => ({
           ...polyline,
           path: polyline.path.map((point) => ({
             lat: point.lat,
@@ -452,9 +476,10 @@ function normalizeLocationState(
         ? input.tailDirection
         : "right",
     hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    // isSubjectTailPinned and subjectPinnedTailTipPosition removed - use subject fields instead
+    isSubjectTailPinned: typeof input?.isSubjectTailPinned === "boolean" ? input.isSubjectTailPinned : true,
+    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
     streetLabels: Array.isArray(input?.streetLabels)
-      ? input!.streetLabels!.map(cloneStreetLabel)
+      ? input.streetLabels.map(cloneStreetLabel)
       : [],
     labelSize:
       typeof input?.labelSize === "number"
@@ -480,6 +505,11 @@ export function createDefaultProject(): ProjectData {
     NEIGHBORHOOD_DEFAULT,
   );
   return { subject, comparables, location, neighborhood };
+}
+
+export function createDefaultLocationMapState(): LocationMapState {
+  const subject = normalizeSubjectState(SUBJECT_DEFAULT);
+  return normalizeLocationState(subject, LOCATION_DEFAULT);
 }
 
 export function normalizeProjectData(data?: Partial<ProjectData>): ProjectData {

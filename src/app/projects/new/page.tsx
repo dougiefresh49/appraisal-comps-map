@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   normalizeProjectData,
   normalizeProjectsMap,
-  getNextProjectName,
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   createDefaultProject,
@@ -128,8 +127,8 @@ export default function NewProjectPage() {
 
           return {
             id: `comp-${type.toLowerCase()}-${Date.now()}-${index}-${Math.random()}`,
-            address: comp.Address || "",
-            addressForDisplay: comp.Address || "",
+            address: comp.Address ?? "",
+            addressForDisplay: comp.Address ?? "",
             isTailPinned: true,
             type,
             apn: apnArray && apnArray.length > 0 ? apnArray : undefined,
@@ -186,21 +185,21 @@ export default function NewProjectPage() {
             Land: {
               ...defaultProject.comparables.byType.Land,
               comparables: [
-                ...(defaultProject.comparables.byType.Land.comparables || []),
+                ...(defaultProject.comparables.byType.Land.comparables ?? []),
                 ...landComparables,
               ],
             },
             Sales: {
               ...defaultProject.comparables.byType.Sales,
               comparables: [
-                ...(defaultProject.comparables.byType.Sales.comparables || []),
+                ...(defaultProject.comparables.byType.Sales.comparables ?? []),
                 ...saleComparables,
               ],
             },
             Rentals: {
               ...defaultProject.comparables.byType.Rentals,
               comparables: [
-                ...(defaultProject.comparables.byType.Rentals.comparables ||
+                ...(defaultProject.comparables.byType.Rentals.comparables ??
                   []),
                 ...rentalComparables,
               ],

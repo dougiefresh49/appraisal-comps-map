@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+
 import { useEffect, useState } from "react";
 
 interface PropertyInfo {
@@ -20,9 +20,6 @@ interface StreetLabelData {
 
 interface PropertyInfoPanelProps {
   heading?: string;
-  projectName: string;
-  onProjectNameEdit?: () => void;
-  onProjectSwitch?: () => void;
   propertyInfo: PropertyInfo;
   onPropertyInfoChange: (info: PropertyInfo) => void;
   onAddressSearch: (address: string) => void;
@@ -47,7 +44,6 @@ interface PropertyInfoPanelProps {
   labelSize: number;
   onLabelSizeChange: (size: number) => void;
   mapCenter: { lat: number; lng: number };
-  onShare?: () => void;
   apn?: string[]; // APN numbers for land comparables
   documentFrameSize?: number; // For land comp document frame size
   onDocumentFrameSizeChange?: (size: number) => void; // For land comp document frame size
@@ -55,9 +51,6 @@ interface PropertyInfoPanelProps {
 
 export function PropertyInfoPanel({
   heading = "Subject Location Map",
-  projectName,
-  onProjectNameEdit,
-  onProjectSwitch,
   propertyInfo,
   onPropertyInfoChange,
   onAddressSearch,
@@ -65,11 +58,11 @@ export function PropertyInfoPanel({
   onBubbleSizeChange,
   tailDirection,
   onTailDirectionChange,
-    hideUI,
-    onHideUIChange,
-    showDocumentOverlay,
-    onShowDocumentOverlayChange,
-    isTailPinned,
+  hideUI,
+  onHideUIChange,
+  showDocumentOverlay,
+  onShowDocumentOverlayChange,
+  isTailPinned,
   onIsTailPinnedChange,
   pinnedTailTipPosition,
   onPinnedTailTipPositionChange,
@@ -80,7 +73,6 @@ export function PropertyInfoPanel({
   labelSize,
   onLabelSizeChange,
   mapCenter,
-  onShare,
   apn,
   documentFrameSize,
   onDocumentFrameSizeChange,
@@ -122,58 +114,7 @@ export function PropertyInfoPanel({
   return (
     <div className="w-80 border-r border-gray-300 bg-white p-6 shadow-lg">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">{heading}</h2>
-        {onShare && (
-          <button
-            onClick={onShare}
-            className="rounded-md border-2 border-blue-500 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-          >
-            Share
-          </button>
-        )}
-      </div>
-
-      <div className="mb-4 border-b border-gray-200 pb-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">
-              Project
-            </span>
-            <span className="text-base font-semibold text-gray-900">
-              {projectName}
-            </span>
-          </div>
-          {(onProjectNameEdit || onProjectSwitch) && (
-            <div className="flex gap-2">
-              {onProjectNameEdit && (
-                <button
-                  type="button"
-                  onClick={onProjectNameEdit}
-                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                  title="Rename project"
-                >
-                  ✏️
-                </button>
-              )}
-              {onProjectSwitch && (
-                <button
-                  type="button"
-                  onClick={onProjectSwitch}
-                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                  title="Switch project"
-                >
-                  🔁
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        <Link
-          href="/projects"
-          className="mt-3 inline-block text-sm text-blue-600 hover:text-blue-800 hover:underline"
-        >
-          ← Back to Projects
-        </Link>
+        <h2 className="text-lg font-semibold">{heading}</h2>
       </div>
 
       {/* Address Search */}

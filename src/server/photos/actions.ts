@@ -19,7 +19,7 @@ export type PhotoInputs = z.infer<typeof PhotoInputsSchema>;
 const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 
 // Debug function to list all files in the folder
-export async function listAllFilesInFolder(folderId: string): Promise<any> {
+export async function listAllFilesInFolder(folderId: string): Promise<unknown> {
   try {
     // Try different query approaches
     const queries = [
@@ -37,7 +37,9 @@ export async function listAllFilesInFolder(folderId: string): Promise<any> {
         continue;
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        files?: { id: string; name: string }[];
+      };
 
       if (data.files && data.files.length > 0) {
         return data;
@@ -49,7 +51,7 @@ export async function listAllFilesInFolder(folderId: string): Promise<any> {
       `${GOOGLE_DRIVE_API_BASE}/files?q='${folderId}' in parents&key=${env.GOOGLE_DRIVE_API_KEY}`,
     );
 
-    const data = await response.json();
+    const data: unknown = await response.json();
     return data;
   } catch (error) {
     console.error("Error listing files:", error);
@@ -160,7 +162,7 @@ export async function saveChanges(
           body: JSON.stringify({
             photos: updatedPhotos,
             folderId,
-            fileId: fileId || "unknown",
+            fileId: fileId ?? "unknown",
           }),
         },
       );
@@ -229,7 +231,10 @@ async function fetchInputJsonFromDrive(folderId: string): Promise<{
     );
   }
 
-  const inputs = await inputResponse.json();
+  const inputs = (await inputResponse.json()) as Array<{
+    image: string;
+    label: string;
+  }>;
 
   return { inputs, fileId: inputFileId };
 }

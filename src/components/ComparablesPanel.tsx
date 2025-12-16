@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { COMPARABLE_TYPES, type ComparableType } from "~/utils/projectStore";
 
@@ -100,9 +100,6 @@ interface ComparableInfo {
 }
 
 interface ComparablesPanelProps {
-  projectName: string;
-  onProjectNameEdit?: () => void;
-  onProjectSwitch?: () => void;
   subjectInfo: SubjectInfo;
   onSubjectInfoChange: (info: SubjectInfo) => void;
   onSubjectAddressSearch: (address: string) => void;
@@ -129,14 +126,10 @@ interface ComparablesPanelProps {
   ) => void;
   isRepositioningSubjectTail: boolean;
   onIsRepositioningSubjectTailChange: (repositioning: boolean) => void;
-  onShare?: () => void;
   onOpenLandMap?: (compId: string) => void;
 }
 
 export function ComparablesPanel({
-  projectName,
-  onProjectNameEdit,
-  onProjectSwitch,
   subjectInfo,
   onSubjectInfoChange,
   onSubjectAddressSearch,
@@ -161,7 +154,6 @@ export function ComparablesPanel({
   onSubjectPinnedTailTipPositionChange,
   isRepositioningSubjectTail,
   onIsRepositioningSubjectTailChange,
-  onShare,
   onOpenLandMap,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
@@ -247,70 +239,7 @@ export function ComparablesPanel({
   return (
     <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Comparables Map</h2>
-        {onShare && (
-          <button
-            onClick={onShare}
-            className="rounded-md border-2 border-blue-500 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-          >
-            Share
-          </button>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <Link
-          href="/projects"
-          className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          <span className="text-sm font-medium">Back to Projects</span>
-        </Link>
-      </div>
-
-      <div className="mb-6 border-b border-gray-200 pb-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className="block text-xs font-medium tracking-wide text-gray-500 uppercase">
-              Project
-            </span>
-            <span className="text-base font-semibold text-gray-900">
-              {projectName}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onProjectNameEdit}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Rename project"
-              disabled={!onProjectNameEdit}
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              onClick={onProjectSwitch}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Switch project"
-              disabled={!onProjectSwitch}
-            >
-              🔁
-            </button>
-          </div>
-        </div>
+        <h2 className="text-lg font-semibold">Comparables Map</h2>
       </div>
 
       {/* Subject Section */}
@@ -354,7 +283,7 @@ export function ComparablesPanel({
           </label>
           <input
             type="text"
-            value={subjectInfo.addressForDisplay || ""}
+            value={subjectInfo.addressForDisplay ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -369,7 +298,7 @@ export function ComparablesPanel({
           <label className="mb-1 block text-xs text-gray-600">Acres</label>
           <input
             type="text"
-            value={subjectInfo.acres || ""}
+            value={subjectInfo.acres ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -386,7 +315,7 @@ export function ComparablesPanel({
           </label>
           <input
             type="text"
-            value={subjectInfo.legalDescription || ""}
+            value={subjectInfo.legalDescription ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, use } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
@@ -11,32 +11,21 @@ import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
-import { useSearchParams } from "next/navigation";
-import {
-  encodeState,
-  decodeState,
-  MAX_URL_STATE_LENGTH,
-} from "~/utils/statePersistence";
+
 import {
   createDefaultProject,
   normalizeProjectData,
   normalizeProjectsMap,
-  getNextProjectName,
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
-  COMPARABLE_TYPES,
 } from "~/utils/projectStore";
 import type {
-  ComparablesMapState,
-  ComparableType,
   LocationMapState,
-  NeighborhoodMapState,
   ProjectData,
   ProjectsMap,
-  ProjectSubjectState,
   SubjectInfo,
   StreetLabelData,
   Circle,
@@ -45,16 +34,27 @@ import type {
 
 type PropertyInfo = SubjectInfo;
 
-export default function NeighborhoodMapPage() {
-  const searchParams = useSearchParams();
+interface LandCompLocationMapPageProps {
+  params: Promise<{
+    projectId: string;
+    compId: string;
+  }>;
+}
+
+export default function LandCompLocationMapPage({ params }: LandCompLocationMapPageProps) {
+  const { projectId, compId } = use(params);
+  const decodedProjectId = decodeURIComponent(projectId);
+  const projectName = decodedProjectId;
+
   const projectStoreRef = useRef<ProjectsMap>({});
-  const [projectName, setProjectName] = useState("Project 1");
+  
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
     addressForDisplay: "",
     legalDescription: "",
     acres: "",
   });
+  const [apn, setApn] = useState<string[] | undefined>(undefined);
   const [markerPosition, setMarkerPosition] = useState<{
     lat: number;
     lng: number;
@@ -101,71 +101,89 @@ export default function NeighborhoodMapPage() {
   const applyProjectState = useCallback(
     (project?: ProjectData) => {
       const snapshot = normalizeProjectData(project);
-      const subjectSnapshot = snapshot.subject;
-      // This is the main difference: use neighborhood state
-      const neighborhoodSnapshot = snapshot.neighborhood;
+      
+      // Specifically load Land Location Map state for this compId
+      const mapState =
+        snapshot.comparables.byType.Land.landLocationMaps?.[compId] ?? {};
+        
+      // Also get comparable info for initial address
+      const comparable = snapshot.comparables.byType.Land.comparables?.find(
+        (c) => c.id === compId,
+      );
 
-      const infoSnapshot = subjectSnapshot.info;
+      // If no stored state but we have comparable info, use it
+      const infoAddress =
+        mapState.propertyInfo?.address ?? comparable?.address ?? "";
+      const infoAddressForDisplay =
+        mapState.propertyInfo?.addressForDisplay ??
+        comparable?.addressForDisplay ??
+        infoAddress;
+
       setPropertyInfo({
-        address: infoSnapshot.address ?? "",
-        addressForDisplay:
-          infoSnapshot.addressForDisplay ?? infoSnapshot.address ?? "",
-        legalDescription: infoSnapshot.legalDescription ?? "",
-        acres: infoSnapshot.acres ?? "",
+        address: infoAddress,
+        addressForDisplay: infoAddressForDisplay,
+        legalDescription: mapState.propertyInfo?.legalDescription ?? "",
+        acres: mapState.propertyInfo?.acres ?? "",
       });
+      setApn(comparable?.apn);
+      
+      // Use comparable position as fallback if no map state
+      const initialMarkerPos = mapState.markerPosition ?? comparable?.markerPosition ?? null;
       setMarkerPosition(
-        subjectSnapshot.markerPosition
-          ? { ...subjectSnapshot.markerPosition }
-          : null,
+        initialMarkerPos ? { ...initialMarkerPos } : null,
       );
+      
+      // Fallback bubble position
       setBubblePosition(
-        subjectSnapshot.bubblePosition
-          ? { ...subjectSnapshot.bubblePosition }
-          : null,
+        mapState.bubblePosition
+          ? { ...mapState.bubblePosition }
+          : initialMarkerPos ? { lat: initialMarkerPos.lat + 0.001, lng: initialMarkerPos.lng + 0.001 } : null
       );
+      
       setPolygonPath(
-        neighborhoodSnapshot.polygonPath
-          ? neighborhoodSnapshot.polygonPath.map((point) => ({ ...point }))
+        mapState.polygonPath
+          ? mapState.polygonPath.map((point) => ({ ...point }))
           : [],
       );
       setCircles(
-        neighborhoodSnapshot.circles
-          ? neighborhoodSnapshot.circles.map((circle) => ({
+        mapState.circles
+          ? mapState.circles.map((circle) => ({
               ...circle,
               center: { ...circle.center },
             }))
           : [],
       );
       setMapCenter(
-        neighborhoodSnapshot.mapCenter
-          ? { ...neighborhoodSnapshot.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
+        mapState.mapCenter
+          ? { ...mapState.mapCenter }
+          : initialMarkerPos
+            ? { ...initialMarkerPos }
+            : { ...DEFAULT_MAP_CENTER },
       );
-      setMapZoom(neighborhoodSnapshot.mapZoom ?? 17);
-      setBubbleSize(neighborhoodSnapshot.bubbleSize ?? 1.0);
-      setTailDirection(neighborhoodSnapshot.tailDirection ?? "right");
-      setHideUI(neighborhoodSnapshot.hideUI ?? false);
-      setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
+      setMapZoom(mapState.mapZoom ?? 17);
+      setBubbleSize(mapState.bubbleSize ?? 1.0);
+      setTailDirection(mapState.tailDirection ?? "right");
+      setHideUI(mapState.hideUI ?? false);
+      setIsSubjectTailPinned(mapState.isSubjectTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        subjectSnapshot.pinnedTailTipPosition ?? undefined,
+        mapState.subjectPinnedTailTipPosition ?? undefined,
       );
       setStreetLabels(
-        neighborhoodSnapshot.streetLabels
-          ? neighborhoodSnapshot.streetLabels.map((label) => ({
+        mapState.streetLabels
+          ? mapState.streetLabels.map((label) => ({
               ...label,
               position: { ...label.position },
             }))
           : [],
       );
-      setLabelSize(neighborhoodSnapshot.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(
-        neighborhoodSnapshot.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
-      );
+      setLabelSize(mapState.labelSize ?? DEFAULT_LABEL_SIZE);
+      setCircleRadius(mapState.circleRadius ?? DEFAULT_CIRCLE_RADIUS);
       setIsDrawing(false);
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
     [
+      compId,
       setPropertyInfo,
       setMarkerPosition,
       setBubblePosition,
@@ -215,36 +233,13 @@ export default function NeighborhoodMapPage() {
       }
     }
 
-    let selectedProjectName =
-      window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ?? undefined;
-
-    const encodedFromUrl = searchParams.get("mapState");
-    if (encodedFromUrl) {
-      const decoded = decodeState<ProjectData>(encodedFromUrl);
-      if (decoded) {
-        const normalized = normalizeProjectData(decoded);
-        const newProjectName = getNextProjectName(Object.keys(projectStore));
-        projectStore[newProjectName] = normalized;
-        selectedProjectName = newProjectName;
-      }
+    if (!projectStore[projectName]) {
+       console.warn(`Project ${projectName} not found in storage, creating default.`);
+       projectStore[projectName] = createDefaultProject();
     }
-
-    const projectKeys = Object.keys(projectStore);
-    if (!selectedProjectName || !projectStore[selectedProjectName]) {
-      if (projectKeys.length > 0) {
-        selectedProjectName = projectKeys[0];
-      } else {
-        const defaultName = getNextProjectName([]);
-        projectStore[defaultName] = createDefaultProject();
-        selectedProjectName = defaultName;
-      }
-    }
-
-    const finalProjectName = selectedProjectName as string;
 
     projectStoreRef.current = projectStore;
-    setProjectName(finalProjectName);
-    applyProjectState(projectStore[finalProjectName]);
+    applyProjectState(projectStore[projectName]);
 
     try {
       window.localStorage.setItem(
@@ -253,14 +248,14 @@ export default function NeighborhoodMapPage() {
       );
       window.localStorage.setItem(
         CURRENT_PROJECT_STORAGE_KEY,
-        finalProjectName,
+        projectName,
       );
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
 
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, searchParams]);
+  }, [applyProjectState, isStateHydrated, projectName]);
 
   const persistCurrentProjectState = useCallback(() => {
     if (!projectName) return;
@@ -268,8 +263,9 @@ export default function NeighborhoodMapPage() {
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    const subject: ProjectSubjectState = {
-      info: {
+    // Construct the LocationMapState for this specific comp
+    const locationState: LocationMapState = {
+      propertyInfo: {
         address: propertyInfo.address ?? "",
         addressForDisplay:
           propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
@@ -278,16 +274,6 @@ export default function NeighborhoodMapPage() {
       },
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
-
-    const neighborhoodState: NeighborhoodMapState = {
-      ...baseProject.neighborhood,
-      markerPosition: subject.markerPosition,
-      bubblePosition: subject.bubblePosition,
       polygonPath: polygonPath.map((point) => ({ ...point })),
       circles: circles.map((circle) => ({
         ...circle,
@@ -304,12 +290,35 @@ export default function NeighborhoodMapPage() {
       })),
       labelSize,
       circleRadius,
+      isSubjectTailPinned: isSubjectTailPinned,
+      subjectPinnedTailTipPosition: subjectPinnedTailTipPosition
+        ? { ...subjectPinnedTailTipPosition }
+        : null,
+    };
+
+    // Update the Land Comparables state with this comp's map
+    const landState = baseProject.comparables.byType.Land;
+    const updatedLandLocationMaps = {
+        ...(landState.landLocationMaps ?? {}),
+        [compId]: locationState
+    };
+
+    const updatedLandState = {
+        ...landState,
+        landLocationMaps: updatedLandLocationMaps
+    };
+
+    const comparablesState = {
+      ...baseProject.comparables,
+      byType: {
+        ...baseProject.comparables.byType,
+        Land: updatedLandState
+      }
     };
 
     const snapshot: ProjectData = {
       ...baseProject,
-      subject,
-      neighborhood: neighborhoodState, // Update neighborhood instead of location
+      comparables: comparablesState,
     };
 
     projectStoreRef.current[projectName] = snapshot;
@@ -331,6 +340,7 @@ export default function NeighborhoodMapPage() {
     subjectPinnedTailTipPosition,
     tailDirection,
     bubbleSize,
+    compId,
   ]);
 
   const writeProjectsToStorage = useCallback((currentName: string) => {
@@ -342,68 +352,9 @@ export default function NeighborhoodMapPage() {
       );
       window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
     } catch (error) {
-      console.error("Failed to save neighborhood map projects", error);
+      console.error("Failed to save location map projects", error);
     }
   }, []);
-
-  const handleProjectNameEdit = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const input = window.prompt("Rename project", projectName)?.trim();
-    if (!input || input === projectName) return;
-
-    if (projectStoreRef.current[input]) {
-      window.alert(
-        "A project with that name already exists. Choose another name.",
-      );
-      return;
-    }
-
-    persistCurrentProjectState();
-
-    const updatedStore: ProjectsMap = {};
-    Object.entries(projectStoreRef.current).forEach(([name, state]) => {
-      updatedStore[name === projectName ? input : name] = state;
-    });
-
-    projectStoreRef.current = updatedStore;
-    setProjectName(input);
-    writeProjectsToStorage(input);
-  }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
-
-  const handleProjectSwitch = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const names = Object.keys(projectStoreRef.current);
-    const suggestion =
-      names.find((name) => name !== projectName) ?? getNextProjectName(names);
-    const input = window
-      .prompt(
-        names.length
-          ? `Enter project name to switch to (existing names):\n${names.join(
-              "\n",
-            )}\n\nTo create a new project, enter a new name.`
-          : "Enter project name to create",
-        suggestion,
-      )
-      ?.trim();
-
-    if (!input || input === projectName) return;
-
-    persistCurrentProjectState();
-
-    if (!projectStoreRef.current[input]) {
-      projectStoreRef.current[input] = createDefaultProject();
-    }
-
-    const targetProject = projectStoreRef.current[input];
-    setProjectName(input);
-    applyProjectState(targetProject);
-    writeProjectsToStorage(input);
-  }, [
-    applyProjectState,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
 
   useEffect(() => {
     if (!isStateHydrated) return;
@@ -434,96 +385,45 @@ export default function NeighborhoodMapPage() {
     writeProjectsToStorage,
   ]);
 
-  const handleShare = useCallback(async () => {
-    if (typeof window === "undefined") return;
-    persistCurrentProjectState();
-    writeProjectsToStorage(projectName);
-    const projectSnapshot =
-      serializedProjectRef.current ?? projectStoreRef.current[projectName];
-    const encoded = encodeState(projectSnapshot);
-    if (!encoded) {
-      window.alert("Unable to generate share link. Please try again.");
-      return;
-    }
 
-    if (encoded.length > MAX_URL_STATE_LENGTH) {
-      window.alert(
-        "Map state is too large to share via URL. Please simplify the map and try again.",
-      );
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    url.searchParams.set("mapState", encoded);
-
-    try {
-      await navigator.clipboard.writeText(url.toString());
-      window.alert(`Shareable link for ${projectName} copied to clipboard!`);
-    } catch (error) {
-      console.error("Failed to copy share link", error);
-      window.prompt("Copy this share link", url.toString());
-    }
-  }, [persistCurrentProjectState, projectName, writeProjectsToStorage]);
 
   const handleAddressSearch = async (address: string) => {
-    if (!address.trim()) return;
-
-    try {
-      const geocoder = new google.maps.Geocoder();
-      const results = await new Promise<google.maps.GeocoderResult[]>(
-        (resolve, reject) => {
-          geocoder.geocode({ address }, (results, status) => {
-            if (status === "OK" && results) {
-              resolve(results);
-            } else {
-              reject(new Error(`Geocoding failed: ${status}`));
-            }
+      // Reuse address search logic
+      if (!address.trim()) return;
+        try {
+          const geocoder = new google.maps.Geocoder();
+          const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+              void geocoder.geocode({ address }, (results, status) => { if (status === google.maps.GeocoderStatus.OK && results) resolve(results); else reject(new Error(`Geocoding failed`)); });
           });
-        },
-      );
-
-      if (results && results.length > 0) {
-        const location = results[0]!.geometry.location;
-        const formattedAddress = results[0]?.formatted_address ?? address;
-        const newPosition = {
-          lat: location.lat(),
-          lng: location.lng(),
-        };
-        setMapCenter(newPosition);
-        setMarkerPosition(newPosition);
-        setBubblePosition({
-          lat: newPosition.lat + 0.001,
-          lng: newPosition.lng + 0.001,
-        });
-        if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
-          setSubjectPinnedTailTipPosition(newPosition);
+          if (results && results.length > 0) {
+            const result = results[0];
+            if (!result) return;
+            const location = result.geometry.location;
+            const newPosition = { lat: location.lat(), lng: location.lng() };
+            setMapCenter(newPosition);
+            setMarkerPosition(newPosition);
+            setBubblePosition({ lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 });
+            if (isSubjectTailPinned && !subjectPinnedTailTipPosition) { setSubjectPinnedTailTipPosition(newPosition); }
+            setMapZoom(18);
+            const formattedAddress = result.formatted_address ?? address;
+            setPropertyInfo((prev) => {
+              const keepDisplay = prev.addressForDisplay && prev.addressForDisplay.trim().length > 0 && prev.addressForDisplay !== prev.address;
+              return { ...prev, address: formattedAddress, addressForDisplay: keepDisplay ? prev.addressForDisplay : formattedAddress };
+            });
+          }
+        } catch (error) {
+          console.error("Error geocoding address", error);
         }
-        setMapZoom(18);
-        setPropertyInfo((prev) => {
-          const keepDisplay =
-            prev.addressForDisplay &&
-            prev.addressForDisplay.trim().length > 0 &&
-            prev.addressForDisplay !== prev.address;
-          return {
-            ...prev,
-            address: formattedAddress,
-            addressForDisplay: keepDisplay
-              ? prev.addressForDisplay
-              : formattedAddress,
-          };
-        });
-      }
-    } catch (error) {
-      console.error("Error geocoding address:", error);
-    }
   };
 
   return (
     <div className="flex h-screen w-full">
       <PropertyInfoPanel
-        projectName={projectName}
+        heading={`Land Comp ${compId} Map`}
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
+        // No share button or project header needed
+        apn={apn}
         onAddressSearch={handleAddressSearch}
         bubbleSize={bubbleSize}
         onBubbleSizeChange={setBubbleSize}
@@ -544,8 +444,6 @@ export default function NeighborhoodMapPage() {
         labelSize={labelSize}
         onLabelSizeChange={setLabelSize}
         mapCenter={mapCenter}
-        onShare={handleShare}
-        title="Neighborhood Map"
       />
 
       <div className="relative flex-1">
@@ -560,43 +458,31 @@ export default function NeighborhoodMapPage() {
             disableDefaultUI={hideUI}
             onCenterChanged={(e) => {
               const center = e.detail.center;
-              if (center) {
-                setMapCenter({ lat: center.lat, lng: center.lng });
-              }
+              if (center) { setMapCenter({ lat: center.lat, lng: center.lng }); }
             }}
             onZoomChanged={(e) => {
               const zoom = e.detail.zoom;
-              if (zoom) {
-                setMapZoom(zoom);
-              }
+              if (zoom) { setMapZoom(zoom); }
             }}
             onClick={(e) => {
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
-
                 if (isRepositioningSubjectTail) {
                   setSubjectPinnedTailTipPosition({ lat, lng });
                   setIsRepositioningSubjectTail(false);
                   setIsSubjectTailPinned(true);
                   return;
                 }
-
                 if (isDrawingCircle) {
-                  const newCircle: Circle = {
-                    center: { lat, lng },
-                    radius: circleRadius * 1609.34,
-                    id: `circle-${Date.now()}-${Math.random()}`,
-                  };
+                  const newCircle: Circle = { center: { lat, lng }, radius: circleRadius * 1609.34, id: `circle-${Date.now()}-${Math.random()}` };
                   setCircles((prev) => [...prev, newCircle]);
                 } else if (isDrawing) {
                   setPolygonPath((prev) => [...prev, { lat, lng }]);
                 } else if (!markerPosition) {
                   setMarkerPosition({ lat, lng });
                   setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
-                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
-                    setSubjectPinnedTailTipPosition({ lat, lng });
-                  }
+                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) { setSubjectPinnedTailTipPosition({ lat, lng }); }
                 }
               }
             }}
@@ -607,58 +493,31 @@ export default function NeighborhoodMapPage() {
               polygonPath={polygonPath}
               onPolygonPathChange={setPolygonPath}
             />
-
-            <CircleDrawingTool circles={circles} onCirclesChange={setCircles} />
-
+            <CircleDrawingTool circles={circles} />
             {markerPosition && !hideUI && (
               <AdvancedMarker
                 position={markerPosition}
                 draggable
                 onDragEnd={(e) => {
                   if (e.latLng) {
-                    const newPosition = {
-                      lat: e.latLng.lat(),
-                      lng: e.latLng.lng(),
-                    };
-
+                    const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
                     const currentMarkerPos = markerPositionRef.current;
                     const currentBubblePos = bubblePositionRef.current;
-
                     if (currentMarkerPos && currentBubblePos) {
-                      const latDiff =
-                        currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff =
-                        currentBubblePos.lng - currentMarkerPos.lng;
-
+                      const latDiff = currentBubblePos.lat - currentMarkerPos.lat;
+                      const lngDiff = currentBubblePos.lng - currentMarkerPos.lng;
                       setMarkerPosition(newPosition);
-                      setBubblePosition({
-                        lat: newPosition.lat + latDiff,
-                        lng: newPosition.lng + lngDiff,
-                      });
-                    } else {
-                      setMarkerPosition(newPosition);
-                    }
+                      setBubblePosition({ lat: newPosition.lat + latDiff, lng: newPosition.lng + lngDiff });
+                    } else { setMarkerPosition(newPosition); }
                   }
                 }}
               >
                 <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
               </AdvancedMarker>
             )}
-
-            {isSubjectTailPinned &&
-              subjectPinnedTailTipPosition &&
-              bubblePosition &&
-              markerPosition && (
-                <PinnedTailOverlay
-                  bubblePosition={bubblePosition}
-                  pinnedTailTipPosition={subjectPinnedTailTipPosition}
-                  bubbleWidth={400 * bubbleSize}
-                  bubbleHeight={200 * bubbleSize}
-                  color="#ffffff"
-                  strokeColor="#000000"
-                />
-              )}
-
+            {isSubjectTailPinned && subjectPinnedTailTipPosition && bubblePosition && markerPosition && (
+                 <PinnedTailOverlay bubblePosition={bubblePosition} pinnedTailTipPosition={subjectPinnedTailTipPosition} bubbleWidth={400 * bubbleSize} bubbleHeight={200 * bubbleSize} color="#ffffff" strokeColor="#000000" />
+            )}
             {bubblePosition && markerPosition && (
               <SubjectLocationMarker
                 position={bubblePosition}
@@ -671,42 +530,17 @@ export default function NeighborhoodMapPage() {
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
               />
             )}
-
             {streetLabels.map((label) => (
               <StreetLabel
                 key={label.id}
                 position={label.position}
                 text={label.text}
                 rotation={label.rotation}
-                onPositionChange={(newPosition) => {
-                  setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, position: newPosition } : l,
-                    ),
-                  );
-                }}
-                onRotationChange={(newRotation) => {
-                  setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, rotation: newRotation } : l,
-                    ),
-                  );
-                }}
-                onTextChange={(newText) => {
-                  setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, text: newText } : l,
-                    ),
-                  );
-                }}
+                onPositionChange={(newPosition) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, position: newPosition } : l)); }}
+                onRotationChange={(newRotation) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, rotation: newRotation } : l)); }}
+                onTextChange={(newText) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, text: newText } : l)); }}
                 isEditing={label.isEditing}
-                onEditToggle={() => {
-                  setStreetLabels((prev) =>
-                    prev.map((l) =>
-                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
-                    ),
-                  );
-                }}
+                onEditToggle={() => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, isEditing: !l.isEditing } : l)); }}
                 hideUI={hideUI}
                 sizeMultiplier={labelSize}
               />
@@ -714,7 +548,6 @@ export default function NeighborhoodMapPage() {
           </Map>
         </APIProvider>
         <DocumentOverlay enabled={showDocumentOverlay} />
-
         <MapDrawingControls
           isDrawing={isDrawing}
           onIsDrawingChange={setIsDrawing}

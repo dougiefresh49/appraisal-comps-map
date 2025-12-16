@@ -7,7 +7,6 @@ import {
   createDefaultProject,
   normalizeProjectData,
   normalizeProjectsMap,
-  getNextProjectName,
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   COMPARABLE_TYPES,
@@ -141,7 +140,9 @@ export default function ProjectsPage() {
     setProjects((prev) => {
       const current = prev[selectedProjectName];
       if (!current) return prev;
-      const { [selectedProjectName]: _removed, ...rest } = prev;
+      const rest = { ...prev };
+      delete rest[selectedProjectName];
+      // const { [selectedProjectName]: _removed, ...rest } = prev;
       return {
         ...rest,
         [input]: current,
@@ -165,7 +166,8 @@ export default function ProjectsPage() {
     );
 
     setProjects((prev) => {
-      const { [selectedProjectName]: _removed, ...rest } = prev;
+      const rest = { ...prev };
+      delete rest[selectedProjectName];
       return rest;
     });
 
@@ -214,6 +216,7 @@ export default function ProjectsPage() {
       );
 
       return {
+        ...project,
         subject: {
           ...project.subject,
           info: updatedInfo,
@@ -221,10 +224,6 @@ export default function ProjectsPage() {
         comparables: {
           ...project.comparables,
           byType: updatedByType,
-        },
-        location: {
-          ...project.location,
-          propertyInfo: { ...project.location.propertyInfo, ...updatedInfo },
         },
       };
     });
@@ -413,38 +412,38 @@ export default function ProjectsPage() {
                 {isSelected && normalizedProject && (
                   <div className="ml-4 space-y-1 border-l-2 border-blue-200 pl-3">
                     <Link
-                      href={`/cover?project=${encodeURIComponent(name)}`}
+                      href={`/project/${encodeURIComponent(name)}/cover`}
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
                       Cover Page
                     </Link>
                     <Link
-                      href="/location-map"
+                      href={`/project/${encodeURIComponent(name)}/subject/location-map`}
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
                       Location Map
                     </Link>
                     <Link
-                      href="/neighborhood-map"
+                      href={`/project/${encodeURIComponent(name)}/neighborhood-map`}
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
                       Neighborhood Map
                     </Link>
                     <Link
-                      href="/comps-map"
+                      href={`/project/${encodeURIComponent(name)}/land-sales/comparables-map`}
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
                       Comparables Map
                     </Link>
                     <Link
-                      href={`/reports?project=${encodeURIComponent(name)}`}
+                      href={`/project/${encodeURIComponent(name)}/reports`}
                       className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
                       Reports
                     </Link>
                     {normalizedProject.subjectPhotosFolderId && (
                       <Link
-                        href={`/photos?folderId=${encodeURIComponent(normalizedProject.subjectPhotosFolderId)}`}
+                        href={`/project/${encodeURIComponent(name)}/subject/photos?folderId=${encodeURIComponent(normalizedProject.subjectPhotosFolderId)}`}
                         className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                       >
                         Photos
@@ -469,6 +468,12 @@ export default function ProjectsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href={`/project/${encodeURIComponent(selectedProjectName)}`}
+              className="rounded-md border border-blue-500 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Open Dashboard
+            </Link>
             <button
               onClick={() => setIsJsonMode((prev) => !prev)}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
@@ -752,7 +757,7 @@ export default function ProjectsPage() {
                                 <div className="flex items-center gap-2">
                                   {type === "Land" && selectedProjectName && (
                                     <Link
-                                      href={`/land-comp-map?project=${encodeURIComponent(selectedProjectName)}&compId=${comparable.id}`}
+                                      href={`/project/${encodeURIComponent(selectedProjectName)}/land-sales/comps/${comparable.id}/location-map`}
                                       className="rounded-md border border-green-600 bg-green-50 px-2 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100"
                                     >
                                       Land Map

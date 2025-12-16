@@ -11,7 +11,6 @@ import {
 import { env } from "~/env";
 import { MapOverlayPortal } from "./MapOverlayPortal";
 import { DndContext, useDraggable } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
 
 // --- Hardcoded Data based on your previous input ---
 // In a real app, you would fetch this data from an API or your n8n workflow.
@@ -168,17 +167,17 @@ function DraggableBubble({
 // DraggableBubblesOverlay: handles all drag logic and rendering
 function DraggableBubblesOverlay({
   projection,
-  mapDiv,
+  // mapDiv,
   properties,
   bubblePositions,
   setBubblePositions,
 }: {
   projection: google.maps.MapCanvasProjection;
-  mapDiv: HTMLDivElement;
+  // mapDiv: HTMLDivElement;
   properties: Property[];
-  bubblePositions: { [id: number]: { lat: number; lng: number } };
+  bubblePositions: Record<number, { lat: number; lng: number }>;
   setBubblePositions: React.Dispatch<
-    React.SetStateAction<{ [id: number]: { lat: number; lng: number } }>
+    React.SetStateAction<Record<number, { lat: number; lng: number }>>
   >;
 }) {
   const map = useMap();
@@ -246,7 +245,7 @@ function DraggableBubblesOverlay({
         // Store the bubble's lat/lng at drag start
         const prop = properties.find((p) => p.id === Number(event.active.id));
         if (prop) {
-          const latLng = bubblePositions[prop.id] || prop.position;
+          const latLng = bubblePositions[prop.id] ?? prop.position;
           setDragStartLatLng(latLng);
           setPreviewLatLng(latLng);
         }
@@ -287,7 +286,7 @@ function DraggableBubblesOverlay({
         const bubbleLatLng =
           isActive && previewLatLng
             ? previewLatLng
-            : bubblePositions[prop.id] || prop.position;
+            : bubblePositions[prop.id] ?? prop.position;
         const markerPx = latLngToPixel(
           projection,
           prop.position.lat,
@@ -345,8 +344,8 @@ export function MinimalDraggableBubble({
   projection,
   bubbleLatLng,
   setBubbleLatLng,
-  dragStartLatLng,
-  setDragStartLatLng,
+  // dragStartLatLng,
+  // setDragStartLatLng,
   previewLatLng,
   setPreviewLatLng,
 }: {
@@ -355,10 +354,10 @@ export function MinimalDraggableBubble({
   setBubbleLatLng: React.Dispatch<
     React.SetStateAction<{ lat: number; lng: number }>
   >;
-  dragStartLatLng: { lat: number; lng: number } | null;
-  setDragStartLatLng: React.Dispatch<
-    React.SetStateAction<{ lat: number; lng: number } | null>
-  >;
+  // dragStartLatLng: { lat: number; lng: number } | null;
+  // setDragStartLatLng: React.Dispatch<
+  //   React.SetStateAction<{ lat: number; lng: number } | null>
+  // >;
   previewLatLng: { lat: number; lng: number } | null;
   setPreviewLatLng: React.Dispatch<
     React.SetStateAction<{ lat: number; lng: number } | null>
@@ -487,9 +486,9 @@ export default function CompMap() {
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const mapCenter = properties[0]?.position;
   // Store bubble positions as lat/lng, not pixel offsets
-  const [bubblePositions, setBubblePositions] = useState<{
-    [id: number]: { lat: number; lng: number };
-  }>({});
+  const [bubblePositions, setBubblePositions] = useState<
+    Record<number, { lat: number; lng: number }>
+  >({});
 
   return (
     <APIProvider apiKey={apiKey}>
@@ -512,7 +511,7 @@ export default function CompMap() {
             return (
               <DraggableBubblesOverlay
                 projection={projection}
-                mapDiv={mapDiv}
+                // mapDiv={mapDiv}
                 properties={properties}
                 bubblePositions={bubblePositions}
                 setBubblePositions={setBubblePositions}

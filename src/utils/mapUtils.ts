@@ -55,7 +55,7 @@ export function calculateDirection(
   ];
 
   const index = Math.round(normalizedAngle / 22.5) % 16;
-  return directions[index] || "N";
+  return directions[index] ?? "N";
 }
 
 /**

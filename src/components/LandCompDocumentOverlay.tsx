@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 interface LandCompDocumentOverlayProps {
   enabled: boolean;
   size: number; // Scale factor (0.5 to 2.0)
-  onSizeChange?: (size: number) => void;
+  // onSizeChange?: (size: number) => void;
 }
 
 /**
@@ -15,7 +15,7 @@ interface LandCompDocumentOverlayProps {
 export function LandCompDocumentOverlay({
   enabled,
   size,
-  onSizeChange,
+  // onSizeChange,
 }: LandCompDocumentOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({

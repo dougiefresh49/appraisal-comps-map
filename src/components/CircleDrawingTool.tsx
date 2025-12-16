@@ -11,12 +11,12 @@ interface Circle {
 
 interface CircleDrawingToolProps {
   circles: Circle[];
-  onCirclesChange: (circles: Circle[]) => void;
+  // onCirclesChange: (circles: Circle[]) => void;
 }
 
 export function CircleDrawingTool({
   circles,
-  onCirclesChange,
+  // onCirclesChange, // Unused
 }: CircleDrawingToolProps) {
   const map = useMap();
   const circleRefs = useRef<Map<string, google.maps.Circle>>(new Map());

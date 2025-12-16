@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { createPortal } from "react-dom";
 import {
   APIProvider,
   Map,
@@ -10,8 +9,6 @@ import {
   useMap,
 } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
-
-// --- Hardcoded Data based on your previous input ---
 // In a real app, you would fetch this data from an API or your n8n workflow.
 type Property = {
   type: "subject" | "comp";
@@ -73,52 +70,7 @@ const properties: Property[] = [
 ];
 
 // --- Custom Bubble Component ---
-const CustomBubble = ({ property }: { property: Property }) => {
-  const isSubject = property.type === "subject";
-  const bubbleStyle: React.CSSProperties = {
-    position: "relative",
-    background: isSubject ? "#c00" : "#0070d2",
-    color: "white",
-    padding: "10px 15px",
-    borderRadius: "8px",
-    width: "200px",
-    fontFamily: "Arial, sans-serif",
-    fontSize: "14px",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-    border: `2px solid ${isSubject ? "#a00" : "#00539e"}`,
-    textAlign: "center",
-    // This transform centers the bubble on its logical point
-    transform: "translate(-50%, -115%)",
-  };
 
-  const tailStyle: React.CSSProperties = {
-    content: '""',
-    position: "absolute",
-    bottom: "-10px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: "0",
-    height: "0",
-    borderLeft: "10px solid transparent",
-    borderRight: "10px solid transparent",
-    borderTop: `10px solid ${isSubject ? "#a00" : "#00539e"}`,
-  };
-
-  return (
-    <div style={bubbleStyle}>
-      <strong>{property.compNumber}</strong>
-      <div style={{ fontSize: "12px", marginTop: "5px" }}>
-        {property.address}
-      </div>
-      {property.distance !== undefined && (
-        <div style={{ fontSize: "12px", marginTop: "2px" }}>
-          {property.distance.toFixed(2)} miles
-        </div>
-      )}
-      <div style={tailStyle}></div>
-    </div>
-  );
-};
 
 
 // Individual bubble overlay component that creates one overlay per bubble
@@ -358,14 +310,17 @@ function BubbleOverlay({
       overlayRef.current = null;
       contentCreated.current = false;
     };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [map, property.id]);
 
   // Update position when prop changes
   useEffect(() => {
     if (overlayRef.current) {
-      (overlayRef.current as any).updatePosition(
-        new google.maps.LatLng(position.lat, position.lng)
-      );
+      (
+        overlayRef.current as unknown as {
+          updatePosition: (pos: google.maps.LatLng) => void;
+        }
+      ).updatePosition(new google.maps.LatLng(position.lat, position.lng));
     }
   }, [position]);
 
@@ -481,6 +436,7 @@ function RibbonOverlay({
       overlay.setMap(null);
       overlayRef.current = null;
     };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [map, property.position.lat, property.position.lng, bubblePosition.lat, bubblePosition.lng, dragPositions]);
 
   return null;

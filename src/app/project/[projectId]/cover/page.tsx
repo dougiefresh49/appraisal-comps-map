@@ -1,33 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState, use } from "react";
 import {
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   normalizeProjectsMap,
-  getNextProjectName,
   createDefaultProject,
   type ProjectData,
   type ProjectsMap,
 } from "~/utils/projectStore";
 import { env } from "~/env";
-export default function CoverPage() {
-  const searchParams = useSearchParams();
-  const projectParam = searchParams.get("project") ?? undefined;
+
+interface CoverPageProps {
+  params: Promise<{
+    projectId: string;
+  }>;
+}
+
+export default function ProjectCoverPage({ params }: CoverPageProps) {
+  const { projectId } = use(params);
+  const decodedProjectId = decodeURIComponent(projectId);
 
   const projectStoreRef = useRef<ProjectsMap>({});
-  const [projectName, setProjectName] = useState<string>(
-    projectParam ?? "Project 1",
-  );
+  
+  // We don't need `projectName` state to be selectable, it's fixed by URL
+  // but we keep it for compatibility with existing logic functions
+  const projectName = decodedProjectId; 
+  
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
   const [clientCompany, setClientCompany] = useState("");
   const [clientName, setClientName] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [coverSize, setCoverSize] = useState(1.5);
-  const [imageSize, setImageSize] = useState(1.0); // Multiplier for image size (1.0 = 320x204, larger = 450x264)
+  const [imageSize, setImageSize] = useState(1.0); 
   const [subjectPhotoUrl, setSubjectPhotoUrl] = useState<string | null>(null);
   const [isLoadingCoverData, setIsLoadingCoverData] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -45,9 +51,8 @@ export default function CoverPage() {
     if (typeof window === "undefined") return;
 
     // Only update fields that have been explicitly changed by the user
-    // Preserve all other fields from projectData
     const updatedProject: ProjectData = {
-      ...projectData, // Preserve all existing fields
+      ...projectData, 
       clientCompany: clientCompany || projectData.clientCompany,
       clientName: clientName || projectData.clientName,
       propertyType: propertyType || projectData.propertyType,
@@ -61,11 +66,12 @@ export default function CoverPage() {
         PROJECTS_STORAGE_KEY,
         JSON.stringify(projectStoreRef.current),
       );
+      // Ensure this is marked as current project
       window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
     } catch (error) {
       console.error("Failed to persist project state", error);
     }
-  }, [projectName, projectData, clientCompany, clientName, propertyType]);
+  }, [projectName, projectData, clientCompany, clientName, propertyType, hasInitialized]);
 
   // Auto-save every 30 seconds
   useEffect(() => {
@@ -76,7 +82,7 @@ export default function CoverPage() {
     return () => clearInterval(interval);
   }, [isStateHydrated, persistCurrentProjectState]);
 
-  // Save on field changes (only after initialization)
+  // Save on field changes
   useEffect(() => {
     if (!isStateHydrated || !hasInitialized) return;
     const timeoutId = setTimeout(() => {
@@ -111,31 +117,23 @@ export default function CoverPage() {
       }
     }
 
-    let selectedProjectName =
-      projectParam ??
-      window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ??
-      undefined;
-
-    const projectKeys = Object.keys(projectStore);
-    if (!selectedProjectName || !projectStore[selectedProjectName]) {
-      if (projectKeys.length > 0) {
-        selectedProjectName = projectKeys[0];
-      } else {
-        const defaultName = getNextProjectName([]);
-        projectStore[defaultName] = createDefaultProject();
-        selectedProjectName = defaultName;
-      }
+    // Initialize if not exists
+    if (!projectStore[projectName]) {
+       // This is a new project purely from URL? Handle gracefully or create it?
+       // Usually we expect it to exist if navigating here.
+       // But if it doesn't, we might create a default one or show error.
+       // For robustness, let's create default if missing, but preferably warn.
+       console.warn(`Project ${projectName} not found in storage, creating default.`);
+       projectStore[projectName] = createDefaultProject();
     }
 
-    const finalProjectName = selectedProjectName as string;
-
     projectStoreRef.current = projectStore;
-    setProjectName(finalProjectName);
-    const project = projectStore[finalProjectName];
+    const project = projectStore[projectName];
     if (project) {
       applyProjectState(project);
     }
 
+    // Persist ensures if we created a default, it saves.
     try {
       window.localStorage.setItem(
         PROJECTS_STORAGE_KEY,
@@ -143,20 +141,19 @@ export default function CoverPage() {
       );
       window.localStorage.setItem(
         CURRENT_PROJECT_STORAGE_KEY,
-        finalProjectName,
+        projectName,
       );
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
 
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectParam]);
+  }, [applyProjectState, isStateHydrated, projectName]);
 
-  // Initialize cover data from project data (no initial webhook fetch needed)
+  // Initialize cover data from project data
   useEffect(() => {
     if (!isStateHydrated || !projectData) return;
 
-    // Set initial values from project data
     if (projectData.propertyType) {
       setPropertyType(projectData.propertyType);
     }
@@ -166,85 +163,42 @@ export default function CoverPage() {
     if (projectData.clientCompany) {
       setClientCompany(projectData.clientCompany);
     }
-    // Note: subjectPhotoUrl is not stored in project data, it's fetched on demand
   }, [isStateHydrated, projectData]);
 
   if (!projectData) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+      <div className="flex h-full w-full items-center justify-center bg-gray-50">
         <div className="text-gray-500">Loading...</div>
       </div>
     );
   }
 
   const subjectAddress =
-    projectData.subject.info.addressForDisplay ||
-    projectData.subject.info.address ||
+    projectData.subject.info.addressForDisplay ??
+    projectData.subject.info.address ??
     "";
 
+  /* eslint-disable @next/next/no-img-element */
   return (
     <>
-      {/* Print styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
           @media print {
-            /* Hide sidebar when printing */
-            aside {
-              display: none !important;
-            }
-            
-            /* Make main content full width */
-            main {
-              width: 100% !important;
-              max-width: 100% !important;
-              padding: 0 !important;
-              margin: 0 !important;
-            }
-            
-            /* Ensure cover page is centered and properly sized */
-            body {
-              margin: 0;
-              padding: 0;
-              background: white;
-            }
-            
-            /* Hide any other UI elements */
-            .no-print {
-              display: none !important;
-            }
+            aside { display: none !important; }
+            main { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+            body { margin: 0; padding: 0; background: white; }
+            .no-print { display: none !important; }
           }
         `,
         }}
       />
 
-      <div className="flex h-screen w-full bg-white">
-        {/* Side Panel */}
-        <aside className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <div className="mb-4">
-              <Link
-                href="/projects"
-                className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
-              >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                <span className="text-sm font-medium">Back to Projects</span>
-              </Link>
-            </div>
+      <div className="flex h-full w-full bg-white">
+        {/* Settings Panel - simplified as we are already inside a layout with sidebar */}
+        <div className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm no-print">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">
-              Cover Page
+              Cover Page Settings
             </h2>
 
             <div className="space-y-4">
@@ -358,10 +312,9 @@ export default function CoverPage() {
                         };
 
                         if (photoData) {
-                          // Update subjectPhotosFolderId if provided
                           if (photoData.subjectPhotosFolderId) {
                             const updatedProject: ProjectData = {
-                              ...projectData, // Preserve all existing fields
+                              ...projectData, 
                               subjectPhotosFolderId:
                                 photoData.subjectPhotosFolderId,
                             };
@@ -382,17 +335,11 @@ export default function CoverPage() {
                             }
                           }
 
-                          // Update image from base64 data
                           if (photoData.subjectPhotoBase64) {
                             const dataUrl = `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`;
-                            console.log(
-                              "Refresh - Setting image from base64 data",
-                            );
                             setSubjectPhotoUrl(dataUrl);
                           } else {
-                            console.warn(
-                              "Refresh - No image data found in photo data",
-                            );
+                            setSubjectPhotoUrl(null);
                           }
                         }
                       } catch (error) {
@@ -418,7 +365,6 @@ export default function CoverPage() {
                   <button
                     onClick={() => setImageSize(Math.max(0.5, imageSize - 0.1))}
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                    title="Decrease image size"
                   >
                     −
                   </button>
@@ -428,19 +374,14 @@ export default function CoverPage() {
                   <button
                     onClick={() => setImageSize(Math.min(2.0, imageSize + 0.1))}
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                    title="Increase image size"
                   >
                     +
                   </button>
                 </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  Base: 320×204px | Large: 450×264px | Current:{" "}
-                  {Math.round(320 * imageSize)}×{Math.round(204 * imageSize)}px
-                </div>
               </div>
 
-              {/* Cover Size Controls */}
-              <div className="mt-6 border-t border-gray-200 pt-6">
+               {/* Cover Size Controls */}
+               <div className="mt-6 border-t border-gray-200 pt-6">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Cover Size
                 </label>
@@ -450,7 +391,6 @@ export default function CoverPage() {
                       setCoverSize(Math.max(0.5, coverSize - 0.05))
                     }
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                    title="Decrease cover size"
                   >
                     −
                   </button>
@@ -462,14 +402,9 @@ export default function CoverPage() {
                       setCoverSize(Math.min(3.0, coverSize + 0.05))
                     }
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                    title="Increase cover size"
                   >
                     +
                   </button>
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  Base: 612×792px (100%) | Current:{" "}
-                  {Math.round(612 * coverSize)}×{Math.round(792 * coverSize)}px
                 </div>
               </div>
 
@@ -483,14 +418,9 @@ export default function CoverPage() {
                 >
                   Print to PDF
                 </button>
-                <p className="mt-2 text-xs text-gray-500">
-                  Opens browser print dialog. Select "Save as PDF" as
-                  destination.
-                </p>
               </div>
             </div>
-          </div>
-        </aside>
+        </div>
 
         {/* Cover Page Content */}
         <main className="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-8">
@@ -537,12 +467,12 @@ export default function CoverPage() {
               <div className="absolute right-0 bottom-0 left-0 h-3 bg-[#15616D]"></div>
             </div>
 
-            {/* Main Content Area - padding: 56px top, 100px right, 100px bottom, 100px left */}
+            {/* Main Content Area */}
             <div
               className="flex flex-1 flex-col items-center justify-center"
               style={{ padding: "56px 100px 100px 100px" }}
             >
-              {/* Photo - Dynamic size based on imageSize multiplier */}
+              {/* Photo */}
               <div
                 className="overflow-hidden rounded-lg border border-gray-300 shadow-sm"
                 style={{
@@ -558,24 +488,13 @@ export default function CoverPage() {
                     src={subjectPhotoUrl}
                     alt="Subject Property"
                     className="h-full w-full object-cover"
-                    onLoad={() => console.log("Image loaded successfully")}
-                    onError={(e) => {
-                      console.error(
-                        "Image failed to load:",
-                        subjectPhotoUrl,
-                        e,
-                      );
-                      // If using a data URL, it shouldn't fail, so this is likely a URL-based image
-                      // Clear the URL to show placeholder
-                      if (!subjectPhotoUrl?.startsWith("data:")) {
-                        console.warn(
-                          "Image URL failed, clearing to show placeholder",
-                        );
+                    onError={(_e) => {
+                       if (!subjectPhotoUrl?.startsWith("data:")) {
                         setSubjectPhotoUrl(null);
                       }
                     }}
                   />
-                ) : (
+                ) : ( // ...
                   <div className="flex h-full w-full items-center justify-center bg-gray-200">
                     <span className="text-sm text-gray-400">
                       Property Photo
@@ -584,9 +503,8 @@ export default function CoverPage() {
                 )}
               </div>
 
-              {/* Text Section - Vertically centered column with 16px gap between each text element */}
+              {/* Text Section */}
               <div className="flex flex-col items-center justify-center">
-                {/* Appraisal Report Label */}
                 <p
                   className="font-sans text-[11px] tracking-wider text-[#5A5463] uppercase"
                   style={{
@@ -596,7 +514,6 @@ export default function CoverPage() {
                   APPRAISAL REPORT
                 </p>
 
-                {/* Property Type */}
                 <h1
                   className="text-center font-sans text-[21px] font-bold tracking-wide text-[#0E0D0D] uppercase"
                   style={{
@@ -606,7 +523,6 @@ export default function CoverPage() {
                   {propertyType || "COMMERCIAL OFFICE BUILDING"}
                 </h1>
 
-                {/* Property Address */}
                 {subjectAddress ? (
                   <div
                     className="flex flex-col items-center"
