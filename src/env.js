@@ -8,6 +8,8 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
+    GOOGLE_DRIVE_API_KEY: z.string().optional(),
+    N8N_WEBHOOK_BASE_URL: z.string().optional(),
   },
 
   /**
@@ -18,6 +20,8 @@ export const env = createEnv({
   client: {
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string(),
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string(),
+    NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL: z.string(),
   },
 
   /**
@@ -26,9 +30,13 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
+    GOOGLE_DRIVE_API_KEY: process.env.GOOGLE_DRIVE_API_KEY,
+    N8N_WEBHOOK_BASE_URL: process.env.N8N_WEBHOOK_BASE_URL,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
+    NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL:
+      process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
