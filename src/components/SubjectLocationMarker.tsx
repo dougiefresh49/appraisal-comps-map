@@ -18,6 +18,7 @@ interface SubjectLocationMarkerProps {
   tailDirection?: "left" | "right";
   isTailPinned?: boolean;
   pinnedTailTipPosition?: { lat: number; lng: number };
+  title?: string; // Optional title override. If not provided, uses address or "Subject"
 }
 
 // Base dimensions (reference: 400x200px)
@@ -37,6 +38,7 @@ export function SubjectLocationMarker({
   tailDirection = "right",
   isTailPinned = false,
   pinnedTailTipPosition,
+  title,
 }: SubjectLocationMarkerProps) {
   // Apply size multiplier to base dimensions
   const bubbleWidth = BASE_WIDTH * sizeMultiplier;
@@ -57,6 +59,9 @@ export function SubjectLocationMarker({
       ? propertyInfo.addressForDisplay
       : propertyInfo.address;
   const address = addressLine || "Enter address";
+
+  // Determine title: use prop if provided, otherwise use address, fallback to "Subject"
+  const bubbleTitle = title ?? address ?? "Subject";
 
   // Format legal line: Acres always comes first if present, then legal description
   let legalLine = "";
@@ -211,11 +216,11 @@ export function SubjectLocationMarker({
             className="text-center font-bold"
             style={{ fontSize: `${fontSizeTitle}px` }}
           >
-            Subject
+            {bubbleTitle}
           </div>
 
-          {/* Address - left-aligned, bold */}
-          {address && (
+          {/* Address - left-aligned, bold (only show if title is not the address) */}
+          {address && title !== address && bubbleTitle !== address && (
             <div
               className="font-bold"
               style={{ fontSize: `${fontSizeText}px` }}

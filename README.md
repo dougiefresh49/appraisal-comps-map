@@ -1,6 +1,6 @@
-# Photo Management App
+# Appraisal Report Management Tool
 
-A Next.js application for managing photos from Google Drive with drag-and-drop reordering and label editing capabilities.
+A Next.js application for managing commercial appraisal reports, connecting Google drive and n8n
 
 ## Features
 
@@ -22,7 +22,7 @@ Create a `.env.local` file in the root directory with the following variables:
 GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
 
 # n8n Webhook URL (optional - for automatic saving)
-N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/photo-updates
+N8N_WEBHOOK_BASE_URL=https://your-n8n-instance.com/webhook/
 
 # Existing Google Maps variables (if using maps features)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key

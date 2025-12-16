@@ -115,18 +115,15 @@ export async function processImages(
     }
 
     // Fire-and-forget: trigger the webhook but don't wait for response
-    fetch(
-      "https://dougiefreshdesigns.app.n8n.cloud/webhook/subject-process-photos",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          projectFolderId,
-        }),
+    fetch(env.N8N_WEBHOOK_BASE_URL + "/subject-process-photos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    ).catch((error) => {
+      body: JSON.stringify({
+        projectFolderId,
+      }),
+    }).catch((error) => {
       // Log errors but don't block the response
       console.error("Error triggering image processing webhook:", error);
     });
@@ -152,18 +149,21 @@ export async function saveChanges(
 ): Promise<{ success: boolean; data?: string; error?: string }> {
   try {
     // Option 1: Try to save via n8n webhook if configured
-    if (env.N8N_WEBHOOK_PHOTOS_UPDATE) {
-      const response = await fetch(env.N8N_WEBHOOK_PHOTOS_UPDATE, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    if (env.N8N_WEBHOOK_BASE_URL) {
+      const response = await fetch(
+        env.N8N_WEBHOOK_BASE_URL + "/photos-update",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            photos: updatedPhotos,
+            folderId,
+            fileId: fileId || "unknown",
+          }),
         },
-        body: JSON.stringify({
-          photos: updatedPhotos,
-          folderId,
-          fileId: fileId || "unknown",
-        }),
-      });
+      );
 
       if (response.ok) {
         return { success: true };

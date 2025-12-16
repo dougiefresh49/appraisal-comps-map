@@ -308,7 +308,9 @@ export default function LandCompMapPage() {
             addressForDisplay:
               propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
             // Update positions from landLocationMap state
-            markerPosition: markerPosition ? { ...markerPosition } : comp.markerPosition,
+            markerPosition: markerPosition
+              ? { ...markerPosition }
+              : comp.markerPosition,
             position: bubblePosition ? { ...bubblePosition } : comp.position,
             // Update pinned tail tip position if it was set
             pinnedTailTipPosition: subjectPinnedTailTipPosition
@@ -739,8 +741,10 @@ export default function LandCompMapPage() {
                 position={bubblePosition}
                 markerPosition={markerPosition}
                 propertyInfo={{
-                  address: activeComparableLabel,
+                  address: propertyInfo.address,
+                  addressForDisplay: propertyInfo.addressForDisplay,
                 }}
+                title={activeComparableLabel}
                 onPositionChange={(next) => setBubblePosition(next)}
                 sizeMultiplier={bubbleSize}
                 tailDirection={tailDirection}

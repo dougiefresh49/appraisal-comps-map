@@ -1,10 +1,86 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  COMPARABLE_TYPES,
-  type ComparableType,
-} from "~/utils/projectStore";
+import { COMPARABLE_TYPES, type ComparableType } from "~/utils/projectStore";
+
+type LatLng = { lat: number; lng: number };
+
+function formatLatLng(value: LatLng): string {
+  return `${value.lat.toFixed(6)}, ${value.lng.toFixed(6)}`;
+}
+
+function parseDecimalLatLng(input: string): LatLng | null {
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(input);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90) return null;
+  if (lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+function dmsToDecimal(
+  degrees: number,
+  minutes: number,
+  seconds: number,
+  direction: "N" | "S" | "E" | "W",
+): number {
+  const magnitude = Math.abs(degrees) + minutes / 60 + seconds / 3600;
+  const signed =
+    direction === "S" || direction === "W" ? -magnitude : magnitude;
+  return signed;
+}
+
+function parseDmsLatLng(input: string): LatLng | null {
+  // Supports: 31° 47' 24" N 102° 30' 30" W (and many common variations)
+  const normalized = input
+    .replace(/[’‘′]/g, "'")
+    .replace(/[“”″]/g, '"')
+    .replace(/º/g, "°")
+    .trim()
+    .toUpperCase();
+
+  const token =
+    /(\d+(?:\.\d+)?)\s*°\s*(\d+(?:\.\d+)?)?\s*'?\s*(\d+(?:\.\d+)?)?\s*"?\s*([NSEW])/g;
+
+  const parts: Array<{
+    deg: number;
+    min: number;
+    sec: number;
+    dir: "N" | "S" | "E" | "W";
+  }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(normalized))) {
+    const deg = Number(match[1]);
+    const min = match[2] ? Number(match[2]) : 0;
+    const sec = match[3] ? Number(match[3]) : 0;
+    const dir = match[4] as "N" | "S" | "E" | "W";
+    if (![deg, min, sec].every(Number.isFinite)) return null;
+    parts.push({ deg, min, sec, dir });
+  }
+
+  if (parts.length < 2) return null;
+
+  const latPart = parts.find((p) => p.dir === "N" || p.dir === "S");
+  const lngPart = parts.find((p) => p.dir === "E" || p.dir === "W");
+  if (!latPart || !lngPart) return null;
+
+  const lat = dmsToDecimal(latPart.deg, latPart.min, latPart.sec, latPart.dir);
+  const lng = dmsToDecimal(lngPart.deg, lngPart.min, lngPart.sec, lngPart.dir);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90) return null;
+  if (lng < -180 || lng > 180) return null;
+
+  return { lat, lng };
+}
+
+function parseCoordinates(input: string): LatLng | null {
+  return parseDecimalLatLng(input) ?? parseDmsLatLng(input);
+}
 
 interface SubjectInfo {
   address: string;
@@ -20,6 +96,7 @@ interface ComparableInfo {
   isTailPinned: boolean;
   type: ComparableType;
   pinnedTailTipPosition?: { lat: number; lng: number };
+  apn?: string[];
 }
 
 interface ComparablesPanelProps {
@@ -68,13 +145,13 @@ export function ComparablesPanel({
   onComparableAddressSearch,
   bubbleSize,
   onBubbleSizeChange,
-    hideUI,
-    onHideUIChange,
-    showDocumentOverlay,
-    onShowDocumentOverlayChange,
-    documentFrameSize,
-    onDocumentFrameSizeChange,
-    activeType,
+  hideUI,
+  onHideUIChange,
+  showDocumentOverlay,
+  onShowDocumentOverlayChange,
+  documentFrameSize,
+  onDocumentFrameSizeChange,
+  activeType,
   onActiveTypeChange,
   pinningTailForCompId,
   onPinningTailForCompIdChange,
@@ -88,6 +165,12 @@ export function ComparablesPanel({
   onOpenLandMap,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
+  const [coordinateInputsById, setCoordinateInputsById] = useState<
+    Record<string, string>
+  >({});
+  const [coordinateErrorsById, setCoordinateErrorsById] = useState<
+    Record<string, string | undefined>
+  >({});
 
   useEffect(() => {
     setSearchAddress(subjectInfo.address || "");
@@ -142,6 +225,25 @@ export function ComparablesPanel({
     );
   };
 
+  const applyCoordinatesToComparable = (compId: string, raw: string) => {
+    const parsed = parseCoordinates(raw);
+    if (!parsed) {
+      setCoordinateErrorsById((prev) => ({
+        ...prev,
+        [compId]:
+          "Invalid coordinate format. Example: 31° 47' 24\" N 102° 30' 30\" W",
+      }));
+      return;
+    }
+
+    const decimal = formatLatLng(parsed);
+    setCoordinateInputsById((prev) => ({ ...prev, [compId]: decimal }));
+    setCoordinateErrorsById((prev) => ({ ...prev, [compId]: undefined }));
+
+    handleComparableChange(compId, { address: decimal });
+    onComparableAddressSearch(compId, decimal);
+  };
+
   return (
     <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -156,10 +258,32 @@ export function ComparablesPanel({
         )}
       </div>
 
+      <div className="mb-4">
+        <Link
+          href="/projects"
+          className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          <span className="text-sm font-medium">Back to Projects</span>
+        </Link>
+      </div>
+
       <div className="mb-6 border-b border-gray-200 pb-4">
         <div className="flex items-start justify-between">
           <div>
-            <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">
+            <span className="block text-xs font-medium tracking-wide text-gray-500 uppercase">
               Project
             </span>
             <span className="text-base font-semibold text-gray-900">
@@ -336,26 +460,26 @@ export function ComparablesPanel({
 
       {/* Comparable Properties */}
       <div className="mb-6">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2">
           <label className="text-sm font-medium text-gray-700">
             Comparable Properties
           </label>
-          <div className="flex gap-2">
-            {COMPARABLE_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => onActiveTypeChange(type)}
-                className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
-                  type === activeType
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="mb-4 flex gap-2">
+          {COMPARABLE_TYPES.map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onActiveTypeChange(type)}
+              className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
+                type === activeType
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {type}
+            </button>
+          ))}
         </div>
 
         {filteredComparables.map((comp, index) => (
@@ -377,6 +501,56 @@ export function ComparablesPanel({
               )}
             </div>
 
+            {comp.apn && comp.apn.length > 0 && (
+              <div className="mb-2">
+                <label className="mb-1 block text-xs text-gray-600">APN</label>
+                <input
+                  type="text"
+                  value={comp.apn.join(", ")}
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
+                />
+              </div>
+            )}
+            <div className="mb-2">
+              <label className="mb-1 block text-xs text-gray-600">
+                Coordinates (DMS)
+              </label>
+              <input
+                type="text"
+                value={coordinateInputsById[comp.id] ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCoordinateInputsById((prev) => ({
+                    ...prev,
+                    [comp.id]: value,
+                  }));
+                  setCoordinateErrorsById((prev) => ({
+                    ...prev,
+                    [comp.id]: undefined,
+                  }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const raw = coordinateInputsById[comp.id] ?? "";
+                    if (raw.trim().length > 0) {
+                      applyCoordinatesToComparable(comp.id, raw);
+                    }
+                  }
+                }}
+                placeholder={`31° 47' 24" N 102° 30' 30" W`}
+                className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              />
+              {coordinateErrorsById[comp.id] ? (
+                <div className="mt-1 text-xs text-red-600">
+                  {coordinateErrorsById[comp.id]}
+                </div>
+              ) : (
+                <div className="mt-1 text-xs text-gray-500">
+                  Paste coordinates and press Enter to update this comp.
+                </div>
+              )}
+            </div>
             <div className="mb-2">
               <label className="mb-1 block text-xs text-gray-600">
                 Address
@@ -560,7 +734,7 @@ export function ComparablesPanel({
           >
             {showDocumentOverlay
               ? "✓ Document Frame Visible"
-              : "Show 8.5×11\" Document Frame"}
+              : 'Show 8.5×11" Document Frame'}
           </button>
         )}
         {showDocumentOverlay &&
@@ -604,10 +778,9 @@ export function ComparablesPanel({
             ? "All buttons and controls are hidden. Ready to take a screenshot!"
             : "Toggle to hide all UI elements for clean screenshots"}
           {showDocumentOverlay &&
-            " The document frame shows the 8.5×11\" area that will fit on a Google Doc page."}
+            ' The document frame shows the 8.5×11" area that will fit on a Google Doc page.'}
         </div>
       </div>
     </div>
   );
 }
-

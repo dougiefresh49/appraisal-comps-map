@@ -615,6 +615,78 @@ export default function ComparablesMapPage() {
 
     try {
       const geocoder = new google.maps.Geocoder();
+
+      const decimalMatch =
+        /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(address);
+      if (decimalMatch) {
+        const lat = Number(decimalMatch[1]);
+        const lng = Number(decimalMatch[2]);
+        if (
+          Number.isFinite(lat) &&
+          Number.isFinite(lng) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180
+        ) {
+          const normalized = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+          // Reverse geocode to get a human-friendly address for display.
+          let formattedAddress: string | undefined;
+          try {
+            const reverseResults = await new Promise<
+              google.maps.GeocoderResult[]
+            >((resolve, reject) => {
+              geocoder.geocode(
+                { location: { lat, lng } },
+                (results, status) => {
+                  if (status === "OK" && results) {
+                    resolve(results);
+                  } else {
+                    reject(new Error(`Reverse geocoding failed: ${status}`));
+                  }
+                },
+              );
+            });
+            formattedAddress = reverseResults?.[0]?.formatted_address;
+          } catch {
+            // ignore reverse-geocode errors; we still have valid coordinates
+          }
+
+          const newPosition = { lat, lng };
+
+          setComparables((prev) =>
+            prev.map((comp) => {
+              if (comp.id !== compId) return comp;
+
+              const keepDisplay =
+                comp.addressForDisplay &&
+                comp.addressForDisplay.trim().length > 0 &&
+                comp.addressForDisplay !== comp.address;
+
+              return {
+                ...comp,
+                type: comp.type ?? activeType,
+                address: normalized,
+                addressForDisplay: keepDisplay
+                  ? comp.addressForDisplay
+                  : (formattedAddress ?? normalized),
+                markerPosition: newPosition,
+                position: comp.position || {
+                  lat: newPosition.lat + 0.001,
+                  lng: newPosition.lng + 0.001,
+                },
+                pinnedTailTipPosition:
+                  comp.pinnedTailTipPosition ||
+                  (comp.isTailPinned ? newPosition : undefined),
+              };
+            }),
+          );
+
+          return;
+        }
+      }
+
       const results = await new Promise<google.maps.GeocoderResult[]>(
         (resolve, reject) => {
           geocoder.geocode({ address }, (results, status) => {

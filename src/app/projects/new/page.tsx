@@ -16,6 +16,7 @@ import type {
   ComparableInfo,
   ComparableType,
 } from "~/utils/projectStore";
+import { env } from "~/env";
 
 interface CompData {
   Address?: string;
@@ -65,7 +66,7 @@ export default function NewProjectPage() {
     try {
       // Fetch project data from webhook
       const response = await fetch(
-        "https://dougiefreshdesigns.app.n8n.cloud/webhook/project-data",
+        env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/project-data",
         {
           method: "POST",
           headers: {

@@ -430,6 +430,12 @@ export default function ProjectsPage() {
                     >
                       Comparables Map
                     </Link>
+                    <Link
+                      href={`/reports?project=${encodeURIComponent(name)}`}
+                      className="block rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Reports
+                    </Link>
                     {normalizedProject.subjectPhotosFolderId && (
                       <Link
                         href={`/photos?folderId=${encodeURIComponent(normalizedProject.subjectPhotosFolderId)}`}
