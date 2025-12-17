@@ -645,6 +645,7 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
                     sizeMultiplier={bubbleSize}
                     isTailPinned={comp.isTailPinned}
                     pinnedTailTipPosition={comp.pinnedTailTipPosition}
+                    color="#2563eb"
                 />
             ))}
 

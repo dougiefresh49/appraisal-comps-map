@@ -647,6 +647,7 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
                     sizeMultiplier={bubbleSize}
                     isTailPinned={comp.isTailPinned}
                     pinnedTailTipPosition={comp.pinnedTailTipPosition}
+                    color="#9333ea"
                 />
             ))}
 

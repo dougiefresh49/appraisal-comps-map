@@ -673,6 +673,7 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
                     sizeMultiplier={bubbleSize}
                     isTailPinned={comp.isTailPinned}
                     pinnedTailTipPosition={comp.pinnedTailTipPosition}
+                    color="#10b981"
                 />
             ))}
 

@@ -188,13 +188,15 @@ export function SubjectLocationMarker({
           />
         </svg>
 
-        {/* Content overlay - starts at top, title centered horizontally, text left-aligned */}
+        {/* Content overlay - Centered */}
         <div
-          className="pointer-events-none absolute flex flex-col text-black"
+          className="pointer-events-none absolute flex flex-col items-center justify-center text-black"
           style={{
-            left: `${paddingX}px`,
-            right: `${paddingX}px`,
-            top: `${paddingY}px`,
+            left: 0,
+            top: 0,
+            width: `${bubbleWidth}px`,
+            height: `${bubbleHeight}px`,
+            padding: `${paddingY}px ${paddingX}px`,
             gap: `${lineGap}px`,
             overflow: "hidden",
             textAlign: "center",

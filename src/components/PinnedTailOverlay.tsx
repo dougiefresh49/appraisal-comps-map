@@ -180,7 +180,7 @@ export function PinnedTailOverlay({
         fillOpacity: 1,
         strokeColor: finalStrokeColor,
         strokeOpacity: 0.8,
-        strokeWeight: 1,
+        strokeWeight: 0,
         map,
         zIndex: 1,
       });
@@ -188,7 +188,7 @@ export function PinnedTailOverlay({
       polygonRef.current.setPaths(path);
       polygonRef.current.setOptions({
         fillColor: color,
-        strokeColor: finalStrokeColor,
+        strokeWeight: 0,
       });
     }
 
