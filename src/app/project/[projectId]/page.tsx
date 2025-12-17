@@ -1,22 +1,15 @@
 "use client";
 
-import { useEffect, useState, use, useMemo, useCallback } from "react";
+import { useState, use, useMemo } from "react";
 import Link from "next/link";
 import {
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
-  normalizeProjectsMap,
-  createDefaultProject,
   normalizeProjectData,
   COMPARABLE_TYPES,
   type ProjectData,
-  type ProjectsMap,
-  type SubjectInfo,
   type ComparableType,
-  type ComparablesMapState,
   type ComparableInfo,
-  type LocationMapState,
 } from "~/utils/projectStore";
+import { useProject } from "~/hooks/useProject";
 
 interface ProjectPageProps {
   params: Promise<{
@@ -24,73 +17,21 @@ interface ProjectPageProps {
   }>;
 }
 
-type EditableSubjectFields = keyof SubjectInfo;
+type EditableSubjectFields = "address" | "addressForDisplay" | "legalDescription" | "acres";
 
 export default function ProjectDashboard({ params }: ProjectPageProps) {
   const { projectId } = use(params);
+  const { project: selectedProject, updateProject, isLoading, projectExists } = useProject(projectId);
   const decodedProjectId = decodeURIComponent(projectId);
   const projectName = decodedProjectId;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [projects, setProjects] = useState<ProjectsMap>({});
-  const [projectExists, setProjectExists] = useState(false);
-  const [activeMapType, setActiveMapType] = useState<ComparableType>("Land");
+
   const [isJsonMode, setIsJsonMode] = useState(false);
   const [jsonValue, setJsonValue] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    let projectStore: ProjectsMap = {};
-    
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    setProjects(projectStore);
-    
-    if (projectStore[decodedProjectId]) {
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, decodedProjectId);
-      setProjectExists(true);
-      const project = normalizeProjectData(projectStore[decodedProjectId]);
-      if (project.comparables.activeType) {
-        setActiveMapType(project.comparables.activeType);
-      }
-    } else {
-      setProjectExists(false);
-    }
-    
-    setIsLoading(false);
-  }, [decodedProjectId]);
-
-  // Persist changes
-  useEffect(() => {
-    if (isLoading) return;
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projects),
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-  }, [isLoading, projects]);
-
-  const selectedProject = useMemo(() => {
-    if (!projectName || !projects[projectName]) return undefined;
-    return normalizeProjectData(projects[projectName]);
-  }, [projects, projectName]);
-
   // JSON Mode sync
-  useEffect(() => {
+  useMemo(() => {
     if (!isJsonMode) return;
     if (!selectedProject) {
       setJsonValue("");
@@ -100,146 +41,14 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
     setJsonError(null);
   }, [isJsonMode, selectedProject]);
 
-
-  const updateProject = useCallback(
-    (updater: (project: ProjectData) => ProjectData) => {
-      if (!projectName) return;
-      setProjects((prev) => {
-        const project = prev[projectName];
-        if (!project) return prev;
-        const normalized = normalizeProjectData(project);
-        const updated = updater(normalized);
-        return {
-          ...prev,
-          [projectName]: updated,
-        };
-      });
-    },
-    [projectName],
-  );
-
   const handleSubjectChange = (field: EditableSubjectFields, value: string) => {
     updateProject((project) => {
       const updatedInfo = { ...project.subject.info, [field]: value };
-      const updatedByType = COMPARABLE_TYPES.reduce<
-        Record<ComparableType, ComparablesMapState>
-      >(
-        (acc, type) => {
-          const currentState =
-            project.comparables.byType[type] ??
-            createDefaultProject().comparables.byType[type];
-          acc[type] = {
-            ...currentState,
-          };
-          return acc;
-        },
-        {} as Record<ComparableType, ComparablesMapState>,
-      );
-
       return {
         ...project,
         subject: {
           ...project.subject,
           info: updatedInfo,
-        },
-        comparables: {
-          ...project.comparables,
-          byType: updatedByType,
-        },
-      };
-    });
-  };
-
-  const handleAddComparable = (type: ComparableType) => {
-    const id = `comp-${Date.now()}-${Math.random()}`;
-    const newComparable: ComparableInfo = {
-      id,
-      address: "",
-      addressForDisplay: "",
-      isTailPinned: true,
-      type,
-    };
-    updateProject((project) => {
-      const currentState =
-        project.comparables.byType[type] ??
-        createDefaultProject().comparables.byType[type];
-      return {
-        ...project,
-        comparables: {
-          ...project.comparables,
-          byType: {
-            ...project.comparables.byType,
-            [type]: {
-              ...currentState,
-              comparables: [...(currentState.comparables ?? []), newComparable],
-            },
-          },
-        },
-      };
-    });
-  };
-
-  const handleComparableChange = (
-    type: ComparableType,
-    id: string,
-    field: "address" | "addressForDisplay",
-    value: string,
-  ) => {
-    updateProject((project) => {
-      const currentState =
-        project.comparables.byType[type] ??
-        createDefaultProject().comparables.byType[type];
-      return {
-        ...project,
-        comparables: {
-          ...project.comparables,
-          byType: {
-            ...project.comparables.byType,
-            [type]: {
-              ...currentState,
-              comparables: (currentState.comparables ?? []).map((comp) =>
-                comp.id === id ? { ...comp, [field]: value } : comp,
-              ),
-              landLocationMaps:
-                type === "Land" && currentState.landLocationMaps
-                  ? { ...currentState.landLocationMaps }
-                  : currentState.landLocationMaps,
-            },
-          },
-        },
-      };
-    });
-  };
-
-  const handleRemoveComparable = (type: ComparableType, id: string) => {
-    updateProject((project) => {
-      const currentState =
-        project.comparables.byType[type] ??
-        createDefaultProject().comparables.byType[type];
-      return {
-        ...project,
-        comparables: {
-          ...project.comparables,
-          byType: {
-            ...project.comparables.byType,
-            [type]: {
-              ...currentState,
-              comparables: (currentState.comparables ?? []).filter(
-                (comp) => comp.id !== id,
-              ),
-              landLocationMaps:
-                type === "Land" && currentState.landLocationMaps
-                  ? Object.entries(currentState.landLocationMaps).reduce<
-                      Record<string, LocationMapState>
-                    >((acc, [key, value]) => {
-                      if (key !== id) {
-                        acc[key] = value;
-                      }
-                      return acc;
-                    }, {})
-                  : currentState.landLocationMaps,
-            },
-          },
         },
       };
     });
@@ -250,10 +59,12 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
     try {
       const parsed = JSON.parse(jsonValue) as Partial<ProjectData>;
       const normalized = normalizeProjectData(parsed);
-      setProjects((prev) => ({
-        ...prev,
-        [projectName]: normalized,
-      }));
+      
+      // We need to update the entire project state.
+      // The updateProject function expects a transformer, but we have a new state.
+      // We can just return the new state.
+      updateProject(() => normalized);
+      
       setJsonError(null);
     } catch (error) {
       console.error("Failed to parse project JSON", error);
@@ -263,16 +74,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
     }
   };
 
-  const handleSetActiveMapType = (type: ComparableType) => {
-     setActiveMapType(type);
-     updateProject((project) => ({
-      ...project,
-      comparables: {
-        ...project.comparables,
-        activeType: type,
-      },
-    }));
-  };
+
 
   const comparablesByType = useMemo(() => {
     if (!selectedProject) {
@@ -474,7 +276,6 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                   </Link>
                 )}
               </div>
-              {/* Other metadata fields */}
                <div>
                   <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                     Client Company
@@ -554,21 +355,6 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
               <h3 className="text-lg font-semibold text-gray-800">
                 Comparable Properties
               </h3>
-              <div className="flex gap-2">
-                {COMPARABLE_TYPES.map((type) => (
-                  <button
-                    key={`active-${type}`}
-                    onClick={() => handleSetActiveMapType(type)}
-                    className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
-                      type === activeMapType
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    Active: {type}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <p className="mb-4 text-xs text-gray-500">
@@ -579,6 +365,8 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
             <div className="space-y-6">
               {COMPARABLE_TYPES.map((type) => {
                 const list = comparablesByType[type];
+                const sectionSlug = type === "Land" ? "land-sales" : type === "Sales" ? "sales" : "rentals";
+                
                 return (
                   <div
                     key={type}
@@ -588,12 +376,21 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                       <span className="text-sm font-semibold text-gray-700">
                         {type} Comparables ({list.length})
                       </span>
-                      <button
-                        onClick={() => handleAddComparable(type)}
-                        className="rounded-md border border-blue-500 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-                      >
-                        + Add {type}
-                      </button>
+                      <div className="flex gap-2">
+                          <Link
+                            href={`/project/${projectId}/${sectionSlug}/comparables`}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                           Edit {type} Comps
+                          </Link>
+                          {/* Placeholder Refresh Icon */}
+                          <button 
+                            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50"
+                            title="Refresh (Placeholder)"
+                          >
+                            🔄
+                          </button>
+                      </div>
                     </div>
 
                     {list.length === 0 ? (
@@ -620,17 +417,6 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                                     Land Map
                                   </Link>
                                 )}
-                                <button
-                                  onClick={() =>
-                                    handleRemoveComparable(
-                                      type,
-                                      comparable.id,
-                                    )
-                                  }
-                                  className="text-xs font-medium text-red-600 hover:text-red-700"
-                                >
-                                  Remove
-                                </button>
                               </div>
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
@@ -638,39 +424,17 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                                 <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                                   Address
                                 </label>
-                                <input
-                                  type="text"
-                                  value={comparable.address}
-                                  onChange={(event) =>
-                                    handleComparableChange(
-                                      type,
-                                      comparable.id,
-                                      "address",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                  placeholder="Comparable address..."
-                                />
+                                <div className="text-sm text-gray-800 p-2 bg-gray-50 rounded border border-gray-200">
+                                    {comparable.address || "No Address"}
+                                </div>
                               </div>
                               <div>
                                 <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
                                   Address (Display)
                                 </label>
-                                <input
-                                  type="text"
-                                  value={comparable.addressForDisplay}
-                                  onChange={(event) =>
-                                    handleComparableChange(
-                                      type,
-                                      comparable.id,
-                                      "addressForDisplay",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                  placeholder="Comparable display address..."
-                                />
+                                <div className="text-sm text-gray-800 p-2 bg-gray-50 rounded border border-gray-200">
+                                    {comparable.addressForDisplay || "No Display Address"}
+                                </div>
                               </div>
                             </div>
                           </div>

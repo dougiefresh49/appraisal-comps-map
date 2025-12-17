@@ -146,6 +146,17 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
           {expandedSections.landSales && (
             <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2">
               <Link
+                href={`/project/${projectId}/land-sales/comparables`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/land-sales/comparables`) &&
+                  !isActive(`/project/${projectId}/land-sales/comparables-map`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Comps
+              </Link>
+              <Link
                 href={`/project/${projectId}/land-sales/comparables-map`}
                 className={`block rounded-md px-3 py-2 transition ${
                   isActive(`/project/${projectId}/land-sales/comparables-map`)
@@ -153,7 +164,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
                     : "hover:bg-gray-100"
                 }`}
               >
-                Comparables Map
+                Map
               </Link>
               {/* Future: Comps list or details could go here */}
             </div>
@@ -172,6 +183,17 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
           {expandedSections.sales && (
             <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2">
               <Link
+                href={`/project/${projectId}/sales/comparables`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/sales/comparables`) &&
+                  !isActive(`/project/${projectId}/sales/comparables-map`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Comps
+              </Link>
+              <Link
                 href={`/project/${projectId}/sales/comparables-map`}
                 className={`block rounded-md px-3 py-2 transition ${
                   isActive(`/project/${projectId}/sales/comparables-map`)
@@ -179,7 +201,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
                     : "hover:bg-gray-100"
                 }`}
               >
-                Comparables Map
+                Map
               </Link>
             </div>
           )}
@@ -197,6 +219,17 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
           {expandedSections.rentals && (
             <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2">
               <Link
+                href={`/project/${projectId}/rentals/comparables`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/rentals/comparables`) &&
+                  !isActive(`/project/${projectId}/rentals/comparables-map`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Comps
+              </Link>
+              <Link
                 href={`/project/${projectId}/rentals/comparables-map`}
                 className={`block rounded-md px-3 py-2 transition ${
                   isActive(`/project/${projectId}/rentals/comparables-map`)
@@ -204,7 +237,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
                     : "hover:bg-gray-100"
                 }`}
               >
-                Comparables Map
+                Map
               </Link>
             </div>
           )}
