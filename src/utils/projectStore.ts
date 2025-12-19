@@ -94,6 +94,7 @@ export interface LocationMapState {
   streetLabels?: StreetLabelData[];
   labelSize?: number;
   circleRadius?: 1 | 2 | 3 | 5;
+  documentFrameSize?: number;
 }
 
 export type NeighborhoodMapState = LocationMapState;
@@ -146,6 +147,7 @@ export const LOCATION_DEFAULT: LocationMapState = {
   streetLabels: [],
   labelSize: DEFAULT_LABEL_SIZE,
   circleRadius: DEFAULT_CIRCLE_RADIUS,
+  documentFrameSize: 1.0,
 };
 
 const NEIGHBORHOOD_DEFAULT: NeighborhoodMapState = {
@@ -234,6 +236,10 @@ const info = input?.propertyInfo ?? SUBJECT_DEFAULT.info;
         ? input.labelSize
         : DEFAULT_LABEL_SIZE,
     circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    documentFrameSize:
+      typeof input?.documentFrameSize === "number"
+        ? input.documentFrameSize
+        : 1.0,
   };
 }
 
@@ -486,6 +492,10 @@ export function normalizeLocationState(
         ? input.labelSize
         : DEFAULT_LABEL_SIZE,
     circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    documentFrameSize:
+      typeof input?.documentFrameSize === "number"
+        ? input.documentFrameSize
+        : 1.0,
   };
 }
 

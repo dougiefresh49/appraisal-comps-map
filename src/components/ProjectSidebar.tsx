@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useProject } from "~/hooks/useProject";
 
 interface ProjectSidebarProps {
   projectId: string;
@@ -11,6 +12,7 @@ interface ProjectSidebarProps {
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const pathname = usePathname();
   const decodedProjectId = decodeURIComponent(projectId);
+  const { project } = useProject(projectId);
 
   // Helper to check if a path is active
   const isActive = (path: string) => {
@@ -28,6 +30,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
     landSales: true,
     sales: true,
     rentals: true,
+    parser: true,
   });
 
   const toggleSection = (section: string) => {
@@ -120,8 +123,12 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
               >
                 Location Map
               </Link>
-              <Link
-                href={`/project/${projectId}/subject/photos`}
+                <Link
+                href={
+                  project?.projectFolderId
+                    ? `/project/${projectId}/subject/photos?folderId=${project?.subjectPhotosFolderId}&projectFolderId=${project?.projectFolderId}`
+                    : `/project/${projectId}/subject/photos`
+                }
                 className={`block rounded-md px-3 py-2 transition ${
                   isActive(`/project/${projectId}/subject/photos`)
                     ? "bg-blue-50 text-blue-700"
@@ -203,11 +210,21 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
               >
                 Map
               </Link>
+              <Link
+                href={`/project/${projectId}/sales/ui`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/sales/ui`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                UI
+              </Link>
             </div>
           )}
         </div>
 
-        {/* Rentals Section */}
+          {/* Rentals Section */}
         <div className="pt-2">
           <button
             onClick={() => toggleSection("rentals")}
@@ -238,6 +255,51 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
                 }`}
               >
                 Map
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Parser Section */}
+        <div className="pt-2">
+          <button
+            onClick={() => toggleSection("parser")}
+            className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700"
+          >
+            <span>Parser</span>
+            <span>{expandedSections.parser ? "▼" : "▶"}</span>
+          </button>
+          {expandedSections.parser && (
+            <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2">
+              <Link
+                href={`/project/${projectId}/parser/land`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/parser/land`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Land
+              </Link>
+              <Link
+                href={`/project/${projectId}/parser/sales`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/parser/sales`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Sales
+              </Link>
+              <Link
+                href={`/project/${projectId}/parser/rentals`}
+                className={`block rounded-md px-3 py-2 transition ${
+                  isActive(`/project/${projectId}/parser/rentals`)
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                Rentals
               </Link>
             </div>
           )}

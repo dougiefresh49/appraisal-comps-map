@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import {
   fetchInputsJson,
   saveChanges,
-  listAllFilesInFolder,
   type PhotoInputs,
 } from "~/server/photos/actions";
 
@@ -11,7 +10,6 @@ export async function GET(request: NextRequest) {
   console.log("🚀 API GET /api/photos called");
 
   const { searchParams } = new URL(request.url);
-  const debug = searchParams.get("debug");
   const folderId = searchParams.get("folderId");
 
   if (!folderId) {
@@ -19,21 +17,6 @@ export async function GET(request: NextRequest) {
       { success: false, error: "folderId query parameter is required" },
       { status: 400 },
     );
-  }
-
-  if (debug === "list") {
-    console.log("🔍 Debug list requested");
-    try {
-      const files = await listAllFilesInFolder(folderId);
-      console.log("📁 Files found:", files);
-      return NextResponse.json({ success: true, data: files });
-    } catch (error) {
-      console.error("❌ Error listing files:", error);
-      return NextResponse.json(
-        { success: false, error: "Failed to list files" },
-        { status: 500 },
-      );
-    }
   }
 
   try {

@@ -21,6 +21,7 @@ interface CompData {
   Address?: string;
   APN?: string;
   Recording?: string;
+  '#': number;
   [key: string]: unknown;
 }
 

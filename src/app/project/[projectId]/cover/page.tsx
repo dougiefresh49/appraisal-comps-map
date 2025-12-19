@@ -288,7 +288,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       try {
                         const response = await fetch(
                           env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL +
-                            "subject-photo-data",
+                            "/subject-photo-data",
                           {
                             method: "POST",
                             headers: {

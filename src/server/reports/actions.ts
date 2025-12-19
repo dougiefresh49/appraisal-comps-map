@@ -45,7 +45,7 @@ const EXISTS_KEY = "exists";
 const STATUS_KEY = "status";
 
 function getWebhookUrl(): string {
-  const base = env.N8N_WEBHOOK_BASE_URL ?? env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL;
+  const base = env.N8N_WEBHOOK_BASE_URL;
   if (!base) {
     throw new Error("N8N_WEBHOOK_BASE_URL is not configured");
   }

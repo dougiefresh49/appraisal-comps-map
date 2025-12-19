@@ -15,7 +15,7 @@ export default async function ProjectPhotosPage({ searchParams, params }: Photos
   const { projectId } = await params;
   console.log("Subject Photos Page projectId:", projectId); // Use it to suppress warning or remove if truly unnecessary
 
-  if (!folderId) {
+  if (!folderId || !projectFolderId) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-50">
         <div className="rounded-md border border-gray-200 bg-white p-6 shadow-sm">
@@ -31,7 +31,7 @@ export default async function ProjectPhotosPage({ searchParams, params }: Photos
   // We are not using projectId here yet, but we have it if we need to 
   // do server-side project lookup later if we move storage to DB.
   
-  const { photos, fileId } = await fetchInputsJson(folderId);
+  const { photos, fileId } = await fetchInputsJson(projectFolderId);
 
   return (
     <Suspense fallback={<PhotoGridSkeleton />}>

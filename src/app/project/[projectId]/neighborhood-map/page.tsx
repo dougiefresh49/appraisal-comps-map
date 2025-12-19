@@ -78,6 +78,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
   );
   const [mapZoom, setMapZoom] = useState(17);
   const [bubbleSize, setBubbleSize] = useState(1.0);
+  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
@@ -143,6 +144,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       );
       setMapZoom(neighborhoodSnapshot.mapZoom ?? 17);
       setBubbleSize(neighborhoodSnapshot.bubbleSize ?? 1.0);
+      setDocumentFrameSize(neighborhoodSnapshot.documentFrameSize ?? 1.0);
       setTailDirection(neighborhoodSnapshot.tailDirection ?? "right");
       setHideUI(neighborhoodSnapshot.hideUI ?? false);
       setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
@@ -174,6 +176,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       setMapCenter,
       setMapZoom,
       setBubbleSize,
+      setDocumentFrameSize,
       setTailDirection,
       setHideUI,
       setIsSubjectTailPinned,
@@ -273,6 +276,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
       mapZoom,
       bubbleSize,
+      documentFrameSize,
       tailDirection,
       hideUI,
       streetLabels: streetLabels.map((label) => ({
@@ -439,6 +443,8 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         onLabelSizeChange={setLabelSize}
         mapCenter={mapCenter}
         heading="Neighborhood Map"
+        documentFrameSize={documentFrameSize}
+        onDocumentFrameSizeChange={setDocumentFrameSize}
         // Hide project switcher props
       />
 
@@ -607,7 +613,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} />
+        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
 
         <MapDrawingControls
           isDrawing={isDrawing}
