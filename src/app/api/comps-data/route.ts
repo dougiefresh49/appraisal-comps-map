@@ -37,8 +37,8 @@ export async function POST(request: Request) {
     if (!response.ok) {
         throw new Error(`n8n webhook failed: ${response.statusText}`);
     }
-    const data = (await response.json()) as {comps: unknown[]};
-    return NextResponse.json(data?.comps);
+    const data = (await response.json()) as {comps: unknown[], imageMap: Record<string, ImageData[]>};
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error("Error fetching comps data:", error);

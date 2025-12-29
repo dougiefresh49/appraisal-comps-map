@@ -140,7 +140,7 @@ export default function SalesUIPage({ params }: { params: Promise<{ projectId: s
   const currentCompId = searchParams.get("compId");
   const { project } = useProject(projectId);
   
-  const salesComparables = project?.comparables.byType["Sales"].comparables || [];
+  const salesComparables = project?.comparables.byType.Sales?.comparables ?? [];
   
   // Find the index of the selected comparable
   const selectedIndex = currentCompId 

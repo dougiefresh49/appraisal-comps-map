@@ -635,8 +635,8 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
             {comparablesWithDistance.map((comp, index) => (
                 <ComparableMarker
                     key={comp.id}
-                    position={comp.position!}
-                    markerPosition={comp.markerPosition!}
+                    position={comp.position as { lat: number; lng: number }}
+                    markerPosition={comp.markerPosition as { lat: number; lng: number }}
                     comparableInfo={comp}
                     comparableNumber={index + 1}
                     onPositionChange={(newPos) => {

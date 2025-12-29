@@ -77,6 +77,8 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
@@ -428,6 +430,119 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     }
   };
 
+  // Placeholder - will use dynamic import for html-to-image to avoid SSR issues
+  const handleCaptureScreenshot = async () => {
+    try {
+      const { toPng } = await import("html-to-image");
+      const container = document.getElementById("location-map-container");
+      if (!container) return;
+
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+
+      const documentAspectRatio = 8.5 / 11;
+      const sizeMultiplier = documentFrameSize;
+
+      let docWidth = containerWidth * 0.9 * sizeMultiplier;
+      let docHeight = docWidth / documentAspectRatio;
+
+      if (docHeight > containerHeight * 0.9 * sizeMultiplier) {
+        docHeight = containerHeight * 0.9 * sizeMultiplier;
+        docWidth = docHeight * documentAspectRatio;
+      }
+
+      const x = (containerWidth - docWidth) / 2;
+      const y = (containerHeight - docHeight) / 2;
+      
+      // Capture the entire map container first
+      // We use pixelRatio: 2 for better quality (simulating 2x scale)
+      // fontEmbedCSS: "" avoids CORS issues with Google Fonts by skipping font embedding
+      const dataUrl = await toPng(container, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "transparent",
+        fontEmbedCSS: "",
+      });
+
+      // Now crop the image using a temporary canvas
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const canvas = document.createElement("canvas");
+      // Current pixelRatio used in capture was 2, so dimensions are doubled
+      const scale = 2;
+      canvas.width = docWidth * scale;
+      canvas.height = docHeight * scale;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Draw the portion of the image that corresponds to the crop area
+      // sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight
+      ctx.drawImage(
+        img, 
+        x * scale, 
+        y * scale, 
+        docWidth * scale, 
+        docHeight * scale, 
+        0, 
+        0, 
+        docWidth * scale, 
+        docHeight * scale
+      );
+
+      // Convert canvas to blob for File System Access API
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error("Failed to create image blob");
+
+      try {
+        /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+        if ((window as any).showSaveFilePicker) {
+            const handle = await (window as any).showSaveFilePicker({
+                suggestedName: "subject-location-map.png",
+                types: [{
+                    description: 'PNG Image',
+                    accept: { 'image/png': ['.png'] },
+                }],
+            });
+            const stream = await handle.createWritable();
+            await stream.write(blob);
+            await stream.close();
+        } else {
+            throw new Error("File System Access API not supported");
+        }
+        /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+      } catch (err: unknown) {
+        // If user cancelled the picker, do nothing
+        if (err instanceof Error && err.name === 'AbortError') return;
+
+        // Fallback or error handling
+        if (err instanceof Error && err.message === "File System Access API not supported") {
+             const croppedDataUrl = canvas.toDataURL("image/png");
+             const link = document.createElement("a");
+             link.href = croppedDataUrl;
+             link.download = "subject-location-map.png";
+             link.click();
+        } else {
+            console.error("Screenshot save failed:", err);
+            // Attempt fallback download even if picker failed for other reasons
+             const croppedDataUrl = canvas.toDataURL("image/png");
+             const link = document.createElement("a");
+             link.href = croppedDataUrl;
+             link.download = "subject-location-map.png";
+             link.click();
+        }
+      }
+
+    } catch (error) {
+      console.error("Screenshot failed:", error);
+      alert("Failed to capture screenshot. Please try manually.");
+    }
+  };
+
   return (
     <div className="flex h-screen w-full">
       <PropertyInfoPanel
@@ -452,11 +567,48 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
         onStreetLabelsChange={setStreetLabels}
         labelSize={labelSize}
         onLabelSizeChange={setLabelSize}
-        mapCenter={mapCenter}
         heading="Subject Location Map"
+        isCollapsed={isCollapsed}
+        onIsCollapsedChange={setIsCollapsed}
+        mapCenter={mapCenter}
+        documentFrameSize={documentFrameSize}
+        onDocumentFrameSizeChange={setDocumentFrameSize}
+        onCaptureScreenshot={handleCaptureScreenshot}
       />
 
-      <div className="relative flex-1">
+      {isCollapsed && !hideUI && (
+        <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
+           <button
+              onClick={() => setHideUI(!hideUI)}
+              className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+              title="Toggle UI Visibility"
+            >
+              {hideUI ? "Show UI" : "Hide UI"}
+           </button>
+           
+           {showDocumentOverlay && (
+             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
+                <button
+                    onClick={() => setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))}
+                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="Decrease Frame Size"
+                >
+                    -
+                </button>
+                <span className="min-w-[3ch] text-center text-sm">{Math.round(documentFrameSize * 100)}%</span>
+                <button
+                    onClick={() => setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))}
+                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="Increase Frame Size"
+                >
+                    +
+                </button>
+             </div>
+           )}
+        </div>
+      )}
+
+      <div id="location-map-container" className="relative flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -514,6 +666,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
               onIsDrawingChange={setIsDrawing}
               polygonPath={polygonPath}
               onPolygonPathChange={setPolygonPath}
+              hideUI={hideUI}
             />
 
             <CircleDrawingTool circles={circles} />
@@ -621,7 +774,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} />
+        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
 
         <MapDrawingControls
           isDrawing={isDrawing}

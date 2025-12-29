@@ -558,7 +558,13 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             center={mapCenter}
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
-            disableDefaultUI={hideUI}
+            disableDefaultUI={false}
+            zoomControl={!hideUI}
+            mapTypeControl={!hideUI}
+            streetViewControl={!hideUI}
+            fullscreenControl={!hideUI}
+            scaleControl={!hideUI}
+            rotateControl={!hideUI}
             onCenterChanged={(e) => {
               const center = e.detail.center;
               if (center) {
@@ -663,8 +669,8 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             {comparablesWithDistance.map((comp, index) => (
                 <ComparableMarker
                     key={comp.id}
-                    position={comp.position!}
-                    markerPosition={comp.markerPosition!}
+                    position={comp.position as { lat: number; lng: number }}
+                    markerPosition={comp.markerPosition as { lat: number; lng: number }}
                     comparableInfo={comp}
                     comparableNumber={index + 1}
                     onPositionChange={(newPos: { lat: number; lng: number }) => {

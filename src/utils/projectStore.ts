@@ -24,6 +24,7 @@ export interface ProjectSubjectState {
 
 export interface ComparableInfo {
   id: string;
+  number?: string; // Stable number from API/N8N
   address: string;
   addressForDisplay: string;
   isTailPinned: boolean;
@@ -34,6 +35,16 @@ export interface ComparableInfo {
   distance?: string;
   apn?: string[]; // Array of APN numbers
   instrumentNumber?: string; // Recording number
+  folderId?: string;
+  images?: ImageData[];
+}
+
+export interface ImageData {
+  id: string;
+  name: string;
+  webViewLink: string;
+  webViewUrl: string;
+  mimeType: string;
 }
 
 export interface ComparablesMapState {
@@ -49,6 +60,8 @@ export interface ComparablesMapState {
   isSubjectTailPinned?: boolean;
   subjectPinnedTailTipPosition?: LatLng | null;
   landLocationMaps?: Record<string, LocationMapState>;
+  salesLocationMaps?: Record<string, LocationMapState>;
+  rentalsLocationMaps?: Record<string, LocationMapState>;
 }
 
 export interface ProjectComparablesState {
@@ -299,6 +312,9 @@ function normalizeComparable(
       comparable.instrumentNumber.trim().length > 0
         ? comparable.instrumentNumber
         : undefined,
+    number: comparable.number,
+    folderId: comparable.folderId,
+    images: comparable.images,
   };
 }
 

@@ -13,6 +13,8 @@ interface PolygonDrawingToolProps {
   onIsDrawingChange: (isDrawing: boolean) => void;
   polygonPath: PolygonPath[];
   onPolygonPathChange: (path: PolygonPath[]) => void;
+  readOnly?: boolean;
+  hideUI?: boolean;
 }
 
 export function PolygonDrawingTool({
@@ -20,7 +22,10 @@ export function PolygonDrawingTool({
   onIsDrawingChange,
   polygonPath,
   onPolygonPathChange,
+  readOnly = false,
+  hideUI = false,
 }: PolygonDrawingToolProps) {
+
   const map = useMap();
   const drawingLibrary = useMapsLibrary("drawing");
   const [drawingManager, setDrawingManager] =
@@ -103,20 +108,44 @@ export function PolygonDrawingTool({
       strokeWeight: 3,
       fillColor: "#FFFF00",
       fillOpacity: 0.35,
-      editable: false,
-      draggable: false,
+      editable: !isDrawing && !readOnly && !hideUI,
+      draggable: !isDrawing && !readOnly && !hideUI,
     });
 
     polygon.setMap(map);
     polygonRef.current = polygon;
 
+    // Event listeners to sync state
+    const syncPath = () => {
+      const path = polygon.getPath();
+      const coordinates: PolygonPath[] = [];
+      path.forEach((latLng) => {
+        coordinates.push({
+          lat: latLng.lat(),
+          lng: latLng.lng(),
+        });
+      });
+      onPolygonPathChange(coordinates);
+    };
+
+    const listeners = [
+      polygon.addListener("mouseup", syncPath),
+      polygon.addListener("dragend", syncPath),
+    ];
+
+    const path = polygon.getPath();
+    listeners.push(path.addListener("insert_at", syncPath));
+    listeners.push(path.addListener("remove_at", syncPath));
+    // Note: We avoid 'set_at' during drag to prevent re-render loops. 'mouseup' handles the final position.
+
     return () => {
+      listeners.forEach((listener) => google.maps.event.removeListener(listener));
       if (polygonRef.current) {
         polygonRef.current.setMap(null);
         polygonRef.current = null;
       }
     };
-  }, [map, polygonPath]);
+  }, [map, polygonPath, isDrawing, onPolygonPathChange, readOnly, hideUI]);
 
   return null;
 }

@@ -11,7 +11,8 @@ import {
   createDefaultProject,
   type ComparableInfo,
   type LocationMapState,
-  type ProjectData
+  type ProjectData,
+  type ImageData
 } from "~/utils/projectStore";
 
 interface ComparablesPageContentProps {
@@ -28,12 +29,12 @@ export function ComparablesPageContent({
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mergeConflicts, setMergeConflicts] = useState<MergeConflict[] | null>(null);
-  const [pendingComps, setPendingComps] = useState<CompData[] | null>(null);
+  const [pendingComps, setPendingComps] = useState<{ comp: CompData; existingId?: string }[] | null>(null);
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-gray-500">Loading project...</div>
+        <div className="text-gray-500 dark:text-gray-400">Loading project...</div>
       </div>
     );
   }
@@ -41,7 +42,7 @@ export function ComparablesPageContent({
   if (!projectExists || !project) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-gray-500">Project not found</div>
+        <div className="text-gray-500 dark:text-gray-400">Project not found</div>
       </div>
     );
   }
@@ -61,9 +62,37 @@ export function ComparablesPageContent({
         });
 
         if (!response.ok) throw new Error("Failed to fetch comps");
-        const newComps = (await response.json()) as CompData[];
+        const responseData = (await response.json()) as { comps: CompData[]; imageMap: Record<string, ImageData[]> };
+        
+        // Handle the array response structure - assume first item contains the data we need or flatten if needed
+        // Based on example: [ { comps: [], imageMap: {} } ]
+        const data = responseData;
+        if (!data) throw new Error("No data received");
 
+        const rawComps = data.comps;
+        const imageMap = data.imageMap ?? {};
+        console.log("imageMap received:", imageMap);
+        console.log("rawComps received:", rawComps);
 
+        // Pre-process comps to attach images
+        const newComps = rawComps.map(comp => {
+            const folderId = comp.folderId;
+            const images = folderId && typeof folderId === 'string' ? imageMap[folderId] : undefined;
+            return {                                                                                                                                                                                                                                                                   
+                ...comp,
+                images: images?.map(img => {
+                    let fileId = img.id;
+                    // Fix for malformed IDs (e.g., "anyoneWithLink") from N8N
+                    if (!fileId || fileId === "anyoneWithLink") {
+                         const match = /\/d\/([a-zA-Z0-9_-]+)/.exec(img.webViewLink ?? "");
+                         if (match?.[1]) {
+                             fileId = match[1];
+                         }
+                    }
+                    return { ...img, webViewUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w800` };
+                })
+            };
+        });
 
         // Wait, the prompt says: "check the comp numbers in the local store and then compare to the CompData['#'] field"
         // This implies the local store *should* have comp numbers. 
@@ -80,10 +109,25 @@ export function ComparablesPageContent({
         
         const conflictsFound: MergeConflict[] = [];
 
+        // Identify conflicts and prepare pending structure
+        // We will construct the "new" list of comparables based on the API response.
+        // If a comp exists in API but not local -> New.
+        // If a comp exists in local but not API -> Removed (implicitly, by not including it in the new list).
+        // If matches -> Check conflicts.
+
+        const newPendingComps: { comp: CompData; existingId?: string }[] = [];
+
         newComps.forEach(newComp => {
-             const existingComp = comparables.find(c => 
+             const newCompNumber = String(newComp['#']);
+             
+             // Match by 'number' field
+             let existingComp = comparables.find(c => c.number === newCompNumber);
+             console.log("existingComp by number:", existingComp);
+             console.log("newCompNumber:", newCompNumber);
+             // Fallback: If not found by number (e.g. legacy data), try matching by unique fields
+             existingComp ??= comparables.find(c => 
                 c.address === newComp.Address || 
-                c.address === newComp.Address || 
+                // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
                 (newComp.APN && (c.apn?.includes(newComp.APN) ?? false)) ||
                 (newComp.Recording && c.instrumentNumber === newComp.Recording)
              );
@@ -109,84 +153,105 @@ export function ComparablesPageContent({
                      fieldConflicts.push({ field: "Recording", existingValue: existingComp.instrumentNumber, newValue: newComp.Recording });
                  }
 
-                 if (fieldConflicts.length > 0) {
+                if (fieldConflicts.length > 0) {
                      conflictsFound.push({
-                         compNumber: newComp['#'] ?? 0,
+                         compNumber: Number(newComp['#']) ?? 0,
                          existingMsg: "Local Data",
                          newMsg: "Refresh Data",
                          existingData: { 
-                             '#': newComp['#'], 
+                             '#': Number(existingComp.number) ?? 0, 
                              Address: existingComp.address, 
                              APN: existingComp.apn?.join("\n"), 
-                             Recording: existingComp.instrumentNumber 
-                             // Add other props if needed
+                             Recording: existingComp.instrumentNumber,
+                             folderId: existingComp.folderId,
+                             images: existingComp.images 
                          },
                          newData: newComp,
                          conflicts: fieldConflicts
                      });
-                 } else {
-                     // Update implicitly if no conflict? Or just ignore? 
-                     // If exactly same, do nothing.
                  }
+                 
+                 newPendingComps.push({ comp: newComp, existingId: existingComp.id });
              } else {
-                 // New comp, add to list to be added
-                 // We'll handle this in the bulk update
+                 // New Comp
+                 newPendingComps.push({ comp: newComp });
              }
         });
 
         if (conflictsFound.length > 0) {
             setMergeConflicts(conflictsFound);
-            setPendingComps(newComps); // Store for processing
+            setPendingComps(newPendingComps); 
         } else {
-            // No conflicts, just overwrite/add? 
-            // The request says "if there are no comps... save them".
-            // "if there are comps... check... show merge dialog".
-            // If no conflicts found but data exists, we probably want to update non-conflicting fields or add new ones.
-            // For now, let's just add any completely NEW comps that didn't match anything.
-            // And potentially update fields that were empty in existing?
-            // To be safe and simple: If no conflicts, we assume "Accept Incoming" for all changes.
-            // Actually, if we found matches but no conflicts (i.e. identical), we do nothing for those.
-            // If we found NO matches for a comp, it's a new comp.
-            
-            const completelyNewComps = newComps.filter(nc => !comparables.some(c => 
-                c.address === nc.Address || 
-                (nc.APN && (c.apn?.includes(nc.APN) ?? false)) ||
-                (nc.Recording && c.instrumentNumber === nc.Recording)
-            ));
+             updateProject((proj: ProjectData) => {
+                const currentState = proj.comparables.byType[type] ?? createDefaultProject().comparables.byType[type];
+                const previousComparables = currentState.comparables ?? [];
+                
+                // Construct the NEW list of comparables, preserving IDs/MapState for existing matches
+                const finalComparables: ComparableInfo[] = newPendingComps.map(({ comp: newComp, existingId }, i) => {
+                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                     let baseComp: ComparableInfo;
+                     
+                     if (existingId) {
+                         const existing = previousComparables.find(c => c.id === existingId);
+                         if (existing) {
+                             // Preserve existing state, apply allowed updates (images, folderId)
+                             // Note: If there were NO conflicts, we can arguably apply ALL updates?
+                             // The prompt implies "if there are conflicts... show dialog". 
+                             // If we are here, there are NO conflicts found (or we ignored them? No, we branched above).
+                             // So we should assume "Accept Incoming" for all fields if we are here?
+                             // Logic: If no conflicts found, it means fields match OR we just auto-update?
+                             // Actually, if no conflict, we can just keep existing OR overwrite. 
+                             // Let's overwrite to ensure sync.
+                             
+                             return {
+                                 ...existing,
+                                 // Update fields to match incoming (in case of type/formatting diffs we missed, or just to sync)
+                                 address: newComp.Address ?? existing.address,
+                                 addressForDisplay: newComp.Address ?? existing.addressForDisplay,
+                                 apn: newComp.APN ? newComp.APN.split("\n").filter(x => x.trim()) : existing.apn,
+                                 instrumentNumber: newComp.Recording ?? existing.instrumentNumber,
+                                 folderId: newComp.folderId ?? existing.folderId,
+                                 images: newComp.images ?? existing.images,
+                                 number: String(newComp['#'])
+                             };
+                         }
+                     }
 
-            if (completelyNewComps.length > 0) {
-                // Add them
-                 updateProject((proj: ProjectData) => {
-                    const currentState = proj.comparables.byType[type] ?? createDefaultProject().comparables.byType[type];
-                    
-                    const newComparableInfos: ComparableInfo[] = completelyNewComps.map((c, i) => ({
-                         id: `comp-${type.toLowerCase()}-${Date.now()}-${i}-${Math.random()}`,
-                         address: c.Address ?? "",
-                         addressForDisplay: c.Address ?? "",
-                         isTailPinned: true,
-                         type: type,
-                         apn: c.APN ? c.APN.split("\n").filter(x => x.trim()) : undefined,
-                         instrumentNumber: c.Recording
-                    }));
-
-                    return {
-                        ...proj,
-                        comparables: {
-                            ...proj.comparables,
-                            byType: {
-                                ...proj.comparables.byType,
-                                [type]: {
-                                    ...currentState,
-                                    comparables: [...(currentState.comparables ?? []), ...newComparableInfos],
-                                },
+                     // Completely New
+                     return {
+                             id: `comp-${type.toLowerCase()}-${Date.now()}-${i}-${Math.random()}`,
+                             number: String(newComp['#']),
+                             address: newComp.Address ?? "",
+                             addressForDisplay: newComp.Address ?? "",
+                             isTailPinned: true,
+                             type: type,
+                             apn: newComp.APN ? newComp.APN.split("\n").filter(x => x.trim()) : undefined,
+                             instrumentNumber: newComp.Recording,
+                             folderId: newComp.folderId,
+                             images: newComp.images
+                     };
+                });
+                
+                return {
+                    ...proj,
+                    comparables: {
+                        ...proj.comparables,
+                        byType: {
+                            ...proj.comparables.byType,
+                            [type]: {
+                                ...currentState,
+                                comparables: finalComparables,
                             },
                         },
-                    };
-                 });
-                 alert(`Added ${completelyNewComps.length} new comparables.`);
-            } else {
-                alert("No new comparables or updates found.");
-            }
+                    },
+                };
+            });
+            
+            // Alert logic
+            const addedCount = newPendingComps.filter(c => !c.existingId).length;
+            const removedCount = comparables.length - newPendingComps.filter(c => c.existingId).length;
+            
+            alert(`Comparables refreshed.\nAdded: ${addedCount}\nRemoved: ${removedCount}\nUpdated: ${newPendingComps.length - addedCount}`);
         }
 
     } catch (e) {
@@ -197,75 +262,87 @@ export function ComparablesPageContent({
     }
   };
 
-  const handleMergeComplete = (decisions: Record<number, Record<string, "existing" | "new">>) => {
+  const handleMergeComplete = (decisions: Record<string, Record<string, "existing" | "new">>) => {
        if (!pendingComps) return;
        
+       console.log("Handling Merge Complete. Decisions:", decisions);
+       console.log("Pending Comps:", pendingComps);
+
        updateProject((proj: ProjectData) => {
             const currentState = proj.comparables.byType[type] ?? createDefaultProject().comparables.byType[type];
-            const updatedComparables = [...(currentState.comparables ?? [])];
-            const compsToAdd: ComparableInfo[] = [];
-
-            pendingComps.forEach((newComp, index) => {
-                 // Find existing
-                 const existingIndex = updatedComparables.findIndex(c => 
-                    c.address === newComp.Address || 
-                    (newComp.APN && (c.apn?.includes(newComp.APN) ?? false)) ||
-                    (newComp.Recording && c.instrumentNumber === newComp.Recording)
-                 );
-
-                 if (existingIndex !== -1) {
-                     const compDecisions = decisions[newComp['#']];
-                     if (compDecisions) {
-                         const existingComp = updatedComparables[existingIndex];
-                         if (existingComp) {
-                             // Apply updates based on decision
-                             const updatedComp: ComparableInfo = { ...existingComp };
-                             
-                             if (compDecisions.Address === "new" && typeof newComp.Address === 'string') {
-                                 updatedComp.address = newComp.Address;
-                                 updatedComp.addressForDisplay = newComp.Address;
-                             }
-                             if (compDecisions.APN === "new" && typeof newComp.APN === 'string') {
-                                 updatedComp.apn = newComp.APN.split("\n").filter(x => x.trim());
-                             }
-                             if (compDecisions.Recording === "new" && typeof newComp.Recording === 'string') {
-                                 updatedComp.instrumentNumber = newComp.Recording;
-                             }
-                             
-                             updatedComparables[existingIndex] = updatedComp;
-                         }
-                     }
-                 } else {
-                     // New comp
-                     compsToAdd.push({
-                         id: `comp-${type.toLowerCase()}-${Date.now()}-${index}-${Math.random()}`,
-                         address: typeof newComp.Address === 'string' ? newComp.Address : "",
-                         addressForDisplay: typeof newComp.Address === 'string' ? newComp.Address : "",
-                         isTailPinned: true,
-                         type: type,
-                         apn: typeof newComp.APN === 'string' ? newComp.APN.split("\n").filter(x => x.trim()) : undefined,
-                         instrumentNumber: typeof newComp.Recording === 'string' ? newComp.Recording : undefined
-                     });
-                 }
-            });
+            const previousComparables = currentState.comparables ?? [];
             
+            const finalComparables: ComparableInfo[] = pendingComps.map(({ comp: newComp, existingId }, i) => {
+                if (existingId) {
+                    const existing = previousComparables.find(c => c.id === existingId);
+                    if (existing) {
+                        const updatedComp = { ...existing };
+                        updatedComp.number = String(newComp['#']); // Ensure number is synced
+                        
+                        // Check decisions
+                        // Check decisions
+                        const compId = String(newComp['#']);
+                        const compDecisions = decisions[compId] ?? {};
+
+                        // Default to 'new' (Accept Incoming) if no explicit decision made
+                        // This matches the UI which shows 'Accept Incoming' selected by default
+                        const useNewAddress = (compDecisions.Address ?? "new") === "new";
+                        const useNewAPN = (compDecisions.APN ?? "new") === "new";
+                        const useNewRecording = (compDecisions.Recording ?? "new") === "new";
+                        
+                        if (useNewAddress && typeof newComp.Address === 'string') {
+                            updatedComp.address = newComp.Address;
+                            updatedComp.addressForDisplay = newComp.Address;
+                        }
+
+                        if (useNewAPN && typeof newComp.APN === 'string') {
+                            updatedComp.apn = newComp.APN.split("\n").filter(x => x.trim());
+                        }
+
+                        if (useNewRecording && typeof newComp.Recording === 'string') {
+                            updatedComp.instrumentNumber = newComp.Recording;
+                        }
+                        
+                        // Always update images/folderId/number
+                        if (newComp.folderId) updatedComp.folderId = newComp.folderId;
+                        if (newComp.images) updatedComp.images = newComp.images;
+                        
+                        return updatedComp;
+                    }
+                }
+                
+                // New Comp
+                return {
+                     id: `comp-${type.toLowerCase()}-${Date.now()}-${i}-${Math.random()}`,
+                     number: String(newComp['#']),
+                     address: typeof newComp.Address === 'string' ? newComp.Address : "",
+                     addressForDisplay: typeof newComp.Address === 'string' ? newComp.Address : "",
+                     isTailPinned: true,
+                     type: type,
+                     apn: typeof newComp.APN === 'string' ? newComp.APN.split("\n").filter(x => x.trim()) : undefined,
+                     instrumentNumber: typeof newComp.Recording === 'string' ? newComp.Recording : undefined,
+                     folderId: newComp.folderId,
+                     images: newComp.images
+                };
+            });
+
             return {
                 ...proj,
-                 comparables: {
+                comparables: {
                     ...proj.comparables,
                     byType: {
                         ...proj.comparables.byType,
                         [type]: {
                             ...currentState,
-                            comparables: [...updatedComparables, ...compsToAdd],
+                            comparables: finalComparables,
                         },
                     },
                 },
             };
        });
-
-       setMergeConflicts(null);
+       
        setPendingComps(null);
+       setMergeConflicts(null);
   };
 
   const handleAddComparable = () => {
@@ -299,13 +376,14 @@ export function ComparablesPageContent({
 
   const handleComparableChange = (
     id: string,
-    field: "address" | "addressForDisplay",
+    field: "address" | "addressForDisplay" | "apn",
     value: string,
   ) => {
     updateProject((proj: ProjectData) => {
       const currentState =
         proj.comparables.byType[type] ??
         createDefaultProject().comparables.byType[type];
+      
       return {
         ...proj,
         comparables: {
@@ -314,9 +392,15 @@ export function ComparablesPageContent({
             ...proj.comparables.byType,
             [type]: {
               ...currentState,
-              comparables: (currentState.comparables ?? []).map((comp) =>
-                comp.id === id ? { ...comp, [field]: value } : comp,
-              ),
+              comparables: (currentState.comparables ?? []).map((comp) => {
+                 if (comp.id !== id) return comp;
+                 
+                 if (field === "apn") {
+                     return { ...comp, apn: value.split(",").map(s => s.trim()).filter(Boolean) };
+                 }
+                 
+                 return { ...comp, [field]: value };
+              }),
             },
           },
         },
@@ -450,13 +534,13 @@ export function ComparablesPageContent({
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-            <h2 className="text-2xl font-bold text-gray-900">{decodedProjectId}</h2>
-            <p className="text-sm text-gray-500">Manage {type.toLowerCase()} comparables.</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{decodedProjectId}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage {type.toLowerCase()} comparables.</p>
         </div>
          <button
             onClick={() => void handleRefreshComps()}
             disabled={isRefreshing}
-            className="group flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
+            className="group flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-700"
         >
             <svg 
                 xmlns="http://www.w3.org/2000/svg" 
@@ -464,7 +548,7 @@ export function ComparablesPageContent({
                 viewBox="0 0 24 24" 
                 strokeWidth={1.5} 
                 stroke="currentColor" 
-                className={`h-5 w-5 text-gray-400 group-hover:text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`}
+                className={`h-5 w-5 text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300 ${isRefreshing ? 'animate-spin' : ''}`}
             >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
             </svg>

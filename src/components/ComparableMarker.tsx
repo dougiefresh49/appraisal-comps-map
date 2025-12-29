@@ -85,9 +85,9 @@ export function ComparableMarker({
   const tailLeftMidXBase = (167.97 / originalSvgWidth) * bubbleWidth;
 
   // Original tail stroke path: M98.6449 195.734L167.579 197.797L182.21 254.814L98.6449 195.734Z
-  const tailStrokeLeftXBase = (98.6449 / originalSvgWidth) * bubbleWidth;
-  const tailStrokeLeftMidXBase = (167.579 / originalSvgWidth) * bubbleWidth;
-  const tailStrokeRightMidXBase = (182.21 / originalSvgWidth) * bubbleWidth;
+  // const tailStrokeLeftXBase = (98.6449 / originalSvgWidth) * bubbleWidth;
+  // const tailStrokeLeftMidXBase = (167.579 / originalSvgWidth) * bubbleWidth;
+  // const tailStrokeRightMidXBase = (182.21 / originalSvgWidth) * bubbleWidth;
 
   // Flip coordinates horizontally if tail direction is "left"
   const flipX = (x: number) => (tailDirection === "left" ? bubbleWidth - x : x);
@@ -95,25 +95,25 @@ export function ComparableMarker({
   const tailTipX = flipX(tailTipXBase);
   const tailLeftX = flipX(tailLeftXBase);
   const tailLeftMidX = flipX(tailLeftMidXBase);
-  const tailStrokeLeftX = flipX(tailStrokeLeftXBase);
-  const tailStrokeLeftMidX = flipX(tailStrokeLeftMidXBase);
-  const tailStrokeRightMidX = flipX(tailStrokeRightMidXBase);
+  // const tailStrokeLeftX = flipX(tailStrokeLeftXBase);
+  // const tailStrokeLeftMidX = flipX(tailStrokeLeftMidXBase);
+  // const tailStrokeRightMidX = flipX(tailStrokeRightMidXBase);
 
   // Y positions scaled relative to bubble height
   const tailBaseYLeft = tailBaseY;
-  const tailBaseYStroke = tailBaseY;
+  // const tailBaseYStroke = tailBaseY;
   const tailMidYLeft =
     tailBaseY +
     ((197.308 - originalTailBaseY) / originalTailHeight) * tailHeight;
-  const tailMidYStroke =
-    tailBaseY +
-    ((197.797 - originalTailBaseY) / originalTailHeight) * tailHeight;
-  const tailTipYStroke =
-    tailBaseY +
-    ((254.814 - originalTailBaseY) / originalTailHeight) * tailHeight;
+  // const tailMidYStroke =
+  //   tailBaseY +
+  //   ((197.797 - originalTailBaseY) / originalTailHeight) * tailHeight;
+  // const tailTipYStroke =
+  //   tailBaseY +
+  //   ((254.814 - originalTailBaseY) / originalTailHeight) * tailHeight;
 
   const tailPath = `M${tailTipX} ${tailTipY} L${tailLeftX} ${tailBaseYLeft} L${tailLeftMidX} ${tailMidYLeft} L${tailTipX} ${tailTipY} Z`;
-  const tailStrokePath = `M${tailStrokeLeftX} ${tailBaseYStroke} L${tailStrokeLeftMidX} ${tailMidYStroke} L${tailStrokeRightMidX} ${tailTipYStroke} L${tailStrokeLeftX} ${tailBaseYStroke} Z`;
+  // const tailStrokePath = `M${tailStrokeLeftX} ${tailBaseYStroke} L${tailStrokeLeftMidX} ${tailMidYStroke} L${tailStrokeRightMidX} ${tailTipYStroke} L${tailStrokeLeftX} ${tailBaseYStroke} Z`;
 
   // SVG viewBox
   const viewBoxX = 0;
@@ -123,7 +123,7 @@ export function ComparableMarker({
 
   // Build content
   const address = comparableInfo.address || "Enter address";
-  const distance = comparableInfo.distance || "";
+  const distance = comparableInfo.distance ?? "";
   
   // Calculate line spacing
   const lineGap = fontSizeText * 0.5;

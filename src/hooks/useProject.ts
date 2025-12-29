@@ -15,6 +15,7 @@ export function useProject(projectId: string) {
   const decodedProjectId = decodeURIComponent(projectId);
   const [projects, setProjects] = useState<ProjectsMap>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [projectExists, setProjectExists] = useState(false);
 
   // Load project data
@@ -30,6 +31,7 @@ export function useProject(projectId: string) {
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
+        setLoadError(true);
       }
     }
 
@@ -48,6 +50,7 @@ export function useProject(projectId: string) {
   // Persist changes
   useEffect(() => {
     if (isLoading) return;
+    if (loadError) return; // Do not overwrite if we failed to load
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(
@@ -57,7 +60,7 @@ export function useProject(projectId: string) {
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
-  }, [isLoading, projects]);
+  }, [isLoading, projects, loadError]);
 
   const selectedProject = useMemo(() => {
     if (!decodedProjectId || !projects[decodedProjectId]) return undefined;

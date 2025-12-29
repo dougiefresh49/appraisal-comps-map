@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { COMPARABLE_TYPES, type ComparableType } from "~/utils/projectStore";
+import { GisOverlay } from "./GisOverlay";
 
 type LatLng = { lat: number; lng: number };
 
@@ -145,7 +146,7 @@ export function ComparablesPanel({
   documentFrameSize,
   onDocumentFrameSizeChange,
   activeType,
-  onActiveTypeChange,
+  // onActiveTypeChange,
   pinningTailForCompId,
   onPinningTailForCompIdChange,
   isSubjectTailPinned,
@@ -164,6 +165,18 @@ export function ComparablesPanel({
     Record<string, string | undefined>
   >({});
   const [collapsedComps, setCollapsedComps] = useState<Set<string>>(new Set());
+  const [showGisOverlay, setShowGisOverlay] = useState(false);
+  const [gisApn, setGisApn] = useState("");
+
+  const handleOpenGis = (apn: string) => {
+    setGisApn(apn);
+    setShowGisOverlay(true);
+  };
+
+  const getGisUrl = (apn: string) => {
+      // Basic cleanup of APN if needed, or just pass direct
+      return `https://search.ectorcad.org/map/#${apn}`;
+  };
 
   const toggleCollapse = (id: string) => {
     const newSet = new Set(collapsedComps);
@@ -248,7 +261,14 @@ export function ComparablesPanel({
   };
 
   return (
-    <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg">
+    <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg dark:bg-gray-900 border-l dark:border-gray-700">
+        {gisApn && (
+            <GisOverlay 
+                initialUrl={getGisUrl(gisApn)}
+                visible={showGisOverlay}
+                onClose={() => setShowGisOverlay(false)}
+            />
+        )}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Comparables Map</h2>
       </div>
@@ -279,12 +299,6 @@ export function ComparablesPanel({
               title="Search"
             >
               🔍
-            </button>
-            <button
-              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
-              title="Edit"
-            >
-              ✏️
             </button>
           </div>
         </div>
@@ -459,6 +473,13 @@ export function ComparablesPanel({
                       readOnly
                       className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
                     />
+
+                    <button
+                        onClick={() => handleOpenGis(comp.apn?.[0] ?? "")}
+                        className="mt-1 w-full rounded-md border border-indigo-500 text-indigo-700 bg-indigo-50 px-2 py-1 text-xs hover:bg-indigo-100 transition-colors dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                    >
+                        🌐 Open GIS Overlay
+                    </button>
                   </div>
                 )}
                 <div className="mb-2">
