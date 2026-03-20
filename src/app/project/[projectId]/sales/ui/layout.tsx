@@ -29,7 +29,7 @@ export default function SalesUILayout({
     );
   }
 
-  const salesComparables = project.comparables.byType.Sales?.comparables ?? [];
+  const salesComparables = project.comparables.filter(c => c.type === "Sales");
 
   return (
     <div className="flex h-full bg-gray-50">
