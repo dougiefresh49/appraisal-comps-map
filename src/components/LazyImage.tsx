@@ -30,7 +30,8 @@ export function LazyImage({
   const maxRetries = 3;
   const baseRetryDelay = 2000; // 2 second base delay for rate limiting
 
-  const loadImage = async (url: string, retry: number = 0) => {
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const loadImage = async (url: string, retry = 0) => {
     // Add delay for staggered loading on first attempt
     if (delay > 0 && retry === 0 && !isLoadedRef.current) {
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -56,7 +57,7 @@ export function LazyImage({
       // Retry loading with exponential backoff
       const retryDelay = baseRetryDelay * Math.pow(2, newRetryCount - 1);
       setTimeout(() => {
-        loadImage(src, newRetryCount);
+        void loadImage(src, newRetryCount);
       }, retryDelay);
     } else {
       setError(true);
@@ -77,7 +78,7 @@ export function LazyImage({
             !error &&
             !isLoadedRef.current
           ) {
-            loadImage(src, retryCount);
+            void loadImage(src, retryCount);
             observerRef.current?.unobserve(container);
           }
         });
@@ -94,7 +95,7 @@ export function LazyImage({
         observerRef.current.disconnect();
       }
     };
-  }, [src, delay]); // Remove imageSrc and error from deps to avoid re-observing
+  }, [src, delay]); // Keep existing deps logic as this effect starts the observer
 
   // Retry on error with updated retry count
   useEffect(() => {
@@ -102,11 +103,12 @@ export function LazyImage({
       const retryDelay = baseRetryDelay * Math.pow(2, retryCount);
       const timeoutId = setTimeout(() => {
         setError(false);
-        loadImage(src, retryCount);
+        void loadImage(src, retryCount);
       }, retryDelay);
       return () => clearTimeout(timeoutId);
     }
   }, [error, retryCount, src]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Use fill for aspect ratio container, or provided width/height
   const useFill = !width || !height;

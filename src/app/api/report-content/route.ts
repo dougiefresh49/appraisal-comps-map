@@ -13,10 +13,10 @@ export async function POST(request: Request) {
     const projectFolderId =
       typeof body.projectFolderId === "string" ? body.projectFolderId : "";
     const action = reportActionSchema.safeParse(body.action).success
-      ? (body.action as ReportRequest["action"])
+      ? body.action!
       : undefined;
     const section = reportSectionSchema.safeParse(body.section).success
-      ? (body.section as ReportRequest["section"])
+      ? body.section!
       : undefined;
 
     const content =

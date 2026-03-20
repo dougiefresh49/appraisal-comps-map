@@ -16,12 +16,14 @@ interface ReportSectionPageProps {
   section: ReportSection;
   title: string;
   description?: string;
+  projectName?: string;
 }
 
 export function ReportSectionPage({
   section,
   title,
   description,
+  projectName: propsProjectName,
 }: ReportSectionPageProps) {
   const searchParams = useSearchParams();
   const [projectFolderId, setProjectFolderId] = useState<string | undefined>(
@@ -44,6 +46,7 @@ export function ReportSectionPage({
       const projects = normalizeProjectsMap(raw);
 
       const requestedProject =
+        propsProjectName ??
         searchParams.get("project") ??
         window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ??
         Object.keys(projects)[0];
@@ -63,7 +66,7 @@ export function ReportSectionPage({
         err instanceof Error ? err.message : "Failed to load project data.";
       setError(message);
     }
-  }, [searchParams]);
+  }, [searchParams, propsProjectName]);
 
   return (
     <div className="space-y-3">

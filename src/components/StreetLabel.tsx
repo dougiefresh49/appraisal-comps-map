@@ -28,7 +28,7 @@ export function StreetLabel({
   hideUI = false,
   sizeMultiplier = 1.0,
 }: StreetLabelProps) {
-  const [isDragging, setIsDragging] = useState(false);
+
   const [isRotating, setIsRotating] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const rotationHandleRef = useRef<HTMLDivElement>(null);
@@ -43,8 +43,8 @@ export function StreetLabel({
         lng: e.latLng.lng(),
       });
     }
-    setIsDragging(false);
-  };
+    };
+    // setIsDragging(false);
 
   // Handle rotation via mouse
   useEffect(() => {
@@ -96,7 +96,7 @@ export function StreetLabel({
     <AdvancedMarker
       position={position}
       draggable={!isRotating}
-      onDragStart={() => setIsDragging(true)}
+      // onDragStart={() => setIsDragging(true)}
       onDragEnd={handleDragEnd}
     >
       <div

@@ -15,67 +15,61 @@ export const PhotoInputsSchema = z.array(PhotoInputSchema);
 export type PhotoInput = z.infer<typeof PhotoInputSchema>;
 export type PhotoInputs = z.infer<typeof PhotoInputsSchema>;
 
-// Google Drive API configuration
-const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 
-// Debug function to list all files in the folder
-export async function listAllFilesInFolder(folderId: string): Promise<any> {
-  try {
-    // Try different query approaches
-    const queries = [
-      `'${folderId}' in parents`,
-      `'${folderId}' in parents and trashed=false`,
-      `'${folderId}' in parents and mimeType!='application/vnd.google-apps.folder'`,
-    ];
 
-    for (const query of queries) {
-      const response = await fetch(
-        `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&key=${env.GOOGLE_DRIVE_API_KEY}`,
-      );
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const data = await response.json();
-
-      if (data.files && data.files.length > 0) {
-        return data;
-      }
-    }
-
-    // If all queries return empty, return the last result
-    const response = await fetch(
-      `${GOOGLE_DRIVE_API_BASE}/files?q='${folderId}' in parents&key=${env.GOOGLE_DRIVE_API_KEY}`,
-    );
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Error listing files:", error);
-    throw error;
-  }
-}
 
 // Fetch input.json from Google Drive API
+// Fetch input.json using n8n webhook
 export async function fetchInputsJson(folderId: string): Promise<{
   photos: PhotoInputs;
   fileId: string;
 }> {
   try {
-    // Use Google Drive API to fetch input.json
-    if (!env.GOOGLE_DRIVE_API_KEY) {
-      throw new Error("GOOGLE_DRIVE_API_KEY is not set");
-    }
-
     if (!folderId) {
       throw new Error("Folder ID is required");
     }
 
-    const [inputData, imageFiles] = await Promise.all([
-      fetchInputJsonFromDrive(folderId),
-      fetchImageFilesFromDrive(folderId),
-    ]);
+    if (!env.N8N_WEBHOOK_BASE_URL) {
+       throw new Error("N8N_WEBHOOK_BASE_URL is not set");
+    }
+
+    const response = await fetch(`${env.N8N_WEBHOOK_BASE_URL}/subject-photos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        projectFolderId: folderId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch photos from n8n: ${response.statusText}`);
+    }
+
+
+    const data = (await response.json()) as N8nPhotoResponse;
+    if (!data) {
+      return { photos: [], fileId: "" };
+    }
+
+    // Define interface for n8n response
+    interface N8nPhotoResponse {
+      status: string;
+      photos: { id: string; name: string }[];
+      inputFileId: string;
+      input: { image: string; label: string }[];
+    }
+    
+    if (!data || data.status !== "success") {
+       // Handle case where n8n returns something else or empty
+       console.warn("n8n returned unsuccessful status or invalid format", data);
+       return { photos: [], fileId: "" };
+    }
+
+    const imageFiles = data.photos || [];
+    const inputs = data.input || [];
+    const inputFileId = data.inputFileId || "";
 
     const photosMap = imageFiles.reduce(
       (acc, file) => {
@@ -85,15 +79,16 @@ export async function fetchInputsJson(folderId: string): Promise<{
       {} as Record<string, { id: string; name: string }>,
     );
 
-    const photos: PhotoInputs = inputData.inputs.map((i) => ({
+    const photos: PhotoInputs = inputs.map((i) => ({
       ...i,
       webViewUrl: `https://drive.google.com/thumbnail?id=${photosMap[i.image]?.id ?? ""}&sz=w800`,
     }));
 
-    return { photos, fileId: inputData.fileId };
+    console.log("photos:", photos[0]);
+    return { photos, fileId: inputFileId };
   } catch (error) {
     console.error("Error fetching input.json:", error);
-    // Fallback to sample data for development
+    // Fallback to empty arrays
     return {
       photos: [],
       fileId: "",
@@ -160,7 +155,7 @@ export async function saveChanges(
           body: JSON.stringify({
             photos: updatedPhotos,
             folderId,
-            fileId: fileId || "unknown",
+            fileId: fileId ?? "unknown",
           }),
         },
       );
@@ -186,70 +181,4 @@ export async function saveChanges(
   }
 }
 
-/**
- * Helper functions
- */
 
-async function fetchInputJsonFileId(folderId: string): Promise<string> {
-  const inputFileResponse = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+name='input.json'&key=${env.GOOGLE_DRIVE_API_KEY}`,
-  );
-
-  if (!inputFileResponse.ok) {
-    throw new Error(
-      `Failed to search for input.json: ${inputFileResponse.status}`,
-    );
-  }
-
-  const inputFileData = (await inputFileResponse.json()) as {
-    files?: Array<{ id: string }>;
-  };
-  const inputFiles = inputFileData.files ?? [];
-
-  if (inputFiles.length === 0) {
-    throw new Error("No input.json file found in folder");
-  }
-
-  return inputFiles[0]?.id ?? "";
-}
-
-// Helper function to find and fetch input.json from Google Drive
-async function fetchInputJsonFromDrive(folderId: string): Promise<{
-  inputs: Array<{ image: string; label: string }>;
-  fileId: string;
-}> {
-  const inputFileId = await fetchInputJsonFileId(folderId);
-  const inputResponse = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${inputFileId}?alt=media&key=${env.GOOGLE_DRIVE_API_KEY}`,
-  );
-
-  if (!inputResponse.ok) {
-    throw new Error(
-      `Failed to fetch input.json content: ${inputResponse.status}`,
-    );
-  }
-
-  const inputs = await inputResponse.json();
-
-  return { inputs, fileId: inputFileId };
-}
-
-// Helper function to fetch image files from Google Drive
-async function fetchImageFilesFromDrive(
-  folderId: string,
-): Promise<Array<{ id: string; name: string }>> {
-  const filesResponse = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+mimeType+contains+'image/'&key=${env.GOOGLE_DRIVE_API_KEY}`,
-  );
-
-  if (!filesResponse.ok) {
-    throw new Error(`Failed to fetch image files: ${filesResponse.status}`);
-  }
-
-  const filesData = (await filesResponse.json()) as {
-    files?: Array<{ id: string; name: string }>;
-  };
-  const imageFiles = filesData.files ?? [];
-
-  return imageFiles.map((file) => ({ id: file.id, name: file.name }));
-}

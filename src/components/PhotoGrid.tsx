@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import {
   DndContext,
   closestCenter,
@@ -33,7 +33,7 @@ export default function PhotoGrid({
   folderId,
   projectFolderId,
 }: PhotoGridProps) {
-  const router = useRouter();
+
   const [photos, setPhotos] = useState<PhotoInput[]>(initialPhotos);
   const [isSaving, setIsSaving] = useState(false);
   const [isDenseGrid, setIsDenseGrid] = useState(false);
@@ -177,7 +177,7 @@ export default function PhotoGrid({
       } else {
         setSaveResult({
           success: false,
-          error: result.error || "Failed to trigger image processing",
+          error: result.error ?? "Failed to trigger image processing",
         });
         setIsProcessing(false);
       }

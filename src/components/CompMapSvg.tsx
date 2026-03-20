@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   APIProvider,
   Map,
@@ -63,14 +63,14 @@ const properties: Property[] = [
 interface SvgBubbleProps {
   property: Property;
   position: Position;
-  markerPosition: Position;
+  // markerPosition: Position;
   onDragEnd: (position: Position) => void;
 }
 
 const SvgBubble: React.FC<SvgBubbleProps> = ({
   property,
   position,
-  markerPosition,
+  // markerPosition,
   onDragEnd,
 }) => {
   const isSubject = property.type === "subject";
@@ -274,9 +274,9 @@ const TailAtMarker: React.FC<TailProps> = ({
     const pixelDistance = distance * zoomScale;
 
     // Convert to our SVG coordinate system with more precise length calculation
-    const svgScale = 1; // Use 1:1 scale for accurate distance
+    // const svgScale = 1; // Use 1:1 scale for accurate distance
     // Reduce extra length since bubbles are now smaller (100px height)
-    const extraLength = 50; // Smaller extra length to avoid overshooting
+    // const extraLength = 50; // Smaller extra length to avoid overshooting
     // const tailLength = Math.min(pixelDistance / svgScale + extraLength, 500); // Reduced cap for better proportions
     const tailLength = pixelDistance;
 
@@ -292,7 +292,7 @@ const TailAtMarker: React.FC<TailProps> = ({
     // We need to use the actual SVG coordinate system dimensions, not the physical pixel dimensions
     // SVG viewBox is "0 0 437 200" and the rectangle is 396x194, so we need to scale accordingly
     const svgScaleX = 437 / 220; // viewBox width / physical width
-    const svgScaleY = 200 / 100; // viewBox height / physical height
+    // const svgScaleY = 200 / 100; // viewBox height / physical height
     const bubbleWidthInSvg = 396; // Actual rectangle width in SVG coordinates
     const bubbleHeightInSvg = 194; // Actual rectangle height in SVG coordinates
 
@@ -583,7 +583,6 @@ export default function CompMapSvg() {
               key={`bubble-${property.id}`}
               property={property}
               position={bubblePositions[property.id]!}
-              markerPosition={markerPositions[property.id]!}
               onDragEnd={(newPosition) =>
                 handleBubbleDragEnd(property.id, newPosition)
               }

@@ -45,7 +45,7 @@ const EXISTS_KEY = "exists";
 const STATUS_KEY = "status";
 
 function getWebhookUrl(): string {
-  const base = env.N8N_WEBHOOK_BASE_URL || env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL;
+  const base = env.N8N_WEBHOOK_BASE_URL;
   if (!base) {
     throw new Error("N8N_WEBHOOK_BASE_URL is not configured");
   }
@@ -63,15 +63,15 @@ function extractPayload(payload: unknown): {
     const first = payload[0] as Record<string, unknown>;
     const content =
       typeof first?.[CONTENT_KEY] === "string"
-        ? (first[CONTENT_KEY] as string)
+        ? first[CONTENT_KEY]
         : null;
     const exists =
       typeof first?.[EXISTS_KEY] === "boolean"
-        ? (first[EXISTS_KEY] as boolean)
+        ? first[EXISTS_KEY]
         : null;
     const status =
       typeof first?.[STATUS_KEY] === "string"
-        ? (first[STATUS_KEY] as string)
+        ? first[STATUS_KEY]
         : undefined;
     return { content, exists, status };
   }
@@ -79,15 +79,15 @@ function extractPayload(payload: unknown): {
     const data = payload as Record<string, unknown>;
     const content =
       typeof data[CONTENT_KEY] === "string"
-        ? (data[CONTENT_KEY] as string)
+        ? data[CONTENT_KEY]
         : null;
     const exists =
       typeof data[EXISTS_KEY] === "boolean"
-        ? (data[EXISTS_KEY] as boolean)
+        ? data[EXISTS_KEY]
         : null;
     const status =
       typeof data[STATUS_KEY] === "string"
-        ? (data[STATUS_KEY] as string)
+        ? data[STATUS_KEY]
         : undefined;
     return { content, exists, status };
   }
@@ -128,7 +128,7 @@ export async function runReportAction(
       };
     }
 
-    const payload = await response.json();
+    const payload: unknown = await response.json();
     const { content, exists, status } = extractPayload(payload);
 
     return {
