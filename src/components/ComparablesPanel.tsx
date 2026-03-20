@@ -261,7 +261,7 @@ export function ComparablesPanel({
   };
 
   return (
-    <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg dark:bg-gray-900 border-l dark:border-gray-700">
+    <div className="w-80 overflow-y-auto border-l border-r border-gray-300 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-900">
         {gisApn && (
             <GisOverlay 
                 initialUrl={getGisUrl(gisApn)}
@@ -270,16 +270,16 @@ export function ComparablesPanel({
             />
         )}
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Comparables Map</h2>
+        <h2 className="text-lg font-semibold dark:text-gray-100">Comparables Map</h2>
       </div>
 
       {/* Subject Section */}
       <div className="mb-6">
-        <label className="mb-2 block text-sm font-medium text-gray-700">
+        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
           Subject
         </label>
         <div className="mb-2">
-          <label className="mb-1 block text-xs text-gray-600">Address</label>
+          <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Address</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -291,11 +291,11 @@ export function ComparablesPanel({
                 }
               }}
               placeholder="Enter address or search..."
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
             />
             <button
               onClick={handleSubjectSearch}
-              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
+              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               title="Search"
             >
               🔍
@@ -303,7 +303,7 @@ export function ComparablesPanel({
           </div>
         </div>
         <div className="mb-2">
-          <label className="mb-1 block text-xs text-gray-600">
+          <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
             Address (for display)
           </label>
           <input
@@ -316,11 +316,11 @@ export function ComparablesPanel({
               })
             }
             placeholder="Enter display address..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div className="mb-2">
-          <label className="mb-1 block text-xs text-gray-600">Acres</label>
+          <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Acres</label>
           <input
             type="text"
             value={subjectInfo.acres ?? ""}
@@ -331,11 +331,11 @@ export function ComparablesPanel({
               })
             }
             placeholder="Enter acres..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div className="mb-2">
-          <label className="mb-1 block text-xs text-gray-600">
+          <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
             Legal Description
           </label>
           <input
@@ -348,11 +348,11 @@ export function ComparablesPanel({
               })
             }
             placeholder="Enter legal description..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div className="mb-2">
-          <label className="mb-1 block text-xs text-gray-600">Tail Pin</label>
+          <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Tail Pin</label>
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -360,8 +360,8 @@ export function ComparablesPanel({
               }}
               className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
                 isRepositioningSubjectTail
-                  ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               }`}
             >
               {isRepositioningSubjectTail
@@ -390,8 +390,8 @@ export function ComparablesPanel({
               }}
               className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
                 isSubjectTailPinned
-                  ? "border-green-500 bg-green-50 text-green-700"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               }`}
               title={
                 isSubjectTailPinned
@@ -402,7 +402,7 @@ export function ComparablesPanel({
               {isSubjectTailPinned ? "🔒" : "🔓"}
             </button>
           </div>
-          <div className="mt-1 text-xs text-gray-500">
+          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {isSubjectTailPinned
               ? subjectPinnedTailTipPosition
                 ? "Tail tip is pinned. Move bubble to stretch tail."
@@ -415,12 +415,12 @@ export function ComparablesPanel({
       {/* Comparable Properties */}
       <div className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Comparable Properties
           </label>
            <button
              onClick={handleAddComparable}
-             className="rounded-md border border-blue-500 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+             className="rounded-md border border-blue-500 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60"
            >
              + Add
            </button>
@@ -432,19 +432,19 @@ export function ComparablesPanel({
           return (
             <div
               key={comp.id}
-              className="mb-4 rounded-md border border-gray-200 bg-white"
+              className="mb-4 rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
             >
               <div 
-                className="flex cursor-pointer items-center justify-between bg-gray-50 p-3 hover:bg-gray-100"
+                className="flex cursor-pointer items-center justify-between bg-gray-50 p-3 hover:bg-gray-100 dark:bg-gray-800/80 dark:hover:bg-gray-700"
                 onClick={() => toggleCollapse(comp.id)}
               >
                 <div className="flex items-center gap-2">
-                   <span className="text-xs text-gray-500">{isCollapsed ? "▶" : "▼"}</span>
-                   <label className="cursor-pointer text-sm font-medium text-gray-700">
+                   <span className="text-xs text-gray-500 dark:text-gray-400">{isCollapsed ? "▶" : "▼"}</span>
+                   <label className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200">
                       Comp {index + 1}
                    </label>
                    {isCollapsed && (
-                     <span className="ml-2 truncate text-xs text-gray-500 max-w-[150px]">
+                     <span className="ml-2 max-w-[150px] truncate text-xs text-gray-500 dark:text-gray-400">
                        {comp.address || "No address"}
                      </span>
                    )}
@@ -455,7 +455,7 @@ export function ComparablesPanel({
                       e.stopPropagation();
                       handleRemoveComparable(comp.id);
                     }}
-                    className="text-xs text-red-600 hover:text-red-700"
+                    className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Remove
                   </button>
@@ -463,27 +463,27 @@ export function ComparablesPanel({
               </div>
 
               {!isCollapsed && (
-              <div className="p-3 border-t border-gray-200">
+              <div className="border-t border-gray-200 p-3 dark:border-gray-700">
                 {comp.apn && comp.apn.length > 0 && (
                   <div className="mb-2">
-                    <label className="mb-1 block text-xs text-gray-600">APN</label>
+                    <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">APN</label>
                     <input
                       type="text"
                       value={comp.apn.join(", ")}
                       readOnly
-                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
                     />
 
                     <button
                         onClick={() => handleOpenGis(comp.apn?.[0] ?? "")}
-                        className="mt-1 w-full rounded-md border border-indigo-500 text-indigo-700 bg-indigo-50 px-2 py-1 text-xs hover:bg-indigo-100 transition-colors dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                        className="mt-1 w-full rounded-md border border-indigo-500 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-800/60"
                     >
                         🌐 Open GIS Overlay
                     </button>
                   </div>
                 )}
                 <div className="mb-2">
-                  <label className="mb-1 block text-xs text-gray-600">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Coordinates (DMS)
                   </label>
                   <input
@@ -509,20 +509,20 @@ export function ComparablesPanel({
                       }
                     }}
                     placeholder={`31° 47' 24" N 102° 30' 30" W`}
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
                   />
                   {coordinateErrorsById[comp.id] ? (
-                    <div className="mt-1 text-xs text-red-600">
+                    <div className="mt-1 text-xs text-red-600 dark:text-red-400">
                       {coordinateErrorsById[comp.id]}
                     </div>
                   ) : (
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Paste coordinates and press Enter to update this comp.
                     </div>
                   )}
                 </div>
                 <div className="mb-2">
-                  <label className="mb-1 block text-xs text-gray-600">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Address
                   </label>
                   <div className="flex gap-2">
@@ -538,7 +538,7 @@ export function ComparablesPanel({
                         }
                       }}
                       placeholder="Enter address..."
-                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
                     />
                     <button
                       onClick={() => {
@@ -546,7 +546,7 @@ export function ComparablesPanel({
                           onComparableAddressSearch(comp.id, comp.address);
                         }
                       }}
-                      className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200"
+                      className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       title="Search"
                     >
                       🔍
@@ -555,7 +555,7 @@ export function ComparablesPanel({
                 </div>
 
                 <div className="mb-2">
-                  <label className="mb-1 block text-xs text-gray-600">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Address (for display)
                   </label>
                   <input
@@ -567,12 +567,12 @@ export function ComparablesPanel({
                       })
                     }
                     placeholder="Enter display address..."
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
                   />
                 </div>
 
                 <div className="mb-2">
-                  <label className="mb-1 block text-xs text-gray-600">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Tail Pin
                   </label>
                   <div className="flex gap-2">
@@ -582,8 +582,8 @@ export function ComparablesPanel({
                       }}
                       className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
                         pinningTailForCompId === comp.id
-                          ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                          ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       }`}
                     >
                       {pinningTailForCompId === comp.id
@@ -604,8 +604,8 @@ export function ComparablesPanel({
                       }}
                       className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
                         comp.isTailPinned
-                          ? "border-green-500 bg-green-50 text-green-700"
-                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                          ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       }`}
                       title={
                         comp.isTailPinned
@@ -616,7 +616,7 @@ export function ComparablesPanel({
                       {comp.isTailPinned ? "🔒" : "🔓"}
                     </button>
                   </div>
-                  <div className="mt-1 text-xs text-gray-500">
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {comp.isTailPinned
                       ? comp.pinnedTailTipPosition
                         ? "Tail tip is pinned. Move bubble to stretch tail."
@@ -627,7 +627,7 @@ export function ComparablesPanel({
                     <div className="mt-3">
                       <button
                         onClick={() => onOpenLandMap(comp.id)}
-                        className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100"
+                        className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100 dark:border-green-500 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-800/40"
                       >
                         Open Land Location Map
                       </button>
@@ -643,46 +643,46 @@ export function ComparablesPanel({
 
       {/* Bubble Sizes */}
       <div className="mb-6">
-        <label className="mb-2 block text-sm font-medium text-gray-700">
+        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
           Bubble Size
         </label>
         <div className="flex items-center gap-3">
           <button
             onClick={() => onBubbleSizeChange(Math.max(0.5, bubbleSize - 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Decrease bubble size"
           >
             −
           </button>
-          <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+          <span className="min-w-[60px] text-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {Math.round(bubbleSize * 100)}%
           </span>
           <button
             onClick={() =>
               onBubbleSizeChange(Math.min(1.667, bubbleSize + 0.1))
             }
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Increase bubble size"
           >
             +
           </button>
         </div>
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           Base: 400×200px (100%) | Max: ~667×333px (167%)
         </div>
       </div>
 
       {/* Screenshot Mode */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">
+        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
           Screenshot Mode
         </label>
         <button
           onClick={() => onHideUIChange(!hideUI)}
           className={`w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
             hideUI
-              ? "border-green-500 bg-green-50 text-green-700"
-              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
+              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           }`}
         >
           {hideUI
@@ -694,8 +694,8 @@ export function ComparablesPanel({
             onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
             className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
               showDocumentOverlay
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             }`}
           >
             {showDocumentOverlay
@@ -707,7 +707,7 @@ export function ComparablesPanel({
           documentFrameSize !== undefined &&
           onDocumentFrameSizeChange && (
             <div className="mt-3">
-              <label className="mb-2 block text-xs font-medium text-gray-700">
+              <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
                 Frame Size
               </label>
               <div className="flex items-center gap-3">
@@ -717,12 +717,12 @@ export function ComparablesPanel({
                       Math.max(0.5, documentFrameSize - 0.1),
                     )
                   }
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Decrease frame size"
                 >
                   −
                 </button>
-                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700 dark:text-gray-200">
                   {Math.round(documentFrameSize * 100)}%
                 </span>
                 <button
@@ -731,7 +731,7 @@ export function ComparablesPanel({
                       Math.min(2.0, documentFrameSize + 0.1),
                     )
                   }
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Increase frame size"
                 >
                   +
@@ -739,7 +739,7 @@ export function ComparablesPanel({
               </div>
             </div>
           )}
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {hideUI
             ? "All buttons and controls are hidden. Ready to take a screenshot!"
             : "Toggle to hide all UI elements for clean screenshots"}
