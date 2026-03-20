@@ -5,14 +5,14 @@ import { useEffect, useRef, useState } from "react";
 interface DocumentOverlayProps {
   enabled: boolean;
   size?: number; // Scale factor (defaults to 1.0)
+  aspectRatio?: number; // width / height (defaults to 8.5/11)
 }
 
 /**
- * DocumentOverlay shows an 8.5x11 inch document frame overlay on the map
- * to help users understand if their screenshot will fit on a Google document page.
- * Similar to Mac screenshot tool - darkens the area outside the document frame.
+ * DocumentOverlay shows a document frame overlay on the map.
+ * Helps users understand if their screenshot will fit on a document page.
  */
-export function DocumentOverlay({ enabled, size = 1.0 }: DocumentOverlayProps) {
+export function DocumentOverlay({ enabled, size = 1.0, aspectRatio = 8.5 / 11 }: DocumentOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({
     width: 0,
@@ -27,7 +27,6 @@ export function DocumentOverlay({ enabled, size = 1.0 }: DocumentOverlayProps) {
       return;
     }
 
-    // Use a small delay to ensure the ref is mounted
     const updateDimensions = () => {
       if (!overlayRef.current) return;
 
@@ -39,8 +38,8 @@ export function DocumentOverlay({ enabled, size = 1.0 }: DocumentOverlayProps) {
 
       if (containerWidth === 0 || containerHeight === 0) return;
 
-      // 8.5x11 inch aspect ratio
-      const documentAspectRatio = 8.5 / 11; // ≈ 0.7727
+      // Use provided aspect ratio
+      const documentAspectRatio = aspectRatio;
 
       // Calculate document frame size to fit within container
       // Apply the size multiplier
@@ -61,42 +60,24 @@ export function DocumentOverlay({ enabled, size = 1.0 }: DocumentOverlayProps) {
       });
     };
 
-    // Use requestAnimationFrame to ensure DOM is ready
-    let rafId: number;
-    let retryCount = 0;
-    const maxRetries = 10;
+    const container = overlayRef.current?.parentElement;
+    if (!container) return;
+
+    // Initial update
+    updateDimensions();
+
+    // Observe container resize
+    const resizeObserver = new ResizeObserver(() => {
+        // Use requestAnimationFrame to throttle and ensure smooth updates
+        requestAnimationFrame(updateDimensions);
+    });
     
-    const scheduleUpdate = () => {
-      rafId = requestAnimationFrame(() => {
-        if (!overlayRef.current) {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            scheduleUpdate();
-          }
-          return;
-        }
-        
-        const container = overlayRef.current.parentElement;
-        if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            scheduleUpdate();
-          }
-          return;
-        }
-        
-        updateDimensions();
-      });
-    };
-    
-    scheduleUpdate();
-    window.addEventListener("resize", updateDimensions);
+    resizeObserver.observe(container);
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", updateDimensions);
+      resizeObserver.disconnect();
     };
-  }, [enabled, size]);
+  }, [enabled, size, aspectRatio]);
 
   if (!enabled) return null;
 

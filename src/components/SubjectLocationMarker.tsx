@@ -31,13 +31,13 @@ const BASE_FONT_SIZE_TEXT = 18;
 
 export function SubjectLocationMarker({
   position,
-  markerPosition,
+  // markerPosition,
   propertyInfo,
   onPositionChange,
   sizeMultiplier = 1.0,
   tailDirection = "right",
   isTailPinned = false,
-  pinnedTailTipPosition,
+  // pinnedTailTipPosition,
   title,
 }: SubjectLocationMarkerProps) {
   // Apply size multiplier to base dimensions
@@ -55,7 +55,7 @@ export function SubjectLocationMarker({
   const hasAcres = Boolean(propertyInfo.acres);
   const hasLegalDescription = Boolean(propertyInfo.legalDescription);
   const addressLine =
-    propertyInfo.addressForDisplay && propertyInfo.addressForDisplay.trim()
+    propertyInfo.addressForDisplay?.trim()
       ? propertyInfo.addressForDisplay
       : propertyInfo.address;
   const address = addressLine || "Enter address";
@@ -63,19 +63,8 @@ export function SubjectLocationMarker({
   // Determine title: use prop if provided, otherwise use address, fallback to "Subject"
   const bubbleTitle = title ?? address ?? "Subject";
 
-  // Format legal line: Acres always comes first if present, then legal description
-  let legalLine = "";
-  if (hasAcres && hasLegalDescription) {
-    legalLine = `Acres: ${propertyInfo.acres}, ${propertyInfo.legalDescription}`;
-  } else if (hasAcres) {
-    legalLine = `Acres: ${propertyInfo.acres}`;
-  } else if (hasLegalDescription) {
-    legalLine = propertyInfo.legalDescription;
-  }
-
   // Calculate line spacing
-  const lineHeightTitle = fontSizeTitle * 1.2;
-  const lineHeightText = fontSizeText * 1.4;
+
   const lineGap = fontSizeText * 1;
 
   // When tail is pinned, don't render the tail in SVG - it's handled by PinnedTailOverlay
@@ -90,7 +79,7 @@ export function SubjectLocationMarker({
   const originalTailHeight = originalTailTipY - originalTailBaseY; // ~61px
 
   // Scale factor based on bubble width (maintaining aspect ratio)
-  const widthScale = bubbleWidth / originalSvgWidth;
+  // const widthScale = bubbleWidth / originalSvgWidth;
   const heightScale = bubbleHeight / originalSvgBubbleHeight;
 
   const tailHeight = originalTailHeight * heightScale;
@@ -199,13 +188,15 @@ export function SubjectLocationMarker({
           />
         </svg>
 
-        {/* Content overlay - starts at top, title centered horizontally, text left-aligned */}
+        {/* Content overlay - Centered */}
         <div
-          className="pointer-events-none absolute flex flex-col text-black"
+          className="pointer-events-none absolute flex flex-col items-center justify-center text-black"
           style={{
-            left: `${paddingX}px`,
-            right: `${paddingX}px`,
-            top: `${paddingY}px`,
+            left: 0,
+            top: 0,
+            width: `${bubbleWidth}px`,
+            height: `${bubbleHeight}px`,
+            padding: `${paddingY}px ${paddingX}px`,
             gap: `${lineGap}px`,
             overflow: "hidden",
             textAlign: "center",

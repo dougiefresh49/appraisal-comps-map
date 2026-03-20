@@ -122,11 +122,14 @@ export function PolylineDrawingTool({
       polylineRefs.current.set(polyline.id, googlePolyline);
     });
 
+    // Capture ref value for cleanup to avoid exhaustive-deps warning
+    const currentPolylineRefs = polylineRefs.current;
+
     return () => {
-      polylineRefs.current.forEach((polyline) => {
+      currentPolylineRefs.forEach((polyline) => {
         polyline.setMap(null);
       });
-      polylineRefs.current.clear();
+      currentPolylineRefs.clear();
     };
   }, [map, polylines]);
 

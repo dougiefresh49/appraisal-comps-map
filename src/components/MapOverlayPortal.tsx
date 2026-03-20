@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMap } from "@vis.gl/react-google-maps";
 
@@ -23,7 +23,7 @@ export const MapOverlayPortal: React.FC<{
     const overlay = new window.google.maps.OverlayView();
     overlay.onAdd = function () {
       const panes = overlay.getPanes();
-      if (panes && panes.overlayMouseTarget) {
+      if (panes?.overlayMouseTarget) {
         setMapDiv(panes.overlayMouseTarget.parentElement as HTMLDivElement);
       }
     };
@@ -31,7 +31,9 @@ export const MapOverlayPortal: React.FC<{
       const proj = overlay.getProjection();
       if (proj && proj !== projection) setProjection(proj);
     };
-    overlay.onRemove = function () {};
+    overlay.onRemove = function () {
+      // Cleanup handled in useEffect return
+    };
     overlay.setMap(map);
     overlayRef.current = overlay;
     return () => {

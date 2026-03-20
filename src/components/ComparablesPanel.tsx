@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { COMPARABLE_TYPES, type ComparableType } from "~/utils/projectStore";
+import { GisOverlay } from "./GisOverlay";
 
 type LatLng = { lat: number; lng: number };
 
@@ -100,9 +101,6 @@ interface ComparableInfo {
 }
 
 interface ComparablesPanelProps {
-  projectName: string;
-  onProjectNameEdit?: () => void;
-  onProjectSwitch?: () => void;
   subjectInfo: SubjectInfo;
   onSubjectInfoChange: (info: SubjectInfo) => void;
   onSubjectAddressSearch: (address: string) => void;
@@ -129,14 +127,10 @@ interface ComparablesPanelProps {
   ) => void;
   isRepositioningSubjectTail: boolean;
   onIsRepositioningSubjectTailChange: (repositioning: boolean) => void;
-  onShare?: () => void;
   onOpenLandMap?: (compId: string) => void;
 }
 
 export function ComparablesPanel({
-  projectName,
-  onProjectNameEdit,
-  onProjectSwitch,
   subjectInfo,
   onSubjectInfoChange,
   onSubjectAddressSearch,
@@ -152,7 +146,7 @@ export function ComparablesPanel({
   documentFrameSize,
   onDocumentFrameSizeChange,
   activeType,
-  onActiveTypeChange,
+  // onActiveTypeChange,
   pinningTailForCompId,
   onPinningTailForCompIdChange,
   isSubjectTailPinned,
@@ -161,7 +155,6 @@ export function ComparablesPanel({
   onSubjectPinnedTailTipPositionChange,
   isRepositioningSubjectTail,
   onIsRepositioningSubjectTailChange,
-  onShare,
   onOpenLandMap,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
@@ -171,6 +164,29 @@ export function ComparablesPanel({
   const [coordinateErrorsById, setCoordinateErrorsById] = useState<
     Record<string, string | undefined>
   >({});
+  const [collapsedComps, setCollapsedComps] = useState<Set<string>>(new Set());
+  const [showGisOverlay, setShowGisOverlay] = useState(false);
+  const [gisApn, setGisApn] = useState("");
+
+  const handleOpenGis = (apn: string) => {
+    setGisApn(apn);
+    setShowGisOverlay(true);
+  };
+
+  const getGisUrl = (apn: string) => {
+      // Basic cleanup of APN if needed, or just pass direct
+      return `https://search.ectorcad.org/map/#${apn}`;
+  };
+
+  const toggleCollapse = (id: string) => {
+    const newSet = new Set(collapsedComps);
+    if (newSet.has(id)) {
+        newSet.delete(id);
+    } else {
+        newSet.add(id);
+    }
+    setCollapsedComps(newSet);
+  };
 
   useEffect(() => {
     setSearchAddress(subjectInfo.address || "");
@@ -245,72 +261,16 @@ export function ComparablesPanel({
   };
 
   return (
-    <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Comparables Map</h2>
-        {onShare && (
-          <button
-            onClick={onShare}
-            className="rounded-md border-2 border-blue-500 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-          >
-            Share
-          </button>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <Link
-          href="/projects"
-          className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
+    <div className="w-80 overflow-y-auto border-r border-gray-300 bg-white p-6 shadow-lg dark:bg-gray-900 border-l dark:border-gray-700">
+        {gisApn && (
+            <GisOverlay 
+                initialUrl={getGisUrl(gisApn)}
+                visible={showGisOverlay}
+                onClose={() => setShowGisOverlay(false)}
             />
-          </svg>
-          <span className="text-sm font-medium">Back to Projects</span>
-        </Link>
-      </div>
-
-      <div className="mb-6 border-b border-gray-200 pb-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className="block text-xs font-medium tracking-wide text-gray-500 uppercase">
-              Project
-            </span>
-            <span className="text-base font-semibold text-gray-900">
-              {projectName}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onProjectNameEdit}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Rename project"
-              disabled={!onProjectNameEdit}
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              onClick={onProjectSwitch}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-              title="Switch project"
-              disabled={!onProjectSwitch}
-            >
-              🔁
-            </button>
-          </div>
-        </div>
+        )}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Comparables Map</h2>
       </div>
 
       {/* Subject Section */}
@@ -340,12 +300,6 @@ export function ComparablesPanel({
             >
               🔍
             </button>
-            <button
-              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
-              title="Edit"
-            >
-              ✏️
-            </button>
           </div>
         </div>
         <div className="mb-2">
@@ -354,7 +308,7 @@ export function ComparablesPanel({
           </label>
           <input
             type="text"
-            value={subjectInfo.addressForDisplay || ""}
+            value={subjectInfo.addressForDisplay ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -369,7 +323,7 @@ export function ComparablesPanel({
           <label className="mb-1 block text-xs text-gray-600">Acres</label>
           <input
             type="text"
-            value={subjectInfo.acres || ""}
+            value={subjectInfo.acres ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -386,7 +340,7 @@ export function ComparablesPanel({
           </label>
           <input
             type="text"
-            value={subjectInfo.legalDescription || ""}
+            value={subjectInfo.legalDescription ?? ""}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -460,219 +414,231 @@ export function ComparablesPanel({
 
       {/* Comparable Properties */}
       <div className="mb-6">
-        <div className="mb-2">
+        <div className="mb-2 flex items-center justify-between">
           <label className="text-sm font-medium text-gray-700">
             Comparable Properties
           </label>
+           <button
+             onClick={handleAddComparable}
+             className="rounded-md border border-blue-500 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+           >
+             + Add
+           </button>
         </div>
-        <div className="mb-4 flex gap-2">
-          {COMPARABLE_TYPES.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => onActiveTypeChange(type)}
-              className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
-                type === activeType
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
+        {/* Type switcher removed as per requirements */}
+
+        {filteredComparables.map((comp, index) => {
+          const isCollapsed = collapsedComps.has(comp.id);
+          return (
+            <div
+              key={comp.id}
+              className="mb-4 rounded-md border border-gray-200 bg-white"
             >
-              {type}
-            </button>
-          ))}
-        </div>
-
-        {filteredComparables.map((comp, index) => (
-          <div
-            key={comp.id}
-            className="mb-4 rounded-md border border-gray-200 p-3"
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">
-                Comp {index + 1}
-              </label>
-              {filteredComparables.length > 1 && (
-                <button
-                  onClick={() => handleRemoveComparable(comp.id)}
-                  className="text-xs text-red-600 hover:text-red-700"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-
-            {comp.apn && comp.apn.length > 0 && (
-              <div className="mb-2">
-                <label className="mb-1 block text-xs text-gray-600">APN</label>
-                <input
-                  type="text"
-                  value={comp.apn.join(", ")}
-                  readOnly
-                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
-                />
-              </div>
-            )}
-            <div className="mb-2">
-              <label className="mb-1 block text-xs text-gray-600">
-                Coordinates (DMS)
-              </label>
-              <input
-                type="text"
-                value={coordinateInputsById[comp.id] ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setCoordinateInputsById((prev) => ({
-                    ...prev,
-                    [comp.id]: value,
-                  }));
-                  setCoordinateErrorsById((prev) => ({
-                    ...prev,
-                    [comp.id]: undefined,
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const raw = coordinateInputsById[comp.id] ?? "";
-                    if (raw.trim().length > 0) {
-                      applyCoordinatesToComparable(comp.id, raw);
-                    }
-                  }
-                }}
-                placeholder={`31° 47' 24" N 102° 30' 30" W`}
-                className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-              {coordinateErrorsById[comp.id] ? (
-                <div className="mt-1 text-xs text-red-600">
-                  {coordinateErrorsById[comp.id]}
+              <div 
+                className="flex cursor-pointer items-center justify-between bg-gray-50 p-3 hover:bg-gray-100"
+                onClick={() => toggleCollapse(comp.id)}
+              >
+                <div className="flex items-center gap-2">
+                   <span className="text-xs text-gray-500">{isCollapsed ? "▶" : "▼"}</span>
+                   <label className="cursor-pointer text-sm font-medium text-gray-700">
+                      Comp {index + 1}
+                   </label>
+                   {isCollapsed && (
+                     <span className="ml-2 truncate text-xs text-gray-500 max-w-[150px]">
+                       {comp.address || "No address"}
+                     </span>
+                   )}
                 </div>
-              ) : (
-                <div className="mt-1 text-xs text-gray-500">
-                  Paste coordinates and press Enter to update this comp.
-                </div>
-              )}
-            </div>
-            <div className="mb-2">
-              <label className="mb-1 block text-xs text-gray-600">
-                Address
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={comp.address}
-                  onChange={(e) =>
-                    handleComparableChange(comp.id, { address: e.target.value })
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && comp.address.trim()) {
-                      onComparableAddressSearch(comp.id, comp.address);
-                    }
-                  }}
-                  placeholder="Enter address..."
-                  className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={() => {
-                    if (comp.address.trim()) {
-                      onComparableAddressSearch(comp.id, comp.address);
-                    }
-                  }}
-                  className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200"
-                  title="Search"
-                >
-                  🔍
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-2">
-              <label className="mb-1 block text-xs text-gray-600">
-                Address (for display)
-              </label>
-              <input
-                type="text"
-                value={comp.addressForDisplay}
-                onChange={(e) =>
-                  handleComparableChange(comp.id, {
-                    addressForDisplay: e.target.value,
-                  })
-                }
-                placeholder="Enter display address..."
-                className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="mb-2">
-              <label className="mb-1 block text-xs text-gray-600">
-                Tail Pin
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    onPinningTailForCompIdChange(comp.id);
-                  }}
-                  className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-                    pinningTailForCompId === comp.id
-                      ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {pinningTailForCompId === comp.id
-                    ? "Click map to set tail tip..."
-                    : "📍 Reposition Tail Tip"}
-                </button>
-                <button
-                  onClick={() => {
-                    handleComparableChange(comp.id, {
-                      isTailPinned: !comp.isTailPinned,
-                      pinnedTailTipPosition: comp.isTailPinned
-                        ? undefined
-                        : comp.pinnedTailTipPosition,
-                    });
-                    if (pinningTailForCompId === comp.id) {
-                      onPinningTailForCompIdChange(null);
-                    }
-                  }}
-                  className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
-                    comp.isTailPinned
-                      ? "border-green-500 bg-green-50 text-green-700"
-                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                  title={
-                    comp.isTailPinned
-                      ? "Disable tail pinning"
-                      : "Enable tail pinning"
-                  }
-                >
-                  {comp.isTailPinned ? "🔒" : "🔓"}
-                </button>
-              </div>
-              <div className="mt-1 text-xs text-gray-500">
-                {comp.isTailPinned
-                  ? comp.pinnedTailTipPosition
-                    ? "Tail tip is pinned. Move bubble to stretch tail."
-                    : "Click 'Reposition Tail Tip' to set the pin location."
-                  : "Tail pinning is disabled."}
-              </div>
-              {activeType === "Land" && onOpenLandMap && (
-                <div className="mt-3">
+                {filteredComparables.length > 1 && !isCollapsed && (
                   <button
-                    onClick={() => onOpenLandMap(comp.id)}
-                    className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveComparable(comp.id);
+                    }}
+                    className="text-xs text-red-600 hover:text-red-700"
                   >
-                    Open Land Location Map
+                    Remove
                   </button>
+                )}
+              </div>
+
+              {!isCollapsed && (
+              <div className="p-3 border-t border-gray-200">
+                {comp.apn && comp.apn.length > 0 && (
+                  <div className="mb-2">
+                    <label className="mb-1 block text-xs text-gray-600">APN</label>
+                    <input
+                      type="text"
+                      value={comp.apn.join(", ")}
+                      readOnly
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
+                    />
+
+                    <button
+                        onClick={() => handleOpenGis(comp.apn?.[0] ?? "")}
+                        className="mt-1 w-full rounded-md border border-indigo-500 text-indigo-700 bg-indigo-50 px-2 py-1 text-xs hover:bg-indigo-100 transition-colors dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                    >
+                        🌐 Open GIS Overlay
+                    </button>
+                  </div>
+                )}
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-gray-600">
+                    Coordinates (DMS)
+                  </label>
+                  <input
+                    type="text"
+                    value={coordinateInputsById[comp.id] ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCoordinateInputsById((prev) => ({
+                        ...prev,
+                        [comp.id]: value,
+                      }));
+                      setCoordinateErrorsById((prev) => ({
+                        ...prev,
+                        [comp.id]: undefined,
+                      }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const raw = coordinateInputsById[comp.id] ?? "";
+                        if (raw.trim().length > 0) {
+                          applyCoordinatesToComparable(comp.id, raw);
+                        }
+                      }
+                    }}
+                    placeholder={`31° 47' 24" N 102° 30' 30" W`}
+                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  />
+                  {coordinateErrorsById[comp.id] ? (
+                    <div className="mt-1 text-xs text-red-600">
+                      {coordinateErrorsById[comp.id]}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Paste coordinates and press Enter to update this comp.
+                    </div>
+                  )}
                 </div>
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-gray-600">
+                    Address
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={comp.address}
+                      onChange={(e) =>
+                        handleComparableChange(comp.id, { address: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && comp.address.trim()) {
+                          onComparableAddressSearch(comp.id, comp.address);
+                        }
+                      }}
+                      placeholder="Enter address..."
+                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (comp.address.trim()) {
+                          onComparableAddressSearch(comp.id, comp.address);
+                        }
+                      }}
+                      className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200"
+                      title="Search"
+                    >
+                      🔍
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-gray-600">
+                    Address (for display)
+                  </label>
+                  <input
+                    type="text"
+                    value={comp.addressForDisplay}
+                    onChange={(e) =>
+                      handleComparableChange(comp.id, {
+                        addressForDisplay: e.target.value,
+                      })
+                    }
+                    placeholder="Enter display address..."
+                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-gray-600">
+                    Tail Pin
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        onPinningTailForCompIdChange(comp.id);
+                      }}
+                      className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                        pinningTailForCompId === comp.id
+                          ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {pinningTailForCompId === comp.id
+                        ? "Click map to set tail tip..."
+                        : "📍 Reposition Tail Tip"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleComparableChange(comp.id, {
+                          isTailPinned: !comp.isTailPinned,
+                          pinnedTailTipPosition: comp.isTailPinned
+                            ? undefined
+                            : comp.pinnedTailTipPosition,
+                        });
+                        if (pinningTailForCompId === comp.id) {
+                          onPinningTailForCompIdChange(null);
+                        }
+                      }}
+                      className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                        comp.isTailPinned
+                          ? "border-green-500 bg-green-50 text-green-700"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                      title={
+                        comp.isTailPinned
+                          ? "Disable tail pinning"
+                          : "Enable tail pinning"
+                      }
+                    >
+                      {comp.isTailPinned ? "🔒" : "🔓"}
+                    </button>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {comp.isTailPinned
+                      ? comp.pinnedTailTipPosition
+                        ? "Tail tip is pinned. Move bubble to stretch tail."
+                        : "Click 'Reposition Tail Tip' to set the pin location."
+                      : "Tail pinning is disabled."}
+                  </div>
+                  {activeType === "Land" && onOpenLandMap && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => onOpenLandMap(comp.id)}
+                        className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100"
+                      >
+                        Open Land Location Map
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
               )}
             </div>
-          </div>
-        ))}
-
-        <button
-          onClick={handleAddComparable}
-          className="w-full rounded-md border-2 border-blue-500 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-        >
-          Add Comparable +
-        </button>
+          );
+        })}
       </div>
 
       {/* Bubble Sizes */}

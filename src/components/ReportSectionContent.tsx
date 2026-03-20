@@ -134,7 +134,7 @@ export function ReportSectionContent({
         };
 
         if (!response.ok) {
-          throw new Error(payload.error || "Failed to process request");
+          throw new Error(payload.error ?? "Failed to process request");
         }
 
         const received = payload.content ?? "";
