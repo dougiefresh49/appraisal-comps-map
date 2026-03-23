@@ -40,7 +40,14 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
       clientName: clientName || prev.clientName,
       propertyType: propertyType || prev.propertyType,
     }));
-  }, [hasInitialized, project, clientCompany, clientName, propertyType, updateProject]);
+  }, [
+    hasInitialized,
+    project,
+    clientCompany,
+    clientName,
+    propertyType,
+    updateProject,
+  ]);
 
   useEffect(() => {
     if (!hasInitialized) return;
@@ -57,9 +64,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
   }
 
   const subjectAddress =
-    project.subject.addressForDisplay ??
-    project.subject.address ??
-    "";
+    project.subject.addressForDisplay ?? project.subject.address ?? "";
 
   /* eslint-disable @next/next/no-img-element */
   return (
@@ -78,212 +83,210 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
       />
 
       <div className="flex h-full w-full bg-white">
-        <div className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm no-print">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
-              Cover Page Settings
-            </h2>
+        <div className="no-print w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">
+            Cover Page Settings
+          </h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
-                  Property Type
-                </label>
-                <input
-                  type="text"
-                  value={propertyType}
-                  onChange={(e) => setPropertyType(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Commercial Office Building"
-                />
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                Property Type
+              </label>
+              <input
+                type="text"
+                value={propertyType}
+                onChange={(e) => setPropertyType(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                placeholder="Commercial Office Building"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                Subject Address
+              </label>
+              <div className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {subjectAddress || "No address set"}
               </div>
+              <p className="mt-1 text-xs text-gray-500">
+                From subject addressForDisplay
+              </p>
+            </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
-                  Subject Address
-                </label>
-                <div className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                  {subjectAddress || "No address set"}
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  From subject addressForDisplay
-                </p>
-              </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                Client Company
+              </label>
+              <input
+                type="text"
+                value={clientCompany}
+                onChange={(e) => setClientCompany(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                placeholder="Winkler County Hospital District"
+              />
+            </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
-                  Client Company
-                </label>
-                <input
-                  type="text"
-                  value={clientCompany}
-                  onChange={(e) => setClientCompany(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Winkler County Hospital District"
-                />
-              </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                Client Name
+              </label>
+              <input
+                type="text"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                placeholder="Lorenzo Serrano"
+              />
+            </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
-                  Client Name
-                </label>
-                <input
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Lorenzo Serrano"
-                />
-              </div>
-
-              {project?.projectFolderId && (
-                <div className="mt-6 border-t border-gray-200 pt-6">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Cover Data
-                  </label>
-                  {isLoadingCoverData ? (
-                    <div className="text-xs text-gray-500">
-                      Loading cover data...
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs text-gray-500">
-                      <div>Data fetched from webhook</div>
-                      {subjectPhotoUrl && (
-                        <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
-                          <div className="font-semibold">Image URL:</div>
-                          <div className="mt-1 line-clamp-2 break-all">
-                            {subjectPhotoUrl}
-                          </div>
-                        </div>
-                      )}
-                      {!subjectPhotoUrl && (
-                        <div className="mt-2 text-orange-600">
-                          No image URL available
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      if (!project?.projectFolderId) return;
-                      setIsLoadingCoverData(true);
-                      try {
-                        const response = await fetch(
-                          env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL +
-                            "/subject-photo-data",
-                          {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              projectFolderId: project.projectFolderId,
-                            }),
-                          },
-                        );
-
-                        if (!response.ok) {
-                          throw new Error(
-                            `Failed to fetch subject photo data: ${response.statusText}`,
-                          );
-                        }
-
-                        const photoData = (await response.json()) as {
-                          subjectPhotoBase64?: string;
-                          subjectPhotosFolderId?: string;
-                        };
-
-                        if (photoData) {
-                          if (photoData.subjectPhotosFolderId) {
-                            updateProject((prev) => ({
-                              ...prev,
-                              subjectPhotosFolderId: photoData.subjectPhotosFolderId,
-                            }));
-                            await upsertProjectMetadata(projectId, {
-                              subjectPhotosFolderId: photoData.subjectPhotosFolderId,
-                            });
-                          }
-
-                          if (photoData.subjectPhotoBase64) {
-                            setSubjectPhotoUrl(
-                              `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`,
-                            );
-                          } else {
-                            setSubjectPhotoUrl(null);
-                          }
-                        }
-                      } catch (error) {
-                        console.error("Error fetching cover data:", error);
-                      } finally {
-                        setIsLoadingCoverData(false);
-                      }
-                    }}
-                    className="mt-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-                    disabled={isLoadingCoverData}
-                  >
-                    Refresh Cover Data
-                  </button>
-                </div>
-              )}
-
+            {project?.projectFolderId && (
               <div className="mt-6 border-t border-gray-200 pt-6">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Image Size
+                  Cover Data
                 </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setImageSize(Math.max(0.5, imageSize - 0.1))}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    −
-                  </button>
-                  <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
-                    {Math.round(imageSize * 100)}%
-                  </span>
-                  <button
-                    onClick={() => setImageSize(Math.min(2.0, imageSize + 0.1))}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-               <div className="mt-6 border-t border-gray-200 pt-6">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Cover Size
-                </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() =>
-                      setCoverSize(Math.max(0.5, coverSize - 0.05))
-                    }
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    −
-                  </button>
-                  <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
-                    {Math.round(coverSize * 100)}%
-                  </span>
-                  <button
-                    onClick={() =>
-                      setCoverSize(Math.min(3.0, coverSize + 0.05))
-                    }
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 border-t border-gray-200 pt-6">
+                {isLoadingCoverData ? (
+                  <div className="text-xs text-gray-500">
+                    Loading cover data...
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-xs text-gray-500">
+                    <div>Data fetched from webhook</div>
+                    {subjectPhotoUrl && (
+                      <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
+                        <div className="font-semibold">Image URL:</div>
+                        <div className="mt-1 line-clamp-2 break-all">
+                          {subjectPhotoUrl}
+                        </div>
+                      </div>
+                    )}
+                    {!subjectPhotoUrl && (
+                      <div className="mt-2 text-orange-600">
+                        No image URL available
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
-                  onClick={() => {
-                    window.print();
+                  onClick={async () => {
+                    if (!project?.projectFolderId) return;
+                    setIsLoadingCoverData(true);
+                    try {
+                      const response = await fetch(
+                        env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL +
+                          "/subject-photo-data",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            projectFolderId: project.projectFolderId,
+                          }),
+                        },
+                      );
+
+                      if (!response.ok) {
+                        throw new Error(
+                          `Failed to fetch subject photo data: ${response.statusText}`,
+                        );
+                      }
+
+                      const photoData = (await response.json()) as {
+                        subjectPhotoBase64?: string;
+                        subjectPhotosFolderId?: string;
+                      };
+
+                      if (photoData) {
+                        if (photoData.subjectPhotosFolderId) {
+                          updateProject((prev) => ({
+                            ...prev,
+                            subjectPhotosFolderId:
+                              photoData.subjectPhotosFolderId,
+                          }));
+                          await upsertProjectMetadata(projectId, {
+                            subjectPhotosFolderId:
+                              photoData.subjectPhotosFolderId,
+                          });
+                        }
+
+                        if (photoData.subjectPhotoBase64) {
+                          setSubjectPhotoUrl(
+                            `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`,
+                          );
+                        } else {
+                          setSubjectPhotoUrl(null);
+                        }
+                      }
+                    } catch (error) {
+                      console.error("Error fetching cover data:", error);
+                    } finally {
+                      setIsLoadingCoverData(false);
+                    }
                   }}
-                  className="w-full rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  className="mt-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                  disabled={isLoadingCoverData}
                 >
-                  Print to PDF
+                  Refresh Cover Data
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Image Size
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setImageSize(Math.max(0.5, imageSize - 0.1))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  −
+                </button>
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                  {Math.round(imageSize * 100)}%
+                </span>
+                <button
+                  onClick={() => setImageSize(Math.min(2.0, imageSize + 0.1))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  +
                 </button>
               </div>
             </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Cover Size
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCoverSize(Math.max(0.5, coverSize - 0.05))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  −
+                </button>
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                  {Math.round(coverSize * 100)}%
+                </span>
+                <button
+                  onClick={() => setCoverSize(Math.min(3.0, coverSize + 0.05))}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <button
+                onClick={() => {
+                  window.print();
+                }}
+                className="w-full rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Print to PDF
+              </button>
+            </div>
+          </div>
         </div>
 
         <main className="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-8">
@@ -341,7 +344,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                     alt="Subject Property"
                     className="h-full w-full object-cover"
                     onError={(_e) => {
-                       if (!subjectPhotoUrl?.startsWith("data:")) {
+                      if (!subjectPhotoUrl?.startsWith("data:")) {
                         setSubjectPhotoUrl(null);
                       }
                     }}

@@ -42,7 +42,9 @@ interface NeighborhoodMapPageProps {
   }>;
 }
 
-export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps) {
+export default function NeighborhoodMapPage({
+  params,
+}: NeighborhoodMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
 
@@ -92,67 +94,62 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
 
-  const applyProjectState = useCallback(
-    (project?: ProjectData) => {
-      const snapshot = normalizeProjectData(project);
-      const mapView = getMapByType(snapshot, "neighborhood");
-      if (!mapView) return;
+  const applyProjectState = useCallback((project?: ProjectData) => {
+    const snapshot = normalizeProjectData(project);
+    const mapView = getMapByType(snapshot, "neighborhood");
+    if (!mapView) return;
 
-      const subjectMarker = getSubjectMarker(mapView);
-      const infoSnapshot = snapshot.subject;
+    const subjectMarker = getSubjectMarker(mapView);
+    const infoSnapshot = snapshot.subject;
 
-      setPropertyInfo({
-        address: infoSnapshot.address ?? "",
-        addressForDisplay:
-          infoSnapshot.addressForDisplay ?? infoSnapshot.address ?? "",
-        legalDescription: infoSnapshot.legalDescription ?? "",
-        acres: infoSnapshot.acres ?? "",
-      });
-      setMarkerPosition(
-        subjectMarker?.markerPosition
-          ? { ...subjectMarker.markerPosition }
-          : null,
-      );
-      setBubblePosition(
-        subjectMarker?.bubblePosition
-          ? { ...subjectMarker.bubblePosition }
-          : null,
-      );
-      setPolygonPath(
-        mapView.drawings.polygonPath.map((point) => ({ ...point })),
-      );
-      setCircles(
-        mapView.drawings.circles.map((circle) => ({
-          ...circle,
-          center: { ...circle.center },
-        })),
-      );
-      setMapCenter(
-        mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(mapView.mapZoom);
-      setBubbleSize(mapView.bubbleSize);
-      setTailDirection(mapView.drawings.tailDirection);
-      setHideUI(mapView.hideUI);
-      setDocumentFrameSize(mapView.documentFrameSize);
-      setIsSubjectTailPinned(subjectMarker?.isTailPinned ?? true);
-      setSubjectPinnedTailTipPosition(
-        subjectMarker?.pinnedTailTipPosition ?? undefined,
-      );
-      setStreetLabels(
-        mapView.drawings.streetLabels.map((label) => ({
-          ...label,
-          position: { ...label.position },
-        })),
-      );
-      setLabelSize(mapView.drawings.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(mapView.drawings.circleRadius);
-      setIsDrawing(false);
-      setIsDrawingCircle(false);
-      setIsRepositioningSubjectTail(false);
-    },
-    [],
-  );
+    setPropertyInfo({
+      address: infoSnapshot.address ?? "",
+      addressForDisplay:
+        infoSnapshot.addressForDisplay ?? infoSnapshot.address ?? "",
+      legalDescription: infoSnapshot.legalDescription ?? "",
+      acres: infoSnapshot.acres ?? "",
+    });
+    setMarkerPosition(
+      subjectMarker?.markerPosition
+        ? { ...subjectMarker.markerPosition }
+        : null,
+    );
+    setBubblePosition(
+      subjectMarker?.bubblePosition
+        ? { ...subjectMarker.bubblePosition }
+        : null,
+    );
+    setPolygonPath(mapView.drawings.polygonPath.map((point) => ({ ...point })));
+    setCircles(
+      mapView.drawings.circles.map((circle) => ({
+        ...circle,
+        center: { ...circle.center },
+      })),
+    );
+    setMapCenter(
+      mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
+    );
+    setMapZoom(mapView.mapZoom);
+    setBubbleSize(mapView.bubbleSize);
+    setTailDirection(mapView.drawings.tailDirection);
+    setHideUI(mapView.hideUI);
+    setDocumentFrameSize(mapView.documentFrameSize);
+    setIsSubjectTailPinned(subjectMarker?.isTailPinned ?? true);
+    setSubjectPinnedTailTipPosition(
+      subjectMarker?.pinnedTailTipPosition ?? undefined,
+    );
+    setStreetLabels(
+      mapView.drawings.streetLabels.map((label) => ({
+        ...label,
+        position: { ...label.position },
+      })),
+    );
+    setLabelSize(mapView.drawings.labelSize ?? DEFAULT_LABEL_SIZE);
+    setCircleRadius(mapView.drawings.circleRadius);
+    setIsDrawing(false);
+    setIsDrawingCircle(false);
+    setIsRepositioningSubjectTail(false);
+  }, []);
 
   useEffect(() => {
     markerPositionRef.current = markerPosition;
@@ -632,9 +629,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
                 onEditToggle={() => {
                   setStreetLabels((prev) =>
                     prev.map((l) =>
-                      l.id === label.id
-                        ? { ...l, isEditing: !l.isEditing }
-                        : l,
+                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
                     ),
                   );
                 }}

@@ -64,7 +64,7 @@ export function ProjectCard({
       <div className="mt-4 flex items-center justify-end border-t border-gray-100 pt-4 dark:border-gray-700">
         <button
           onClick={handleDelete}
-          className="rounded-md p-1.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:text-gray-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+          className="rounded-md p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 dark:text-gray-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
           title="Delete Project"
         >
           <svg

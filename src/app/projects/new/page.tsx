@@ -19,7 +19,7 @@ interface CompData {
   Address?: string;
   APN?: string;
   Recording?: string;
-  '#': number;
+  "#": number;
   [key: string]: unknown;
 }
 
@@ -40,17 +40,23 @@ interface ProjectDataResponse {
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const { projects: availableProjects, isLoading: isLoadingList, error: listError } = useProjectsList();
-  
+  const {
+    projects: availableProjects,
+    isLoading: isLoadingList,
+    error: listError,
+  } = useProjectsList();
+
   const [projectName, setProjectName] = useState("");
   const [projectFolderId, setProjectFolderId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedProject, setSelectedProject] = useState<DriveProject | null>(null);
+  const [selectedProject, setSelectedProject] = useState<DriveProject | null>(
+    null,
+  );
 
-  const filteredProjects = availableProjects.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProjects = availableProjects.filter((p) =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleSelectProject = (project: DriveProject) => {
@@ -180,12 +186,10 @@ export default function NewProjectPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {!selectedProject ? (
             <div className="space-y-4">
-              <label 
-                className="block text-sm font-semibold text-gray-700 dark:text-gray-300"
-              >
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Select a Project Folder
               </label>
-              
+
               <input
                 type="text"
                 placeholder="Search projects..."
@@ -225,7 +229,7 @@ export default function NewProjectPage() {
             </div>
           ) : (
             <div className="space-y-6">
-               <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
+              <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -262,7 +266,8 @@ export default function NewProjectPage() {
                   disabled={isLoading}
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  You can rename the project for the app (this won&apos;t change the folder name in Drive).
+                  You can rename the project for the app (this won&apos;t change
+                  the folder name in Drive).
                 </p>
               </div>
 

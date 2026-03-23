@@ -56,11 +56,7 @@ function enrichComparableInfoForUi(info: ComparableInfo): ComparableInfo {
   let finalPinnedTailTipPosition = info.pinnedTailTipPosition
     ? { ...info.pinnedTailTipPosition }
     : undefined;
-  if (
-    info.isTailPinned &&
-    !finalPinnedTailTipPosition &&
-    finalMarkerPosition
-  ) {
+  if (info.isTailPinned && !finalPinnedTailTipPosition && finalMarkerPosition) {
     finalPinnedTailTipPosition = { ...finalMarkerPosition };
   }
   return {
@@ -71,7 +67,9 @@ function enrichComparableInfoForUi(info: ComparableInfo): ComparableInfo {
   };
 }
 
-export default function LandComparablesMapPage({ params }: ComparablesMapPageProps) {
+export default function LandComparablesMapPage({
+  params,
+}: ComparablesMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
 
@@ -134,9 +132,7 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     setSubjectInfo({
       address: subjectSnapshot.address ?? "",
       addressForDisplay:
-        subjectSnapshot.addressForDisplay ??
-        subjectSnapshot.address ??
-        "",
+        subjectSnapshot.addressForDisplay ?? subjectSnapshot.address ?? "",
       legalDescription: subjectSnapshot.legalDescription ?? "",
       acres: subjectSnapshot.acres ?? "",
     });
@@ -161,9 +157,7 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     );
 
     setMapCenter(
-      mapView.mapCenter
-        ? { ...mapView.mapCenter }
-        : { ...DEFAULT_MAP_CENTER },
+      mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
     );
     setMapZoom(mapView.mapZoom ?? 17);
     setBubbleSize(mapView.bubbleSize ?? 1.0);
@@ -232,7 +226,9 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
           mapId,
         ),
       );
-      const updatedComparables: Comparable[] = splitPairs.map((p) => p.comparable);
+      const updatedComparables: Comparable[] = splitPairs.map(
+        (p) => p.comparable,
+      );
       const compMarkers: MapMarker[] = splitPairs.map((p) => p.marker);
 
       const otherComparables = baseProject.comparables.filter(
@@ -379,11 +375,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               type: comp.type ?? PAGE_COMPARABLE_TYPE,
               address: `${lat}, ${lng}`,
               markerPosition: newPosition,
-              position:
-                comp.position ?? {
-                  lat: newPosition.lat + 0.001,
-                  lng: newPosition.lng + 0.001,
-                },
+              position: comp.position ?? {
+                lat: newPosition.lat + 0.001,
+                lng: newPosition.lng + 0.001,
+              },
               pinnedTailTipPosition:
                 comp.pinnedTailTipPosition ??
                 (comp.isTailPinned ? newPosition : undefined),
@@ -416,11 +411,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               address,
               addressForDisplay: comp.addressForDisplay ?? address,
               markerPosition: newPosition,
-              position:
-                comp.position ?? {
-                  lat: newPosition.lat + 0.001,
-                  lng: newPosition.lng + 0.001,
-                },
+              position: comp.position ?? {
+                lat: newPosition.lat + 0.001,
+                lng: newPosition.lng + 0.001,
+              },
               pinnedTailTipPosition:
                 comp.pinnedTailTipPosition ??
                 (comp.isTailPinned ? newPosition : undefined),
@@ -563,8 +557,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
                     const currentMarkerPos = subjectMarkerPositionRef.current;
                     const currentBubblePos = subjectBubblePositionRef.current;
                     if (currentMarkerPos && currentBubblePos) {
-                      const latDiff = currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff = currentBubblePos.lng - currentMarkerPos.lng;
+                      const latDiff =
+                        currentBubblePos.lat - currentMarkerPos.lat;
+                      const lngDiff =
+                        currentBubblePos.lng - currentMarkerPos.lng;
                       setSubjectMarkerPosition(newPosition);
                       setSubjectBubblePosition({
                         lat: newPosition.lat + latDiff,
@@ -611,7 +607,9 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               <ComparableMarker
                 key={comp.id}
                 position={comp.position as { lat: number; lng: number }}
-                markerPosition={comp.markerPosition as { lat: number; lng: number }}
+                markerPosition={
+                  comp.markerPosition as { lat: number; lng: number }
+                }
                 comparableInfo={comp}
                 comparableNumber={index + 1}
                 onPositionChange={(newPos: { lat: number; lng: number }) => {
@@ -629,7 +627,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+        />
       </div>
     </div>
   );

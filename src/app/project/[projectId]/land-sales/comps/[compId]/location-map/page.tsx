@@ -42,7 +42,9 @@ interface LandCompLocationMapPageProps {
   }>;
 }
 
-export default function LandCompLocationMapPage({ params }: LandCompLocationMapPageProps) {
+export default function LandCompLocationMapPage({
+  params,
+}: LandCompLocationMapPageProps) {
   const { projectId, compId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
 
@@ -148,9 +150,7 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
       setHideUI(mapState.hideUI);
       setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
 
-      setPolygonPath(
-        mapState.drawings.polygonPath.map((p) => ({ ...p })),
-      );
+      setPolygonPath(mapState.drawings.polygonPath.map((p) => ({ ...p })));
       setCircles(
         mapState.drawings.circles.map((c) => ({
           ...c,
@@ -240,7 +240,9 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
         markers: [compMarker],
       };
 
-      const existingMapIndex = baseProject.maps.findIndex((m) => m.id === mapId);
+      const existingMapIndex = baseProject.maps.findIndex(
+        (m) => m.id === mapId,
+      );
       const updatedMaps =
         existingMapIndex >= 0
           ? baseProject.maps.map((m) => (m.id === mapId ? mapView : m))
@@ -275,32 +277,52 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
   }, [persistState]);
 
   const handleAddressSearch = async (address: string) => {
-      // Reuse address search logic
-      if (!address.trim()) return;
-        try {
-          const geocoder = new google.maps.Geocoder();
-          const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-              void geocoder.geocode({ address }, (results, status) => { if (status === google.maps.GeocoderStatus.OK && results) resolve(results); else reject(new Error(`Geocoding failed`)); });
+    // Reuse address search logic
+    if (!address.trim()) return;
+    try {
+      const geocoder = new google.maps.Geocoder();
+      const results = await new Promise<google.maps.GeocoderResult[]>(
+        (resolve, reject) => {
+          void geocoder.geocode({ address }, (results, status) => {
+            if (status === google.maps.GeocoderStatus.OK && results)
+              resolve(results);
+            else reject(new Error(`Geocoding failed`));
           });
-          if (results && results.length > 0) {
-            const result = results[0];
-            if (!result) return;
-            const location = result.geometry.location;
-            const newPosition = { lat: location.lat(), lng: location.lng() };
-            setMapCenter(newPosition);
-            setMarkerPosition(newPosition);
-            setBubblePosition({ lat: newPosition.lat + 0.001, lng: newPosition.lng + 0.001 });
-            if (isSubjectTailPinned && !subjectPinnedTailTipPosition) { setSubjectPinnedTailTipPosition(newPosition); }
-            setMapZoom(18);
-            const formattedAddress = result.formatted_address ?? address;
-            setPropertyInfo((prev) => {
-              const keepDisplay = prev.addressForDisplay && prev.addressForDisplay.trim().length > 0 && prev.addressForDisplay !== prev.address;
-              return { ...prev, address: formattedAddress, addressForDisplay: keepDisplay ? prev.addressForDisplay : formattedAddress };
-            });
-          }
-        } catch (error) {
-          console.error("Error geocoding address", error);
+        },
+      );
+      if (results && results.length > 0) {
+        const result = results[0];
+        if (!result) return;
+        const location = result.geometry.location;
+        const newPosition = { lat: location.lat(), lng: location.lng() };
+        setMapCenter(newPosition);
+        setMarkerPosition(newPosition);
+        setBubblePosition({
+          lat: newPosition.lat + 0.001,
+          lng: newPosition.lng + 0.001,
+        });
+        if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+          setSubjectPinnedTailTipPosition(newPosition);
         }
+        setMapZoom(18);
+        const formattedAddress = result.formatted_address ?? address;
+        setPropertyInfo((prev) => {
+          const keepDisplay =
+            prev.addressForDisplay &&
+            prev.addressForDisplay.trim().length > 0 &&
+            prev.addressForDisplay !== prev.address;
+          return {
+            ...prev,
+            address: formattedAddress,
+            addressForDisplay: keepDisplay
+              ? prev.addressForDisplay
+              : formattedAddress,
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error geocoding address", error);
+    }
   };
 
   // Placeholder - will use dynamic import for html-to-image to avoid SSR issues
@@ -326,7 +348,7 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
 
       const x = (containerWidth - docWidth) / 2;
       const y = (containerHeight - docHeight) / 2;
-      
+
       // Capture the entire map container first
       // We use pixelRatio: 2 for better quality (simulating 2x scale)
       // fontEmbedCSS: "" avoids CORS issues with Google Fonts by skipping font embedding
@@ -356,61 +378,69 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
       // Draw the portion of the image that corresponds to the crop area
       // sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight
       ctx.drawImage(
-        img, 
-        x * scale, 
-        y * scale, 
-        docWidth * scale, 
-        docHeight * scale, 
-        0, 
-        0, 
-        docWidth * scale, 
-        docHeight * scale
+        img,
+        x * scale,
+        y * scale,
+        docWidth * scale,
+        docHeight * scale,
+        0,
+        0,
+        docWidth * scale,
+        docHeight * scale,
       );
 
       // Convert canvas to blob for File System Access API
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
       if (!blob) throw new Error("Failed to create image blob");
-      const suggestedName = propertyInfo?.addressForDisplay ? `${propertyInfo?.addressForDisplay?.split(",")[0]?.replace(/\s/g, "-")}--aerial.png` : `land-comp-${compId}-aerial.png`;
+      const suggestedName = propertyInfo?.addressForDisplay
+        ? `${propertyInfo?.addressForDisplay?.split(",")[0]?.replace(/\s/g, "-")}--aerial.png`
+        : `land-comp-${compId}-aerial.png`;
 
       try {
         /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
         if ((window as any).showSaveFilePicker) {
-            const handle = await (window as any).showSaveFilePicker({
-                suggestedName,
-                types: [{
-                    description: 'PNG Image',
-                    accept: { 'image/png': ['.png'] },
-                }],
-            });
-            const stream = await handle.createWritable();
-            await stream.write(blob);
-            await stream.close();
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName,
+            types: [
+              {
+                description: "PNG Image",
+                accept: { "image/png": [".png"] },
+              },
+            ],
+          });
+          const stream = await handle.createWritable();
+          await stream.write(blob);
+          await stream.close();
         } else {
-            throw new Error("File System Access API not supported");
+          throw new Error("File System Access API not supported");
         }
         /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       } catch (err: unknown) {
         // If user cancelled the picker, do nothing
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === "AbortError") return;
 
         // Fallback or error handling
-        if (err instanceof Error && err.message === "File System Access API not supported") {
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = suggestedName;
-             link.click();
+        if (
+          err instanceof Error &&
+          err.message === "File System Access API not supported"
+        ) {
+          const croppedDataUrl = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = croppedDataUrl;
+          link.download = suggestedName;
+          link.click();
         } else {
-            console.error("Screenshot save failed:", err);
-            // Attempt fallback download even if picker failed for other reasons
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = "land-comp-map.png";
-             link.click();
+          console.error("Screenshot save failed:", err);
+          // Attempt fallback download even if picker failed for other reasons
+          const croppedDataUrl = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = croppedDataUrl;
+          link.download = "land-comp-map.png";
+          link.click();
         }
       }
-
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");
@@ -418,15 +448,15 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
   };
 
   const handleOpenGis = (apn: string) => {
-      setGisApn(apn);
-      setShowGisOverlay(true);
+    setGisApn(apn);
+    setShowGisOverlay(true);
   };
-  
+
   const getGisUrl = (apn: string) => {
-      if (apn.startsWith("R")) {
-          return `https://maps.midlandtexas.gov/portal/apps/webappviewer/index.html?id=3cce4985d5f94f1c8c5d0ea06e1e5b47&apn=${apn}`;
-      }
-      return `https://search.ectorcad.org/map/#${apn}`;
+    if (apn.startsWith("R")) {
+      return `https://maps.midlandtexas.gov/portal/apps/webappviewer/index.html?id=3cce4985d5f94f1c8c5d0ea06e1e5b47&apn=${apn}`;
+    }
+    return `https://search.ectorcad.org/map/#${apn}`;
   };
 
   if (isLoading) {
@@ -472,36 +502,42 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
         isCollapsed={isCollapsed}
         onIsCollapsedChange={setIsCollapsed}
       />
-      
+
       {isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
-           <button
-              onClick={() => setHideUI(!hideUI)}
-              className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
-              title="Toggle UI Visibility"
-            >
-              {hideUI ? "Show UI" : "Hide UI"}
-           </button>
-           
-           {showDocumentOverlay && (
-             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
-                <button
-                    onClick={() => setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Decrease Frame Size"
-                >
-                    -
-                </button>
-                <span className="min-w-[3ch] text-center text-sm">{Math.round(documentFrameSize * 100)}%</span>
-                <button
-                    onClick={() => setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Increase Frame Size"
-                >
-                    +
-                </button>
-             </div>
-           )}
+          <button
+            onClick={() => setHideUI(!hideUI)}
+            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            title="Toggle UI Visibility"
+          >
+            {hideUI ? "Show UI" : "Hide UI"}
+          </button>
+
+          {showDocumentOverlay && (
+            <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Decrease Frame Size"
+              >
+                -
+              </button>
+              <span className="min-w-[3ch] text-center text-sm">
+                {Math.round(documentFrameSize * 100)}%
+              </span>
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Increase Frame Size"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -523,11 +559,15 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
             rotateControl={!hideUI}
             onCenterChanged={(e) => {
               const center = e.detail.center;
-              if (center) { setMapCenter({ lat: center.lat, lng: center.lng }); }
+              if (center) {
+                setMapCenter({ lat: center.lat, lng: center.lng });
+              }
             }}
             onZoomChanged={(e) => {
               const zoom = e.detail.zoom;
-              if (zoom) { setMapZoom(zoom); }
+              if (zoom) {
+                setMapZoom(zoom);
+              }
             }}
             onClick={(e) => {
               if (e.detail.latLng) {
@@ -540,14 +580,20 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
                   return;
                 }
                 if (isDrawingCircle) {
-                  const newCircle: Circle = { center: { lat, lng }, radius: circleRadius * 1609.34, id: `circle-${Date.now()}-${Math.random()}` };
+                  const newCircle: Circle = {
+                    center: { lat, lng },
+                    radius: circleRadius * 1609.34,
+                    id: `circle-${Date.now()}-${Math.random()}`,
+                  };
                   setCircles((prev) => [...prev, newCircle]);
                 } else if (isDrawing) {
                   setPolygonPath((prev) => [...prev, { lat, lng }]);
                 } else if (!markerPosition) {
                   setMarkerPosition({ lat, lng });
                   setBubblePosition({ lat: lat + 0.001, lng: lng + 0.001 });
-                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) { setSubjectPinnedTailTipPosition({ lat, lng }); }
+                  if (isSubjectTailPinned && !subjectPinnedTailTipPosition) {
+                    setSubjectPinnedTailTipPosition({ lat, lng });
+                  }
                 }
               }
             }}
@@ -566,24 +612,45 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
                 draggable
                 onDragEnd={(e) => {
                   if (e.latLng) {
-                    const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                    const newPosition = {
+                      lat: e.latLng.lat(),
+                      lng: e.latLng.lng(),
+                    };
                     const currentMarkerPos = markerPositionRef.current;
                     const currentBubblePos = bubblePositionRef.current;
                     if (currentMarkerPos && currentBubblePos) {
-                      const latDiff = currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff = currentBubblePos.lng - currentMarkerPos.lng;
+                      const latDiff =
+                        currentBubblePos.lat - currentMarkerPos.lat;
+                      const lngDiff =
+                        currentBubblePos.lng - currentMarkerPos.lng;
                       setMarkerPosition(newPosition);
-                      setBubblePosition({ lat: newPosition.lat + latDiff, lng: newPosition.lng + lngDiff });
-                    } else { setMarkerPosition(newPosition); }
+                      setBubblePosition({
+                        lat: newPosition.lat + latDiff,
+                        lng: newPosition.lng + lngDiff,
+                      });
+                    } else {
+                      setMarkerPosition(newPosition);
+                    }
                   }
                 }}
               >
                 <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
               </AdvancedMarker>
             )}
-            {isSubjectTailPinned && subjectPinnedTailTipPosition && bubblePosition && markerPosition && !hideUI && (
-                 <PinnedTailOverlay bubblePosition={bubblePosition} pinnedTailTipPosition={subjectPinnedTailTipPosition} bubbleWidth={400 * bubbleSize} bubbleHeight={200 * bubbleSize} color="#ffffff" strokeColor="#000000" />
-            )}
+            {isSubjectTailPinned &&
+              subjectPinnedTailTipPosition &&
+              bubblePosition &&
+              markerPosition &&
+              !hideUI && (
+                <PinnedTailOverlay
+                  bubblePosition={bubblePosition}
+                  pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                  bubbleWidth={400 * bubbleSize}
+                  bubbleHeight={200 * bubbleSize}
+                  color="#ffffff"
+                  strokeColor="#000000"
+                />
+              )}
             {bubblePosition && markerPosition && !hideUI && (
               <SubjectLocationMarker
                 position={bubblePosition}
@@ -602,24 +669,52 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
                 position={label.position}
                 text={label.text}
                 rotation={label.rotation}
-                onPositionChange={(newPosition) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, position: newPosition } : l)); }}
-                onRotationChange={(newRotation) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, rotation: newRotation } : l)); }}
-                onTextChange={(newText) => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, text: newText } : l)); }}
+                onPositionChange={(newPosition) => {
+                  setStreetLabels((prev) =>
+                    prev.map((l) =>
+                      l.id === label.id ? { ...l, position: newPosition } : l,
+                    ),
+                  );
+                }}
+                onRotationChange={(newRotation) => {
+                  setStreetLabels((prev) =>
+                    prev.map((l) =>
+                      l.id === label.id ? { ...l, rotation: newRotation } : l,
+                    ),
+                  );
+                }}
+                onTextChange={(newText) => {
+                  setStreetLabels((prev) =>
+                    prev.map((l) =>
+                      l.id === label.id ? { ...l, text: newText } : l,
+                    ),
+                  );
+                }}
                 isEditing={label.isEditing}
-                onEditToggle={() => { setStreetLabels((prev) => prev.map((l) => l.id === label.id ? { ...l, isEditing: !l.isEditing } : l)); }}
+                onEditToggle={() => {
+                  setStreetLabels((prev) =>
+                    prev.map((l) =>
+                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
+                    ),
+                  );
+                }}
                 hideUI={hideUI}
                 sizeMultiplier={labelSize}
               />
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} aspectRatio={1.57} size={documentFrameSize} />
-        
-        <GisOverlay 
-            initialUrl={getGisUrl(gisApn)}
-            visible={showGisOverlay}
-            onClose={() => setShowGisOverlay(false)}
-            position="absolute"
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          aspectRatio={1.57}
+          size={documentFrameSize}
+        />
+
+        <GisOverlay
+          initialUrl={getGisUrl(gisApn)}
+          visible={showGisOverlay}
+          onClose={() => setShowGisOverlay(false)}
+          position="absolute"
         />
 
         <MapDrawingControls
@@ -638,5 +733,5 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
         />
       </div>
     </div>
-  )
+  );
 }

@@ -264,7 +264,9 @@ const DEFAULT_DRAWINGS: MapDrawings = {
 // Map Type <-> Comparable Type helpers
 // ============================================================
 
-export function mapTypeForCompType(compType: ComparableType): Exclude<MapType, "comp-location"> {
+export function mapTypeForCompType(
+  compType: ComparableType,
+): Exclude<MapType, "comp-location"> {
   switch (compType) {
     case "Land":
       return "land-comps";
@@ -510,8 +512,7 @@ function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
         legacy.subject?.bubblePosition ??
         null,
       isTailPinned: typeState?.isSubjectTailPinned ?? true,
-      pinnedTailTipPosition:
-        typeState?.subjectPinnedTailTipPosition ?? null,
+      pinnedTailTipPosition: typeState?.subjectPinnedTailTipPosition ?? null,
     });
 
     for (const comp of typeState?.comparables ?? []) {
@@ -604,9 +605,7 @@ function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
   };
 }
 
-function migrateDrawings(
-  loc?: LegacyLocationMapState,
-): MapDrawings {
+function migrateDrawings(loc?: LegacyLocationMapState): MapDrawings {
   return {
     polygonPath: (loc?.polygonPath ?? []).map((p) => ({
       lat: p.lat,
@@ -725,8 +724,7 @@ function normalizeComparableEntity(
     number: c.number,
     address: c.address ?? "",
     addressForDisplay: c.addressForDisplay ?? c.address ?? "",
-    apn:
-      Array.isArray(c.apn) && c.apn.length > 0 ? c.apn : undefined,
+    apn: Array.isArray(c.apn) && c.apn.length > 0 ? c.apn : undefined,
     instrumentNumber:
       typeof c.instrumentNumber === "string" &&
       c.instrumentNumber.trim().length > 0
@@ -737,16 +735,12 @@ function normalizeComparableEntity(
   };
 }
 
-function createDefaultMapView(
-  type: MapType,
-  linkedCompId?: string,
-): MapView {
+function createDefaultMapView(type: MapType, linkedCompId?: string): MapView {
   const id =
     type === "comp-location" && linkedCompId
       ? compLocationMapId(linkedCompId)
-      : (WELL_KNOWN_MAP_IDS[
-          type as keyof typeof WELL_KNOWN_MAP_IDS
-        ] ?? `map-${type}`);
+      : (WELL_KNOWN_MAP_IDS[type as keyof typeof WELL_KNOWN_MAP_IDS] ??
+        `map-${type}`);
   return {
     id,
     type,
