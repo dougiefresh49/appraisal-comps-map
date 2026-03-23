@@ -5,7 +5,6 @@ import {
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   normalizeProjectsMap,
-  createDefaultProject,
   normalizeProjectData,
   type ProjectData,
   type ProjectsMap,
@@ -18,16 +17,15 @@ export function useProject(projectId: string) {
   const [loadError, setLoadError] = useState(false);
   const [projectExists, setProjectExists] = useState(false);
 
-  // Load project data
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     let projectStore: ProjectsMap = {};
-    
+
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
+        const parsed = JSON.parse(stored) as Record<string, unknown>;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -36,21 +34,23 @@ export function useProject(projectId: string) {
     }
 
     setProjects(projectStore);
-    
+
     if (projectStore[decodedProjectId]) {
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, decodedProjectId);
+      window.localStorage.setItem(
+        CURRENT_PROJECT_STORAGE_KEY,
+        decodedProjectId,
+      );
       setProjectExists(true);
     } else {
       setProjectExists(false);
     }
-    
+
     setIsLoading(false);
   }, [decodedProjectId]);
 
-  // Persist changes
   useEffect(() => {
     if (isLoading) return;
-    if (loadError) return; // Do not overwrite if we failed to load
+    if (loadError) return;
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(
@@ -88,6 +88,6 @@ export function useProject(projectId: string) {
     projectExists,
     isLoading,
     updateProject,
-    setProjects, // For manual overrides (e.g. JSON edit)
+    setProjects,
   };
 }

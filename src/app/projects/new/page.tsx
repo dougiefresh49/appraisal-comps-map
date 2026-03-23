@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   normalizeProjectData,
   normalizeProjectsMap,
@@ -12,7 +12,7 @@ import {
 import type {
   ProjectData,
   ProjectsMap,
-  ComparableInfo,
+  Comparable,
   ComparableType,
 } from "~/utils/projectStore";
 import { env } from "~/env";
@@ -136,24 +136,22 @@ export default function NewProjectPage() {
         return;
       }
 
-      // Helper function to convert comp data to ComparableInfo
+      const defaultProject = createDefaultProject();
+
       const convertCompsToComparables = (
         comps: CompData[],
-        type: ComparableType,
-      ): ComparableInfo[] => {
+        compType: ComparableType,
+      ): Comparable[] => {
         return comps.map((comp, index) => {
-          // Parse APN: split by newlines and filter out empty strings
           const apnArray =
             comp.APN && typeof comp.APN === "string"
               ? comp.APN.split("\n").filter((apn) => apn.trim().length > 0)
               : undefined;
-
           return {
-            id: `comp-${type.toLowerCase()}-${Date.now()}-${index}-${Math.random()}`,
+            id: `comp-${compType.toLowerCase()}-${Date.now()}-${index}-${Math.random()}`,
+            type: compType,
             address: comp.Address ?? "",
             addressForDisplay: comp.Address ?? "",
-            isTailPinned: true,
-            type,
             apn: apnArray && apnArray.length > 0 ? apnArray : undefined,
             instrumentNumber:
               comp.Recording && typeof comp.Recording === "string"
@@ -163,72 +161,23 @@ export default function NewProjectPage() {
         });
       };
 
-      // Create new project from webhook data
-      const defaultProject = createDefaultProject();
-
-      // Convert comps from webhook to ComparableInfo arrays
-      const landComparables = convertCompsToComparables(
-        projectData.landComps || [],
-        "Land",
-      );
-      const saleComparables = convertCompsToComparables(
-        projectData.saleComps || [],
-        "Sales",
-      );
-      const rentalComparables = convertCompsToComparables(
-        projectData.rentalComps || [],
-        "Rentals",
-      );
-
       const newProject: ProjectData = {
         ...defaultProject,
         subject: {
-          ...defaultProject.subject,
-          info: {
-            address: projectData.address || "",
-            addressForDisplay:
-              projectData.addressLabel || projectData.address || "",
-            legalDescription: projectData.legalDescription || "",
-            acres: projectData.acres || "",
-          },
+          address: projectData.address || "",
+          addressForDisplay:
+            projectData.addressLabel || projectData.address || "",
+          legalDescription: projectData.legalDescription || "",
+          acres: projectData.acres || "",
         },
-        location: {
-          ...defaultProject.location,
-          propertyInfo: {
-            address: projectData.address || "",
-            addressForDisplay:
-              projectData.addressLabel || projectData.address || "",
-            legalDescription: projectData.legalDescription || "",
-            acres: projectData.acres || "",
-          },
-        },
-        comparables: {
-          ...defaultProject.comparables,
-          byType: {
-            Land: {
-              ...defaultProject.comparables.byType.Land,
-              comparables: [
-                ...(defaultProject.comparables.byType.Land.comparables ?? []),
-                ...landComparables,
-              ],
-            },
-            Sales: {
-              ...defaultProject.comparables.byType.Sales,
-              comparables: [
-                ...(defaultProject.comparables.byType.Sales.comparables ?? []),
-                ...saleComparables,
-              ],
-            },
-            Rentals: {
-              ...defaultProject.comparables.byType.Rentals,
-              comparables: [
-                ...(defaultProject.comparables.byType.Rentals.comparables ??
-                  []),
-                ...rentalComparables,
-              ],
-            },
-          },
-        },
+        comparables: [
+          ...convertCompsToComparables(projectData.landComps || [], "Land"),
+          ...convertCompsToComparables(projectData.saleComps || [], "Sales"),
+          ...convertCompsToComparables(
+            projectData.rentalComps || [],
+            "Rentals",
+          ),
+        ],
         projectFolderId: projectFolderId.trim(),
         subjectPhotosFolderId: projectData.subjectPhotosFolderId || undefined,
         propertyType: projectData.propertyType || undefined,

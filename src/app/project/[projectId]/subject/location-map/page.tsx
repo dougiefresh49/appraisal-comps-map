@@ -20,22 +20,25 @@ import {
   DEFAULT_MAP_CENTER,
   DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
-  COMPARABLE_TYPES,
+  WELL_KNOWN_MAP_IDS,
+  getMapByType,
+  getSubjectMarker,
+  updateMapInProject,
 } from "~/utils/projectStore";
 import type {
-  ComparablesMapState,
-  ComparableType,
-  LocationMapState,
   ProjectData,
   ProjectsMap,
-  ProjectSubjectState,
   SubjectInfo,
   StreetLabelData,
   Circle,
   PolygonPath,
+  MapView,
+  MapMarker,
 } from "~/utils/projectStore";
 
 type PropertyInfo = SubjectInfo;
+
+const MAP_ID = WELL_KNOWN_MAP_IDS["subject-location"];
 
 interface SubjectLocationMapPageProps {
   params: Promise<{
@@ -46,7 +49,7 @@ interface SubjectLocationMapPageProps {
 export default function SubjectLocationMapPage({ params }: SubjectLocationMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  
+
   const projectStoreRef = useRef<ProjectsMap>({});
   const projectName = decodedProjectId;
 
@@ -85,13 +88,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
   const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true);
   const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] =
-    useState<
-      | {
-          lat: number;
-          lng: number;
-        }
-      | undefined
-    >(undefined);
+    useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] =
     useState(false);
   const [streetLabels, setStreetLabels] = useState<StreetLabelData[]>([]);
@@ -104,10 +101,12 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
   const applyProjectState = useCallback(
     (project?: ProjectData) => {
       const snapshot = normalizeProjectData(project);
-      const subjectSnapshot = snapshot.subject;
-      const locationSnapshot = snapshot.location;
+      const mapView = getMapByType(snapshot, "subject-location");
+      if (!mapView) return;
 
-      const infoSnapshot = subjectSnapshot.info;
+      const subjectMarker = getSubjectMarker(mapView);
+      const infoSnapshot = snapshot.subject;
+
       setPropertyInfo({
         address: infoSnapshot.address ?? "",
         addressForDisplay:
@@ -116,78 +115,51 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
         acres: infoSnapshot.acres ?? "",
       });
       setMarkerPosition(
-        subjectSnapshot.markerPosition
-          ? { ...subjectSnapshot.markerPosition }
+        subjectMarker?.markerPosition
+          ? { ...subjectMarker.markerPosition }
           : null,
       );
       setBubblePosition(
-        subjectSnapshot.bubblePosition
-          ? { ...subjectSnapshot.bubblePosition }
+        subjectMarker?.bubblePosition
+          ? { ...subjectMarker.bubblePosition }
           : null,
       );
       setPolygonPath(
-        locationSnapshot.polygonPath
-          ? locationSnapshot.polygonPath.map((point) => ({ ...point }))
-          : [],
+        mapView.drawings.polygonPath.map((point) => ({ ...point })),
       );
       setCircles(
-        locationSnapshot.circles
-          ? locationSnapshot.circles.map((circle) => ({
-              ...circle,
-              center: { ...circle.center },
-            }))
-          : [],
+        mapView.drawings.circles.map((circle) => ({
+          ...circle,
+          center: { ...circle.center },
+        })),
       );
       setMapCenter(
-        locationSnapshot.mapCenter
-          ? { ...locationSnapshot.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
+        mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
       );
-      setMapZoom(locationSnapshot.mapZoom ?? 17);
-      setBubbleSize(locationSnapshot.bubbleSize ?? 1.0);
-      setTailDirection(locationSnapshot.tailDirection ?? "right");
-      setHideUI(locationSnapshot.hideUI ?? false);
-      setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
+      setMapZoom(mapView.mapZoom);
+      setBubbleSize(mapView.bubbleSize);
+      setTailDirection(mapView.drawings.tailDirection);
+      setHideUI(mapView.hideUI);
+      setDocumentFrameSize(mapView.documentFrameSize);
+      setIsSubjectTailPinned(subjectMarker?.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        subjectSnapshot.pinnedTailTipPosition ?? undefined,
+        subjectMarker?.pinnedTailTipPosition ?? undefined,
       );
       setStreetLabels(
-        locationSnapshot.streetLabels
-          ? locationSnapshot.streetLabels.map((label) => ({
-              ...label,
-              position: { ...label.position },
-            }))
-          : [],
+        mapView.drawings.streetLabels.map((label) => ({
+          ...label,
+          position: { ...label.position },
+        })),
       );
-      setLabelSize(locationSnapshot.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(locationSnapshot.circleRadius ?? DEFAULT_CIRCLE_RADIUS);
+      setLabelSize(mapView.drawings.labelSize);
+      setCircleRadius(mapView.drawings.circleRadius);
       setIsDrawing(false);
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
-    [
-      setPropertyInfo,
-      setMarkerPosition,
-      setBubblePosition,
-      setPolygonPath,
-      setCircles,
-      setMapCenter,
-      setMapZoom,
-      setBubbleSize,
-      setTailDirection,
-      setHideUI,
-      setIsSubjectTailPinned,
-      setSubjectPinnedTailTipPosition,
-      setStreetLabels,
-      setLabelSize,
-      setCircleRadius,
-      setIsDrawing,
-      setIsDrawingCircle,
-      setIsRepositioningSubjectTail,
-    ],
+    [],
   );
 
-  // Sync refs with state
   useEffect(() => {
     markerPositionRef.current = markerPosition;
   }, [markerPosition]);
@@ -196,7 +168,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
-  // Hydrate state
   useEffect(() => {
     if (isStateHydrated) return;
     if (typeof window === "undefined") return;
@@ -205,10 +176,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
+        const parsed = JSON.parse(stored) as Record<string, unknown>;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -216,8 +184,8 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     }
 
     if (!projectStore[projectName]) {
-        console.warn(`Project ${projectName} not found in storage, creating default.`);
-        projectStore[projectName] = createDefaultProject();
+      console.warn(`Project ${projectName} not found in storage, creating default.`);
+      projectStore[projectName] = createDefaultProject();
     }
 
     projectStoreRef.current = projectStore;
@@ -228,10 +196,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
         PROJECTS_STORAGE_KEY,
         JSON.stringify(projectStore),
       );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
+      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
@@ -245,14 +210,17 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    const subject: ProjectSubjectState = {
-      info: {
-        address: propertyInfo.address ?? "",
-        addressForDisplay:
-          propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
-        legalDescription: propertyInfo.legalDescription ?? "",
-        acres: propertyInfo.acres ?? "",
-      },
+    const updatedSubject: SubjectInfo = {
+      address: propertyInfo.address ?? "",
+      addressForDisplay:
+        propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
+      legalDescription: propertyInfo.legalDescription ?? "",
+      acres: propertyInfo.acres ?? "",
+    };
+
+    const subjectMarker: MapMarker = {
+      id: `marker-subject-${MAP_ID}`,
+      mapId: MAP_ID,
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
       isTailPinned: isSubjectTailPinned,
@@ -261,63 +229,42 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
         : null,
     };
 
-    const locationState: LocationMapState = {
-      ...baseProject.location,
-      markerPosition: subject.markerPosition,
-      bubblePosition: subject.bubblePosition,
-      polygonPath: polygonPath.map((point) => ({ ...point })),
-      circles: circles.map((circle) => ({
-        ...circle,
-        center: { ...circle.center },
-      })),
+    const updatedMaps = updateMapInProject(baseProject, MAP_ID, (m) => ({
+      ...m,
       mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
       mapZoom,
       bubbleSize,
-      tailDirection,
       hideUI,
-      streetLabels: streetLabels.map((label) => ({
-        ...label,
-        position: { ...label.position },
-      })),
-      labelSize,
-      circleRadius,
-    };
-
-    const comparablesByType = COMPARABLE_TYPES.reduce<
-      Record<ComparableType, ComparablesMapState>
-    >(
-      (acc, type) => {
-        const currentState =
-          baseProject.comparables.byType[type] ??
-          createDefaultProject().comparables.byType[type];
-        acc[type] = {
-          ...currentState,
-          subjectMarkerPosition: subject.markerPosition,
-          subjectBubblePosition: subject.bubblePosition,
-        };
-        return acc;
+      documentFrameSize,
+      drawings: {
+        polygonPath: polygonPath.map((p) => ({ ...p })),
+        circles: circles.map((c) => ({ ...c, center: { ...c.center } })),
+        polylines: m.drawings.polylines,
+        streetLabels: streetLabels.map((l) => ({
+          ...l,
+          position: { ...l.position },
+        })),
+        labelSize,
+        circleRadius,
+        tailDirection,
       },
-      {} as Record<ComparableType, ComparablesMapState>,
-    );
-
-    const comparablesState = {
-      activeType: baseProject.comparables.activeType,
-      byType: comparablesByType,
-    };
+      markers: [subjectMarker],
+    }));
 
     const snapshot: ProjectData = {
       ...baseProject,
-      subject,
-      location: locationState,
-      comparables: comparablesState,
+      subject: updatedSubject,
+      maps: updatedMaps,
     };
 
     projectStoreRef.current[projectName] = snapshot;
     serializedProjectRef.current = snapshot;
   }, [
     bubblePosition,
+    bubbleSize,
     circleRadius,
     circles,
+    documentFrameSize,
     hideUI,
     isSubjectTailPinned,
     labelSize,
@@ -330,7 +277,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
-    bubbleSize,
   ]);
 
   const writeProjectsToStorage = useCallback((currentName: string) => {
@@ -374,8 +320,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     projectName,
     writeProjectsToStorage,
   ]);
-
-
 
   const handleAddressSearch = async (address: string) => {
     if (!address.trim()) return;
@@ -430,7 +374,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     }
   };
 
-  // Placeholder - will use dynamic import for html-to-image to avoid SSR issues
   const handleCaptureScreenshot = async () => {
     try {
       const { toPng } = await import("html-to-image");
@@ -453,10 +396,7 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
 
       const x = (containerWidth - docWidth) / 2;
       const y = (containerHeight - docHeight) / 2;
-      
-      // Capture the entire map container first
-      // We use pixelRatio: 2 for better quality (simulating 2x scale)
-      // fontEmbedCSS: "" avoids CORS issues with Google Fonts by skipping font embedding
+
       const dataUrl = await toPng(container, {
         cacheBust: true,
         pixelRatio: 2,
@@ -464,7 +404,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
         fontEmbedCSS: "",
       });
 
-      // Now crop the image using a temporary canvas
       const img = new Image();
       img.src = dataUrl;
       await new Promise((resolve) => {
@@ -472,7 +411,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
       });
 
       const canvas = document.createElement("canvas");
-      // Current pixelRatio used in capture was 2, so dimensions are doubled
       const scale = 2;
       canvas.width = docWidth * scale;
       canvas.height = docHeight * scale;
@@ -480,63 +418,51 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Draw the portion of the image that corresponds to the crop area
-      // sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight
       ctx.drawImage(
-        img, 
-        x * scale, 
-        y * scale, 
-        docWidth * scale, 
-        docHeight * scale, 
-        0, 
-        0, 
-        docWidth * scale, 
-        docHeight * scale
+        img,
+        x * scale,
+        y * scale,
+        docWidth * scale,
+        docHeight * scale,
+        0,
+        0,
+        docWidth * scale,
+        docHeight * scale,
       );
 
-      // Convert canvas to blob for File System Access API
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
       if (!blob) throw new Error("Failed to create image blob");
 
       try {
         /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
         if ((window as any).showSaveFilePicker) {
-            const handle = await (window as any).showSaveFilePicker({
-                suggestedName: "subject-location-map.png",
-                types: [{
-                    description: 'PNG Image',
-                    accept: { 'image/png': ['.png'] },
-                }],
-            });
-            const stream = await handle.createWritable();
-            await stream.write(blob);
-            await stream.close();
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: "subject-location-map.png",
+            types: [
+              {
+                description: "PNG Image",
+                accept: { "image/png": [".png"] },
+              },
+            ],
+          });
+          const stream = await handle.createWritable();
+          await stream.write(blob);
+          await stream.close();
         } else {
-            throw new Error("File System Access API not supported");
+          throw new Error("File System Access API not supported");
         }
         /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       } catch (err: unknown) {
-        // If user cancelled the picker, do nothing
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === "AbortError") return;
 
-        // Fallback or error handling
-        if (err instanceof Error && err.message === "File System Access API not supported") {
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = "subject-location-map.png";
-             link.click();
-        } else {
-            console.error("Screenshot save failed:", err);
-            // Attempt fallback download even if picker failed for other reasons
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = "subject-location-map.png";
-             link.click();
-        }
+        const croppedDataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = croppedDataUrl;
+        link.download = "subject-location-map.png";
+        link.click();
       }
-
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");
@@ -578,33 +504,39 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
 
       {isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
-           <button
-              onClick={() => setHideUI(!hideUI)}
-              className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
-              title="Toggle UI Visibility"
-            >
-              {hideUI ? "Show UI" : "Hide UI"}
-           </button>
-           
-           {showDocumentOverlay && (
-             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
-                <button
-                    onClick={() => setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Decrease Frame Size"
-                >
-                    -
-                </button>
-                <span className="min-w-[3ch] text-center text-sm">{Math.round(documentFrameSize * 100)}%</span>
-                <button
-                    onClick={() => setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Increase Frame Size"
-                >
-                    +
-                </button>
-             </div>
-           )}
+          <button
+            onClick={() => setHideUI(!hideUI)}
+            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            title="Toggle UI Visibility"
+          >
+            {hideUI ? "Show UI" : "Hide UI"}
+          </button>
+
+          {showDocumentOverlay && (
+            <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Decrease Frame Size"
+              >
+                -
+              </button>
+              <span className="min-w-[3ch] text-center text-sm">
+                {Math.round(documentFrameSize * 100)}%
+              </span>
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Increase Frame Size"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -764,7 +696,9 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
                 onEditToggle={() => {
                   setStreetLabels((prev) =>
                     prev.map((l) =>
-                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
+                      l.id === label.id
+                        ? { ...l, isEditing: !l.isEditing }
+                        : l,
                     ),
                   );
                 }}
@@ -774,7 +708,10 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+        />
 
         <MapDrawingControls
           isDrawing={isDrawing}

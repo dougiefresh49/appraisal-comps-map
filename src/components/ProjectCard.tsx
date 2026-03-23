@@ -35,7 +35,7 @@ export function ProjectCard({
             {projectName}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {project.subject?.info?.address || "No address provided"}
+            {project.subject?.address || "No address provided"}
           </p>
         </div>
 

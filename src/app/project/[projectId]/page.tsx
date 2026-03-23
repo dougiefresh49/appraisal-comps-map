@@ -5,9 +5,10 @@ import Link from "next/link";
 import {
   normalizeProjectData,
   COMPARABLE_TYPES,
+  getComparablesByType,
   type ProjectData,
   type ComparableType,
-  type ComparableInfo,
+  type Comparable,
 } from "~/utils/projectStore";
 import { useProject } from "~/hooks/useProject";
 
@@ -44,16 +45,13 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
   }, [isJsonMode, selectedProject]);
 
   const handleSubjectChange = (field: EditableSubjectFields, value: string) => {
-    updateProject((project) => {
-      const updatedInfo = { ...project.subject.info, [field]: value };
-      return {
-        ...project,
-        subject: {
-          ...project.subject,
-          info: updatedInfo,
-        },
-      };
-    });
+    updateProject((project) => ({
+      ...project,
+      subject: {
+        ...project.subject,
+        [field]: value,
+      },
+    }));
   };
 
   const handleJsonApply = () => {
@@ -79,25 +77,20 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
 
   const comparablesByType = useMemo(() => {
     if (!selectedProject) {
-      return COMPARABLE_TYPES.reduce<Record<ComparableType, ComparableInfo[]>>(
+      return COMPARABLE_TYPES.reduce<Record<ComparableType, Comparable[]>>(
         (acc, type) => {
           acc[type] = [];
           return acc;
         },
-        {} as Record<ComparableType, ComparableInfo[]>,
+        {} as Record<ComparableType, Comparable[]>,
       );
     }
-    return COMPARABLE_TYPES.reduce<Record<ComparableType, ComparableInfo[]>>(
+    return COMPARABLE_TYPES.reduce<Record<ComparableType, Comparable[]>>(
       (acc, type) => {
-        const list =
-          selectedProject.comparables.byType[type]?.comparables ?? [];
-        acc[type] = list.map((comparable) => ({
-          ...comparable,
-          type: comparable.type ?? type,
-        }));
+        acc[type] = getComparablesByType(selectedProject, type);
         return acc;
       },
-      {} as Record<ComparableType, ComparableInfo[]>,
+      {} as Record<ComparableType, Comparable[]>,
     );
   }, [selectedProject]);
 
@@ -199,7 +192,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                 </label>
                 <input
                   type="text"
-                  value={selectedProject.subject.info.address}
+                  value={selectedProject.subject.address}
                   onChange={(event) =>
                     handleSubjectChange("address", event.target.value)
                   }
@@ -213,7 +206,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                 </label>
                 <input
                   type="text"
-                  value={selectedProject.subject.info.addressForDisplay ?? ""}
+                  value={selectedProject.subject.addressForDisplay ?? ""}
                   onChange={(event) =>
                     handleSubjectChange(
                       "addressForDisplay",
@@ -230,7 +223,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                 </label>
                 <input
                   type="text"
-                  value={selectedProject.subject.info.legalDescription ?? ""}
+                  value={selectedProject.subject.legalDescription ?? ""}
                   onChange={(event) =>
                     handleSubjectChange(
                       "legalDescription",
@@ -247,7 +240,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                 </label>
                 <input
                   type="text"
-                  value={selectedProject.subject.info.acres ?? ""}
+                  value={selectedProject.subject.acres ?? ""}
                   onChange={(event) =>
                     handleSubjectChange("acres", event.target.value)
                   }
@@ -441,7 +434,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                                 <div>
                                     <label className="block text-[10px] uppercase font-bold text-gray-400">Distance</label>
                                      <div className="text-xs text-gray-700 dark:text-gray-300">
-                                        {comparable.distance ?? <span className="text-gray-300 dark:text-gray-600">-</span>}
+                                        -
                                     </div>
                                 </div>
                               </div>

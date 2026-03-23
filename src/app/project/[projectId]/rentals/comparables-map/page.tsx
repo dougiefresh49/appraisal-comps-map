@@ -20,20 +20,61 @@ import {
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
+  WELL_KNOWN_MAP_IDS,
+  getMapByType,
+  getSubjectMarker,
+  getCompMarker,
+  getComparablesByType,
+  buildComparableInfo,
+  updateMapInProject,
+  mapTypeForCompType,
+  splitComparableInfo,
 } from "~/utils/projectStore";
 import type {
   ComparableInfo,
-  ComparablesMapState,
+  Comparable,
   ProjectData,
   ProjectsMap,
   SubjectInfo,
-  ProjectSubjectState,
-  LocationMapState,
   ComparableType,
+  MapMarker,
 } from "~/utils/projectStore";
 
 // Type specific to this page
 const PAGE_COMPARABLE_TYPE: ComparableType = "Rentals";
+
+function finalizeComparablesMapComparableInfo(
+  info: ComparableInfo,
+  nextType: ComparableType,
+): ComparableInfo {
+  const finalMarkerPosition = info.markerPosition
+    ? { ...info.markerPosition }
+    : undefined;
+  let finalPosition = info.position ? { ...info.position } : undefined;
+  if (!finalPosition && finalMarkerPosition) {
+    finalPosition = {
+      lat: finalMarkerPosition.lat + 0.001,
+      lng: finalMarkerPosition.lng + 0.001,
+    };
+  }
+  let finalPinnedTailTipPosition = info.pinnedTailTipPosition
+    ? { ...info.pinnedTailTipPosition }
+    : undefined;
+  if (
+    info.isTailPinned &&
+    !finalPinnedTailTipPosition &&
+    finalMarkerPosition
+  ) {
+    finalPinnedTailTipPosition = { ...finalMarkerPosition };
+  }
+  return {
+    ...info,
+    type: info.type ?? nextType,
+    pinnedTailTipPosition: finalPinnedTailTipPosition,
+    position: finalPosition,
+    markerPosition: finalMarkerPosition,
+  };
+}
 
 interface ComparablesMapPageProps {
   params: Promise<{
@@ -99,13 +140,15 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
       const snapshot = normalizeProjectData(project);
-      const nextType =
-        typeOverride ?? PAGE_COMPARABLE_TYPE;
-      const mapState =
-        snapshot.comparables.byType[nextType] ??
-        createDefaultProject().comparables.byType[nextType];
-      const subjectSnapshot = snapshot.subject;
-      const subjectInfoSnapshot = subjectSnapshot.info;
+      const nextType = typeOverride ?? PAGE_COMPARABLE_TYPE;
+      const mapView = getMapByType(
+        snapshot,
+        mapTypeForCompType(nextType),
+      );
+      if (!mapView) return;
+
+      const subjectMarker = getSubjectMarker(mapView);
+      const subjectInfoSnapshot = snapshot.subject;
 
       setActiveType(nextType);
       setSubjectInfo({
@@ -118,86 +161,40 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
         acres: subjectInfoSnapshot.acres ?? "",
       });
       setSubjectMarkerPosition(
-        subjectSnapshot.markerPosition
-          ? { ...subjectSnapshot.markerPosition }
+        subjectMarker?.markerPosition
+          ? { ...subjectMarker.markerPosition }
           : null,
       );
       setSubjectBubblePosition(
-        subjectSnapshot.bubblePosition
-          ? { ...subjectSnapshot.bubblePosition }
+        subjectMarker?.bubblePosition
+          ? { ...subjectMarker.bubblePosition }
           : null,
       );
       setComparables(
-        (mapState.comparables ?? []).map((comp) => {
-          let resolvedMarkerPosition = comp.markerPosition;
-          let resolvedPosition = comp.position;
-          const resolvedPinnedTailTipPosition = comp.pinnedTailTipPosition;
-
-          if (nextType === "Land" && mapState.landLocationMaps?.[comp.id]) {
-            const landMapState = mapState.landLocationMaps[comp.id];
-            if (landMapState) {
-              if (landMapState.markerPosition) {
-                resolvedMarkerPosition = { ...landMapState.markerPosition };
-              }
-              if (landMapState.bubblePosition) {
-                resolvedPosition = { ...landMapState.bubblePosition };
-              }
-            }
-          }
-
-          // Calculate defaults if needed
-          const finalMarkerPosition = resolvedMarkerPosition ? { ...resolvedMarkerPosition } : undefined;
-          
-          let finalPosition = resolvedPosition ? { ...resolvedPosition } : undefined;
-          if (!finalPosition && finalMarkerPosition) {
-             finalPosition = { lat: finalMarkerPosition.lat + 0.001, lng: finalMarkerPosition.lng + 0.001 };
-          }
-
-          let finalPinnedTailTipPosition = resolvedPinnedTailTipPosition ? { ...resolvedPinnedTailTipPosition } : undefined;
-          if (comp.isTailPinned && !finalPinnedTailTipPosition && finalMarkerPosition) {
-            finalPinnedTailTipPosition = { ...finalMarkerPosition };
-          }
-
-          return {
-            ...comp,
-            type: comp.type ?? nextType,
-            pinnedTailTipPosition: finalPinnedTailTipPosition,
-            position: finalPosition,
-            markerPosition: finalMarkerPosition,
-          };
-        }),
+        getComparablesByType(snapshot, nextType).map((comp) =>
+          finalizeComparablesMapComparableInfo(
+            buildComparableInfo(comp, getCompMarker(mapView, comp.id)),
+            nextType,
+          ),
+        ),
       );
       setMapCenter(
-        mapState.mapCenter
-          ? { ...mapState.mapCenter }
+        mapView.mapCenter
+          ? { ...mapView.mapCenter }
           : { ...DEFAULT_MAP_CENTER },
       );
-      setMapZoom(mapState.mapZoom ?? 17);
-      setBubbleSize(mapState.bubbleSize ?? 1.0);
-      setHideUI(mapState.hideUI ?? false);
-      setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
-      setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
+      setMapZoom(mapView.mapZoom ?? 17);
+      setBubbleSize(mapView.bubbleSize ?? 1.0);
+      setHideUI(mapView.hideUI ?? false);
+      setDocumentFrameSize(mapView.documentFrameSize ?? 1.0);
+      setIsSubjectTailPinned(subjectMarker?.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        subjectSnapshot.pinnedTailTipPosition ?? undefined,
+        subjectMarker?.pinnedTailTipPosition ?? undefined,
       );
       setPinningTailForCompId(null);
       setIsRepositioningSubjectTail(false);
     },
-    [
-      setSubjectInfo,
-      setSubjectMarkerPosition,
-      setSubjectBubblePosition,
-      setComparables,
-      setMapCenter,
-      setMapZoom,
-      setBubbleSize,
-      setHideUI,
-      setIsSubjectTailPinned,
-      setSubjectPinnedTailTipPosition,
-      setPinningTailForCompId,
-      setIsRepositioningSubjectTail,
-      setActiveType,
-    ],
+    [],
   );
 
   // Sync refs with state
@@ -258,14 +255,22 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    const subject: ProjectSubjectState = {
-      info: {
-        address: subjectInfo.address ?? "",
-        addressForDisplay:
-          subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
-        legalDescription: subjectInfo.legalDescription ?? "",
-        acres: subjectInfo.acres ?? "",
-      },
+    const mapId =
+      WELL_KNOWN_MAP_IDS[
+        mapTypeForCompType(PAGE_COMPARABLE_TYPE) as keyof typeof WELL_KNOWN_MAP_IDS
+      ];
+
+    const updatedSubject: SubjectInfo = {
+      address: subjectInfo.address ?? "",
+      addressForDisplay:
+        subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
+      legalDescription: subjectInfo.legalDescription ?? "",
+      acres: subjectInfo.acres ?? "",
+    };
+
+    const subjectMarker: MapMarker = {
+      id: `marker-subject-${mapId}`,
+      mapId,
       markerPosition: subjectMarkerPosition
         ? { ...subjectMarkerPosition }
         : null,
@@ -278,61 +283,41 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
         : null,
     };
 
-    const previousState =
-      baseProject.comparables.byType[activeType] ??
-      createDefaultProject().comparables.byType[activeType];
+    const compMarkerPairs = comparables.map((info) =>
+      splitComparableInfo(
+        { ...info, type: info.type ?? PAGE_COMPARABLE_TYPE },
+        mapId,
+      ),
+    );
+    const pageComparables: Comparable[] = compMarkerPairs.map((p) => p.comparable);
+    const compMarkers: MapMarker[] = compMarkerPairs.map((p) => p.marker);
 
-    const currentMapState: ComparablesMapState = {
-      ...previousState,
-      subjectMarkerPosition: subject.markerPosition,
-      subjectBubblePosition: subject.bubblePosition,
-      comparables: comparables.map((comp) => ({
-        ...comp,
-        type: comp.type ?? activeType,
-        pinnedTailTipPosition: comp.pinnedTailTipPosition
-          ? { ...comp.pinnedTailTipPosition }
-          : undefined,
-        position: comp.position ? { ...comp.position } : undefined,
-        markerPosition: comp.markerPosition
-          ? { ...comp.markerPosition }
-          : undefined,
-      })),
+    const mergedComparables: Comparable[] = [
+      ...baseProject.comparables.filter((c) => c.type !== PAGE_COMPARABLE_TYPE),
+      ...pageComparables,
+    ];
+
+    const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
+      ...m,
       mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
       mapZoom,
       bubbleSize,
       hideUI,
       documentFrameSize,
-       landLocationMaps:
-        activeType === "Land"
-          ? { ...(previousState.landLocationMaps ?? {}) }
-          : previousState.landLocationMaps,
-    };
-
-    const comparablesState = {
-      activeType,
-      byType: {
-        ...baseProject.comparables.byType,
-        [activeType]: currentMapState,
-      },
-    };
-
-    const locationState: LocationMapState = {
-      ...baseProject.location,
-      markerPosition: subject.markerPosition,
-      bubblePosition: subject.bubblePosition,
-    };
+      drawings: m.drawings,
+      markers: [subjectMarker, ...compMarkers],
+    }));
 
     const snapshot: ProjectData = {
       ...baseProject,
-      subject,
-      comparables: comparablesState,
-      location: locationState,
+      subject: updatedSubject,
+      comparables: mergedComparables,
+      maps: updatedMaps,
     };
 
     projectStoreRef.current[projectName] = snapshot;
     serializedProjectRef.current = snapshot;
   }, [
-    activeType,
     comparables,
     documentFrameSize,
     hideUI,

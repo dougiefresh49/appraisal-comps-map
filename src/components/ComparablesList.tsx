@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type ComparableInfo, type ComparableType } from "~/utils/projectStore";
+import { type Comparable, type ComparableType } from "~/utils/projectStore";
 
 interface ComparablesListProps {
   projectId: string;
   type: ComparableType;
-  comparables: ComparableInfo[];
+  comparables: Comparable[];
   onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (id: string, field: "address" | "addressForDisplay" | "apn", value: string) => void;

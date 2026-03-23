@@ -107,10 +107,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
+        const parsed = JSON.parse(stored) as Record<string, unknown>;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -174,8 +171,8 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
   }
 
   const subjectAddress =
-    projectData.subject.info.addressForDisplay ??
-    projectData.subject.info.address ??
+    projectData.subject.addressForDisplay ??
+    projectData.subject.address ??
     "";
 
   /* eslint-disable @next/next/no-img-element */
