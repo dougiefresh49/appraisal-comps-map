@@ -9,12 +9,9 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { useProject } from "~/hooks/useProject";
 import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   WELL_KNOWN_MAP_IDS,
   getMapByType,
@@ -29,7 +26,6 @@ import {
 import type {
   ComparableInfo,
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   ComparableType,
   MapMarker,
@@ -47,7 +43,7 @@ interface ComparablesMapPageProps {
 }
 
 function enrichComparableInfoForUi(info: ComparableInfo): ComparableInfo {
-  let finalMarkerPosition = info.markerPosition
+  const finalMarkerPosition = info.markerPosition
     ? { ...info.markerPosition }
     : undefined;
   let finalPosition = info.position ? { ...info.position } : undefined;
@@ -60,11 +56,7 @@ function enrichComparableInfoForUi(info: ComparableInfo): ComparableInfo {
   let finalPinnedTailTipPosition = info.pinnedTailTipPosition
     ? { ...info.pinnedTailTipPosition }
     : undefined;
-  if (
-    info.isTailPinned &&
-    !finalPinnedTailTipPosition &&
-    finalMarkerPosition
-  ) {
+  if (info.isTailPinned && !finalPinnedTailTipPosition && finalMarkerPosition) {
     finalPinnedTailTipPosition = { ...finalMarkerPosition };
   }
   return {
@@ -75,12 +67,13 @@ function enrichComparableInfoForUi(info: ComparableInfo): ComparableInfo {
   };
 }
 
-export default function LandComparablesMapPage({ params }: ComparablesMapPageProps) {
+export default function LandComparablesMapPage({
+  params,
+}: ComparablesMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
 
-  const projectStoreRef = useRef<ProjectsMap>({});
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
 
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo>({
     address: "",
@@ -127,7 +120,6 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     lng: number;
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -140,9 +132,7 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     setSubjectInfo({
       address: subjectSnapshot.address ?? "",
       addressForDisplay:
-        subjectSnapshot.addressForDisplay ??
-        subjectSnapshot.address ??
-        "",
+        subjectSnapshot.addressForDisplay ?? subjectSnapshot.address ?? "",
       legalDescription: subjectSnapshot.legalDescription ?? "",
       acres: subjectSnapshot.acres ?? "",
     });
@@ -167,9 +157,7 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     );
 
     setMapCenter(
-      mapView.mapCenter
-        ? { ...mapView.mapCenter }
-        : { ...DEFAULT_MAP_CENTER },
+      mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
     );
     setMapZoom(mapView.mapZoom ?? 17);
     setBubbleSize(mapView.bubbleSize ?? 1.0);
@@ -193,114 +181,79 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
 
   useEffect(() => {
     if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
+    if (isLoading) return;
+    if (!project) return;
 
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    if (!projectStore[projectName]) {
-      console.warn(
-        `Project ${projectName} not found in storage, creating default.`,
-      );
-      projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName]);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
+    applyProjectState(project);
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
+  }, [project, isLoading, isStateHydrated, applyProjectState]);
 
-  const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
+  const saveProject = useCallback(() => {
+    updateProject((baseProject) => {
+      const updatedSubject: SubjectInfo = {
+        address: subjectInfo.address ?? "",
+        addressForDisplay:
+          subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
+        legalDescription: subjectInfo.legalDescription ?? "",
+        acres: subjectInfo.acres ?? "",
+      };
 
-    const updatedSubject: SubjectInfo = {
-      address: subjectInfo.address ?? "",
-      addressForDisplay:
-        subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
-      legalDescription: subjectInfo.legalDescription ?? "",
-      acres: subjectInfo.acres ?? "",
-    };
-
-    const mapId = LAND_COMPS_MAP_ID;
-    const subjectMarker: MapMarker = {
-      id: `marker-subject-${mapId}`,
-      mapId,
-      markerPosition: subjectMarkerPosition
-        ? { ...subjectMarkerPosition }
-        : null,
-      bubblePosition: subjectBubblePosition
-        ? { ...subjectBubblePosition }
-        : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
-
-    const splitPairs = comparables.map((comp) =>
-      splitComparableInfo(
-        {
-          ...comp,
-          type: comp.type ?? PAGE_COMPARABLE_TYPE,
-          address: comp.address,
-          addressForDisplay: comp.addressForDisplay ?? comp.address ?? "",
-          isTailPinned: comp.isTailPinned,
-        },
+      const mapId = LAND_COMPS_MAP_ID;
+      const subjectMarker: MapMarker = {
+        id: `marker-subject-${mapId}`,
         mapId,
-      ),
-    );
-    const updatedComparables: Comparable[] = splitPairs.map((p) => p.comparable);
-    const compMarkers: MapMarker[] = splitPairs.map((p) => p.marker);
+        markerPosition: subjectMarkerPosition
+          ? { ...subjectMarkerPosition }
+          : null,
+        bubblePosition: subjectBubblePosition
+          ? { ...subjectBubblePosition }
+          : null,
+        isTailPinned: isSubjectTailPinned,
+        pinnedTailTipPosition: subjectPinnedTailTipPosition
+          ? { ...subjectPinnedTailTipPosition }
+          : null,
+      };
 
-    const otherComparables = baseProject.comparables.filter(
-      (c) => c.type !== PAGE_COMPARABLE_TYPE,
-    );
+      const splitPairs = comparables.map((comp) =>
+        splitComparableInfo(
+          {
+            ...comp,
+            type: comp.type ?? PAGE_COMPARABLE_TYPE,
+            address: comp.address,
+            addressForDisplay: comp.addressForDisplay ?? comp.address ?? "",
+            isTailPinned: comp.isTailPinned,
+          },
+          mapId,
+        ),
+      );
+      const updatedComparables: Comparable[] = splitPairs.map(
+        (p) => p.comparable,
+      );
+      const compMarkers: MapMarker[] = splitPairs.map((p) => p.marker);
 
-    const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
-      ...m,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      hideUI,
-      documentFrameSize,
-      markers: [subjectMarker, ...compMarkers],
-    }));
+      const otherComparables = baseProject.comparables.filter(
+        (c) => c.type !== PAGE_COMPARABLE_TYPE,
+      );
 
-    const snapshot: ProjectData = {
-      ...baseProject,
-      subject: updatedSubject,
-      comparables: [...otherComparables, ...updatedComparables],
-      maps: updatedMaps,
-    };
+      const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
+        ...m,
+        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+        mapZoom,
+        bubbleSize,
+        hideUI,
+        documentFrameSize,
+        markers: [subjectMarker, ...compMarkers],
+      }));
 
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return {
+        ...baseProject,
+        subject: updatedSubject,
+        comparables: [...otherComparables, ...updatedComparables],
+        maps: updatedMaps,
+      };
+    });
   }, [
+    updateProject,
     comparables,
     documentFrameSize,
     hideUI,
@@ -308,25 +261,11 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
     mapCenter,
     mapZoom,
     bubbleSize,
-    projectName,
     subjectBubblePosition,
     subjectInfo,
     subjectMarkerPosition,
     subjectPinnedTailTipPosition,
   ]);
-
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save projects", error);
-    }
-  }, []);
 
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
@@ -341,32 +280,8 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
 
   useEffect(() => {
     if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
-
-    const saveToLocalStorage = () => {
-      persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
+    saveProject();
+  }, [isStateHydrated, saveProject]);
 
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
@@ -460,11 +375,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               type: comp.type ?? PAGE_COMPARABLE_TYPE,
               address: `${lat}, ${lng}`,
               markerPosition: newPosition,
-              position:
-                comp.position ?? {
-                  lat: newPosition.lat + 0.001,
-                  lng: newPosition.lng + 0.001,
-                },
+              position: comp.position ?? {
+                lat: newPosition.lat + 0.001,
+                lng: newPosition.lng + 0.001,
+              },
               pinnedTailTipPosition:
                 comp.pinnedTailTipPosition ??
                 (comp.isTailPinned ? newPosition : undefined),
@@ -497,11 +411,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               address,
               addressForDisplay: comp.addressForDisplay ?? address,
               markerPosition: newPosition,
-              position:
-                comp.position ?? {
-                  lat: newPosition.lat + 0.001,
-                  lng: newPosition.lng + 0.001,
-                },
+              position: comp.position ?? {
+                lat: newPosition.lat + 0.001,
+                lng: newPosition.lng + 0.001,
+              },
               pinnedTailTipPosition:
                 comp.pinnedTailTipPosition ??
                 (comp.isTailPinned ? newPosition : undefined),
@@ -513,6 +426,14 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
       console.error("Error geocoding comparable address:", error);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">
@@ -636,8 +557,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
                     const currentMarkerPos = subjectMarkerPositionRef.current;
                     const currentBubblePos = subjectBubblePositionRef.current;
                     if (currentMarkerPos && currentBubblePos) {
-                      const latDiff = currentBubblePos.lat - currentMarkerPos.lat;
-                      const lngDiff = currentBubblePos.lng - currentMarkerPos.lng;
+                      const latDiff =
+                        currentBubblePos.lat - currentMarkerPos.lat;
+                      const lngDiff =
+                        currentBubblePos.lng - currentMarkerPos.lng;
                       setSubjectMarkerPosition(newPosition);
                       setSubjectBubblePosition({
                         lat: newPosition.lat + latDiff,
@@ -684,7 +607,9 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
               <ComparableMarker
                 key={comp.id}
                 position={comp.position as { lat: number; lng: number }}
-                markerPosition={comp.markerPosition as { lat: number; lng: number }}
+                markerPosition={
+                  comp.markerPosition as { lat: number; lng: number }
+                }
                 comparableInfo={comp}
                 comparableNumber={index + 1}
                 onPositionChange={(newPos: { lat: number; lng: number }) => {
@@ -702,7 +627,10 @@ export default function LandComparablesMapPage({ params }: ComparablesMapPagePro
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+        />
       </div>
     </div>
   );

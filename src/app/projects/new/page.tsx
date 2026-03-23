@@ -4,25 +4,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   createDefaultProject,
 } from "~/utils/projectStore";
 import type {
   ProjectData,
-  ProjectsMap,
   Comparable,
   ComparableType,
 } from "~/utils/projectStore";
 import { env } from "~/env";
 import { useProjectsList, type DriveProject } from "~/hooks/useProjectsList";
+import { insertProject } from "~/lib/supabase-queries";
 
 interface CompData {
   Address?: string;
   APN?: string;
   Recording?: string;
-  '#': number;
+  "#": number;
   [key: string]: unknown;
 }
 
@@ -43,24 +40,30 @@ interface ProjectDataResponse {
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const { projects: availableProjects, isLoading: isLoadingList, error: listError } = useProjectsList();
-  
+  const {
+    projects: availableProjects,
+    isLoading: isLoadingList,
+    error: listError,
+  } = useProjectsList();
+
   const [projectName, setProjectName] = useState("");
   const [projectFolderId, setProjectFolderId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedProject, setSelectedProject] = useState<DriveProject | null>(null);
+  const [selectedProject, setSelectedProject] = useState<DriveProject | null>(
+    null,
+  );
 
-  const filteredProjects = availableProjects.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProjects = availableProjects.filter((p) =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleSelectProject = (project: DriveProject) => {
     setSelectedProject(project);
     setProjectFolderId(project.id);
     setProjectName(project.name);
-    setSearchTerm(""); // Clear search when selected
+    setSearchTerm("");
   };
 
   const handleClearSelection = () => {
@@ -86,19 +89,14 @@ export default function NewProjectPage() {
     setIsLoading(true);
 
     try {
-      // Fetch project data from webhook
       const response = await fetch(
         env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/project-data",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectFolderId: projectFolderId.trim(),
-            include: {
-              subjectPhoto: false,
-            },
+            include: { subjectPhoto: false },
           }),
         },
       );
@@ -110,30 +108,6 @@ export default function NewProjectPage() {
       const projectData = (await response.json()) as ProjectDataResponse;
       if (!projectData) {
         throw new Error("No project data returned from webhook");
-      }
-
-      // Load existing projects
-      let projects: ProjectsMap = {};
-      if (typeof window !== "undefined") {
-        const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored) as Record<
-              string,
-              Partial<ProjectData>
-            >;
-            projects = normalizeProjectsMap(parsed);
-          } catch (error) {
-            console.error("Failed to parse stored projects", error);
-          }
-        }
-      }
-
-      // Check if project name already exists
-      if (projects[projectName.trim()]) {
-        setError("A project with that name already exists");
-        setIsLoading(false);
-        return;
       }
 
       const defaultProject = createDefaultProject();
@@ -185,25 +159,11 @@ export default function NewProjectPage() {
         clientCompany: projectData.clientCompany || undefined,
       };
 
-      // Normalize the project data
       const normalizedProject = normalizeProjectData(newProject);
 
-      // Save to localStorage
-      projects[projectName.trim()] = normalizedProject;
+      const newId = await insertProject(projectName.trim(), normalizedProject);
 
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          PROJECTS_STORAGE_KEY,
-          JSON.stringify(projects),
-        );
-        window.localStorage.setItem(
-          CURRENT_PROJECT_STORAGE_KEY,
-          projectName.trim(),
-        );
-      }
-
-      // Navigate to projects page
-      router.push("/projects");
+      router.push(`/project/${newId}`);
     } catch (error) {
       console.error("Error creating project:", error);
       setError(
@@ -226,12 +186,10 @@ export default function NewProjectPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {!selectedProject ? (
             <div className="space-y-4">
-              <label 
-                className="block text-sm font-semibold text-gray-700 dark:text-gray-300"
-              >
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Select a Project Folder
               </label>
-              
+
               <input
                 type="text"
                 placeholder="Search projects..."
@@ -271,7 +229,7 @@ export default function NewProjectPage() {
             </div>
           ) : (
             <div className="space-y-6">
-               <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
+              <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -308,7 +266,8 @@ export default function NewProjectPage() {
                   disabled={isLoading}
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  You can rename the project for the app (this won't change the folder name in Drive).
+                  You can rename the project for the app (this won&apos;t change
+                  the folder name in Drive).
                 </p>
               </div>
 

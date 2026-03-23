@@ -1,72 +1,38 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { ReportSectionContent } from "~/components/ReportSectionContent";
 import { type ReportSection } from "~/server/reports/actions";
-import {
-  CURRENT_PROJECT_STORAGE_KEY,
-  PROJECTS_STORAGE_KEY,
-  normalizeProjectData,
-  normalizeProjectsMap,
-  type ProjectData,
-} from "~/utils/projectStore";
+import { useProject } from "~/hooks/useProject";
 
 interface ReportSectionPageProps {
   section: ReportSection;
   title: string;
   description?: string;
-  projectName?: string;
 }
 
 export function ReportSectionPage({
   section,
   title,
   description,
-  projectName: propsProjectName,
 }: ReportSectionPageProps) {
-  const searchParams = useSearchParams();
-  const [projectFolderId, setProjectFolderId] = useState<string | undefined>(
-    undefined,
-  );
-  const [projectName, setProjectName] = useState<string | null>(null);
+  const routeParams = useParams<{ projectId: string }>();
+  const projectId = routeParams.projectId ?? "";
+  const { project, projectName, isLoading } = useProject(projectId);
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-      if (!stored) {
-        setError("No projects found. Create a project first.");
-        return;
-      }
-
-      const raw = JSON.parse(stored) as Record<string, Partial<ProjectData>>;
-      const projects = normalizeProjectsMap(raw);
-
-      const requestedProject =
-        propsProjectName ??
-        searchParams.get("project") ??
-        window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ??
-        Object.keys(projects)[0];
-
-      if (!requestedProject || !projects[requestedProject]) {
-        setError("Select a project from the Projects page to continue.");
-        return;
-      }
-
-      const normalized = normalizeProjectData(projects[requestedProject]);
-
-      setProjectName(requestedProject);
-      setProjectFolderId(normalized.projectFolderId ?? undefined);
+    if (isLoading) return;
+    if (!project) {
+      setError("Select a project from the Projects page to continue.");
+    } else {
       setError(null);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load project data.";
-      setError(message);
     }
-  }, [searchParams, propsProjectName]);
+  }, [project, isLoading]);
+
+  const projectFolderId = project?.projectFolderId;
 
   return (
     <div className="space-y-3">

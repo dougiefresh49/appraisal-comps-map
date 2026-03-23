@@ -15,6 +15,7 @@ const geist = Geist({
 });
 
 import { ThemeProvider } from "~/components/ThemeProvider";
+import { SupabaseAuthProvider } from "~/components/SupabaseAuthProvider";
 
 export default function RootLayout({
   children,
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable}`}>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <SupabaseAuthProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </SupabaseAuthProvider>
       </body>
     </html>
   );
