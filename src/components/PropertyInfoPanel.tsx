@@ -16,7 +16,7 @@ interface StreetLabelData {
   position: { lat: number; lng: number };
   text: string;
   rotation: number;
-  isEditing: boolean;
+  isEditing?: boolean;
 }
 
 interface PropertyInfoPanelProps {

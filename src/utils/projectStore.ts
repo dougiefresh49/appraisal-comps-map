@@ -1,3 +1,7 @@
+// ============================================================
+// Core Primitive Types
+// ============================================================
+
 export type LatLng = { lat: number; lng: number };
 
 export type ComparableType = "Land" | "Sales" | "Rentals";
@@ -14,59 +18,12 @@ export interface SubjectInfo {
   acres?: string;
 }
 
-export interface ProjectSubjectState {
-  info: SubjectInfo;
-  markerPosition: LatLng | null;
-  bubblePosition: LatLng | null;
-  isTailPinned: boolean;
-  pinnedTailTipPosition: LatLng | null;
-}
-
-export interface ComparableInfo {
-  id: string;
-  number?: string; // Stable number from API/N8N
-  address: string;
-  addressForDisplay: string;
-  isTailPinned: boolean;
-  type: ComparableType;
-  pinnedTailTipPosition?: LatLng;
-  position?: LatLng;
-  markerPosition?: LatLng;
-  distance?: string;
-  apn?: string[]; // Array of APN numbers
-  instrumentNumber?: string; // Recording number
-  folderId?: string;
-  images?: ImageData[];
-}
-
 export interface ImageData {
   id: string;
   name: string;
   webViewLink: string;
   webViewUrl: string;
   mimeType: string;
-}
-
-export interface ComparablesMapState {
-  // subjectInfo removed - use subject.info instead
-  subjectMarkerPosition?: LatLng | null; // Can be different per comp map
-  subjectBubblePosition?: LatLng | null; // Can be different per comp map
-  comparables?: ComparableInfo[];
-  mapCenter?: LatLng;
-  mapZoom?: number;
-  bubbleSize?: number;
-  hideUI?: boolean;
-  documentFrameSize?: number; // Scale factor for document overlay
-  isSubjectTailPinned?: boolean;
-  subjectPinnedTailTipPosition?: LatLng | null;
-  landLocationMaps?: Record<string, LocationMapState>;
-  salesLocationMaps?: Record<string, LocationMapState>;
-  rentalsLocationMaps?: Record<string, LocationMapState>;
-}
-
-export interface ProjectComparablesState {
-  byType: Record<ComparableType, ComparablesMapState>;
-  activeType: ComparableType;
 }
 
 export type PolygonPath = LatLng;
@@ -76,7 +33,7 @@ export interface StreetLabelData {
   position: LatLng;
   text: string;
   rotation: number;
-  isEditing: boolean;
+  isEditing?: boolean;
 }
 
 export interface Circle {
@@ -90,7 +47,131 @@ export interface Polyline {
   path: PolygonPath[];
 }
 
-export interface LocationMapState {
+// ============================================================
+// New Entity Types (Supabase-ready normalized structure)
+// ============================================================
+
+export type MapType =
+  | "subject-location"
+  | "neighborhood"
+  | "land-comps"
+  | "sales-comps"
+  | "rentals-comps"
+  | "comp-location";
+
+/** Property data for a comparable. No map visualization state. */
+export interface Comparable {
+  id: string;
+  type: ComparableType;
+  number?: string;
+  address: string;
+  addressForDisplay: string;
+  apn?: string[];
+  instrumentNumber?: string;
+  folderId?: string;
+  images?: ImageData[];
+}
+
+/** Position of a subject or comparable on a specific map. */
+export interface MapMarker {
+  id: string;
+  mapId: string;
+  compId?: string;
+  markerPosition: LatLng | null;
+  bubblePosition: LatLng | null;
+  isTailPinned: boolean;
+  pinnedTailTipPosition: LatLng | null;
+}
+
+/** Drawing tools state for a map (polygons, circles, labels). */
+export interface MapDrawings {
+  polygonPath: LatLng[];
+  circles: Circle[];
+  polylines: Polyline[];
+  streetLabels: StreetLabelData[];
+  labelSize: number;
+  circleRadius: 1 | 2 | 3 | 5;
+  tailDirection: "left" | "right";
+}
+
+/** A map's viewport, drawings, and markers. One per "map page." */
+export interface MapView {
+  id: string;
+  type: MapType;
+  linkedCompId?: string;
+  mapCenter: LatLng;
+  mapZoom: number;
+  bubbleSize: number;
+  hideUI: boolean;
+  documentFrameSize: number;
+  drawings: MapDrawings;
+  markers: MapMarker[];
+}
+
+// ============================================================
+// ProjectData (normalized shape)
+// ============================================================
+
+export interface ProjectData {
+  subject: SubjectInfo;
+  comparables: Comparable[];
+  maps: MapView[];
+  subjectPhotosFolderId?: string;
+  projectFolderId?: string;
+  clientCompany?: string;
+  clientName?: string;
+  propertyType?: string;
+}
+
+export type ProjectsMap = Record<string, ProjectData>;
+
+// ============================================================
+// View Model Types (component-facing, constructed at runtime)
+// ============================================================
+
+/**
+ * Combines Comparable data with MapMarker positions for rendering.
+ * Used by ComparableMarker, ComparablesPanel, etc.
+ */
+export interface ComparableInfo {
+  id: string;
+  number?: string;
+  address: string;
+  addressForDisplay: string;
+  isTailPinned: boolean;
+  type: ComparableType;
+  pinnedTailTipPosition?: LatLng;
+  position?: LatLng;
+  markerPosition?: LatLng;
+  distance?: string;
+  apn?: string[];
+  instrumentNumber?: string;
+  folderId?: string;
+  images?: ImageData[];
+}
+
+// ============================================================
+// Legacy Types (for migration from old localStorage shape)
+// ============================================================
+
+interface LegacyComparableInfo {
+  id: string;
+  number?: string;
+  address: string;
+  addressForDisplay: string;
+  isTailPinned: boolean;
+  type: ComparableType;
+  pinnedTailTipPosition?: LatLng;
+  position?: LatLng;
+  markerPosition?: LatLng;
+  distance?: string;
+  apn?: string[];
+  instrumentNumber?: string;
+  folderId?: string;
+  images?: ImageData[];
+}
+
+interface LegacyLocationMapState {
   propertyInfo?: SubjectInfo;
   markerPosition?: LatLng | null;
   bubblePosition?: LatLng | null;
@@ -110,13 +191,36 @@ export interface LocationMapState {
   documentFrameSize?: number;
 }
 
-export type NeighborhoodMapState = LocationMapState;
+interface LegacyComparablesMapState {
+  subjectMarkerPosition?: LatLng | null;
+  subjectBubblePosition?: LatLng | null;
+  comparables?: LegacyComparableInfo[];
+  mapCenter?: LatLng;
+  mapZoom?: number;
+  bubbleSize?: number;
+  hideUI?: boolean;
+  documentFrameSize?: number;
+  isSubjectTailPinned?: boolean;
+  subjectPinnedTailTipPosition?: LatLng | null;
+  landLocationMaps?: Record<string, LegacyLocationMapState>;
+  salesLocationMaps?: Record<string, LegacyLocationMapState>;
+  rentalsLocationMaps?: Record<string, LegacyLocationMapState>;
+}
 
-export interface ProjectData {
-  subject: ProjectSubjectState;
-  comparables: ProjectComparablesState;
-  location: LocationMapState;
-  neighborhood: NeighborhoodMapState;
+interface LegacyProjectData {
+  subject?: {
+    info?: SubjectInfo;
+    markerPosition?: LatLng | null;
+    bubblePosition?: LatLng | null;
+    isTailPinned?: boolean;
+    pinnedTailTipPosition?: LatLng | null;
+  };
+  comparables?: {
+    byType?: Partial<Record<ComparableType, LegacyComparablesMapState>>;
+    activeType?: ComparableType;
+  };
+  location?: LegacyLocationMapState;
+  neighborhood?: LegacyLocationMapState;
   subjectPhotosFolderId?: string;
   projectFolderId?: string;
   clientCompany?: string;
@@ -124,7 +228,9 @@ export interface ProjectData {
   propertyType?: string;
 }
 
-export type ProjectsMap = Record<string, ProjectData>;
+// ============================================================
+// Constants
+// ============================================================
 
 export const PROJECTS_STORAGE_KEY = "appraisal-projects";
 export const CURRENT_PROJECT_STORAGE_KEY = "appraisal-current-project";
@@ -133,45 +239,609 @@ export const DEFAULT_MAP_CENTER: LatLng = { lat: 31.8458, lng: -102.3676 };
 export const DEFAULT_LABEL_SIZE = 1.0;
 export const DEFAULT_CIRCLE_RADIUS: 1 | 2 | 3 | 5 = 2;
 
-export const SUBJECT_DEFAULT: ProjectSubjectState = {
-  info: {
-    address: "",
-    addressForDisplay: "",
-  },
-  markerPosition: null,
-  bubblePosition: null,
-  isTailPinned: true,
-  pinnedTailTipPosition: null,
+export const WELL_KNOWN_MAP_IDS: Record<
+  Exclude<MapType, "comp-location">,
+  string
+> = {
+  "subject-location": "map-subject-location",
+  neighborhood: "map-neighborhood",
+  "land-comps": "map-land-comps",
+  "sales-comps": "map-sales-comps",
+  "rentals-comps": "map-rentals-comps",
 };
 
-export const LOCATION_DEFAULT: LocationMapState = {
-  propertyInfo: undefined,
-  markerPosition: SUBJECT_DEFAULT.markerPosition,
-  bubblePosition: SUBJECT_DEFAULT.bubblePosition,
+const DEFAULT_DRAWINGS: MapDrawings = {
   polygonPath: [],
   circles: [],
-  mapCenter: { ...DEFAULT_MAP_CENTER },
-  mapZoom: 17,
-  bubbleSize: 1.0,
-  tailDirection: "right",
-  hideUI: false,
-  isSubjectTailPinned: true,
-  subjectPinnedTailTipPosition: null,
+  polylines: [],
   streetLabels: [],
   labelSize: DEFAULT_LABEL_SIZE,
   circleRadius: DEFAULT_CIRCLE_RADIUS,
-  documentFrameSize: 1.0,
+  tailDirection: "right",
 };
 
-const NEIGHBORHOOD_DEFAULT: NeighborhoodMapState = {
-  ...LOCATION_DEFAULT,
-};
+// ============================================================
+// Map Type <-> Comparable Type helpers
+// ============================================================
 
-function isComparableType(value: unknown): value is ComparableType {
-  return (
-    typeof value === "string" &&
-    (value === "Land" || value === "Sales" || value === "Rentals")
+export function mapTypeForCompType(compType: ComparableType): Exclude<MapType, "comp-location"> {
+  switch (compType) {
+    case "Land":
+      return "land-comps";
+    case "Sales":
+      return "sales-comps";
+    case "Rentals":
+      return "rentals-comps";
+  }
+}
+
+export function compTypeForMapType(
+  mapType: MapType,
+): ComparableType | undefined {
+  switch (mapType) {
+    case "land-comps":
+      return "Land";
+    case "sales-comps":
+      return "Sales";
+    case "rentals-comps":
+      return "Rentals";
+    default:
+      return undefined;
+  }
+}
+
+export function compLocationMapId(compId: string): string {
+  return `map-comp-location-${compId}`;
+}
+
+// ============================================================
+// View model builders
+// ============================================================
+
+export function buildComparableInfo(
+  comp: Comparable,
+  marker?: MapMarker,
+): ComparableInfo {
+  return {
+    id: comp.id,
+    number: comp.number,
+    address: comp.address,
+    addressForDisplay: comp.addressForDisplay,
+    type: comp.type,
+    apn: comp.apn,
+    instrumentNumber: comp.instrumentNumber,
+    folderId: comp.folderId,
+    images: comp.images,
+    isTailPinned: marker?.isTailPinned ?? true,
+    pinnedTailTipPosition: marker?.pinnedTailTipPosition ?? undefined,
+    position: marker?.bubblePosition ?? undefined,
+    markerPosition: marker?.markerPosition ?? undefined,
+  };
+}
+
+export function splitComparableInfo(
+  info: ComparableInfo,
+  mapId: string,
+): { comparable: Comparable; marker: MapMarker } {
+  return {
+    comparable: {
+      id: info.id,
+      type: info.type,
+      number: info.number,
+      address: info.address,
+      addressForDisplay: info.addressForDisplay,
+      apn: info.apn,
+      instrumentNumber: info.instrumentNumber,
+      folderId: info.folderId,
+      images: info.images,
+    },
+    marker: {
+      id: `marker-${info.id}-${mapId}`,
+      mapId,
+      compId: info.id,
+      markerPosition: info.markerPosition ?? null,
+      bubblePosition: info.position ?? null,
+      isTailPinned: info.isTailPinned,
+      pinnedTailTipPosition: info.pinnedTailTipPosition ?? null,
+    },
+  };
+}
+
+// ============================================================
+// Map / marker access helpers
+// ============================================================
+
+export function getMapByType(
+  project: ProjectData,
+  type: MapType,
+): MapView | undefined {
+  return project.maps.find((m) => m.type === type);
+}
+
+export function getMapForComp(
+  project: ProjectData,
+  compId: string,
+): MapView | undefined {
+  return project.maps.find(
+    (m) => m.type === "comp-location" && m.linkedCompId === compId,
   );
+}
+
+export function getSubjectMarker(mapView: MapView): MapMarker | undefined {
+  return mapView.markers.find((m) => !m.compId);
+}
+
+export function getCompMarker(
+  mapView: MapView,
+  compId: string,
+): MapMarker | undefined {
+  return mapView.markers.find((m) => m.compId === compId);
+}
+
+export function getComparablesByType(
+  project: ProjectData,
+  type: ComparableType,
+): Comparable[] {
+  return project.comparables.filter((c) => c.type === type);
+}
+
+// ============================================================
+// Detection: legacy shape?
+// ============================================================
+
+function isLegacyShape(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  if ("location" in d) return true;
+  if (
+    d.comparables &&
+    typeof d.comparables === "object" &&
+    !Array.isArray(d.comparables)
+  )
+    return true;
+  return false;
+}
+
+// ============================================================
+// Migration: Legacy → New
+// ============================================================
+
+function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
+  const subject: SubjectInfo = {
+    address: legacy.subject?.info?.address ?? "",
+    addressForDisplay: legacy.subject?.info?.addressForDisplay ?? "",
+    legalDescription: legacy.subject?.info?.legalDescription ?? "",
+    acres: legacy.subject?.info?.acres ?? "",
+  };
+
+  const comparables: Comparable[] = [];
+  const maps: MapView[] = [];
+
+  // --- Subject Location Map ---
+  const slId = WELL_KNOWN_MAP_IDS["subject-location"];
+  maps.push({
+    id: slId,
+    type: "subject-location",
+    mapCenter: legacy.location?.mapCenter
+      ? { ...legacy.location.mapCenter }
+      : { ...DEFAULT_MAP_CENTER },
+    mapZoom: legacy.location?.mapZoom ?? 17,
+    bubbleSize: legacy.location?.bubbleSize ?? 1.0,
+    hideUI: legacy.location?.hideUI ?? false,
+    documentFrameSize: legacy.location?.documentFrameSize ?? 1.0,
+    drawings: migrateDrawings(legacy.location),
+    markers: [
+      {
+        id: `marker-subject-${slId}`,
+        mapId: slId,
+        markerPosition:
+          legacy.subject?.markerPosition ??
+          legacy.location?.markerPosition ??
+          null,
+        bubblePosition:
+          legacy.subject?.bubblePosition ??
+          legacy.location?.bubblePosition ??
+          null,
+        isTailPinned:
+          legacy.location?.isSubjectTailPinned ??
+          legacy.subject?.isTailPinned ??
+          true,
+        pinnedTailTipPosition:
+          legacy.location?.subjectPinnedTailTipPosition ??
+          legacy.subject?.pinnedTailTipPosition ??
+          null,
+      },
+    ],
+  });
+
+  // --- Neighborhood Map ---
+  const nhId = WELL_KNOWN_MAP_IDS["neighborhood"];
+  maps.push({
+    id: nhId,
+    type: "neighborhood",
+    mapCenter: legacy.neighborhood?.mapCenter
+      ? { ...legacy.neighborhood.mapCenter }
+      : { ...DEFAULT_MAP_CENTER },
+    mapZoom: legacy.neighborhood?.mapZoom ?? 17,
+    bubbleSize: legacy.neighborhood?.bubbleSize ?? 1.0,
+    hideUI: legacy.neighborhood?.hideUI ?? false,
+    documentFrameSize: legacy.neighborhood?.documentFrameSize ?? 1.0,
+    drawings: migrateDrawings(legacy.neighborhood),
+    markers: [
+      {
+        id: `marker-subject-${nhId}`,
+        mapId: nhId,
+        markerPosition:
+          legacy.neighborhood?.markerPosition ??
+          legacy.subject?.markerPosition ??
+          null,
+        bubblePosition:
+          legacy.neighborhood?.bubblePosition ??
+          legacy.subject?.bubblePosition ??
+          null,
+        isTailPinned:
+          legacy.neighborhood?.isSubjectTailPinned ??
+          legacy.subject?.isTailPinned ??
+          true,
+        pinnedTailTipPosition:
+          legacy.neighborhood?.subjectPinnedTailTipPosition ??
+          legacy.subject?.pinnedTailTipPosition ??
+          null,
+      },
+    ],
+  });
+
+  // --- Comparables Maps (per type) ---
+  for (const compType of COMPARABLE_TYPES) {
+    const typeState = legacy.comparables?.byType?.[compType];
+    const mType = mapTypeForCompType(compType);
+    const mId = WELL_KNOWN_MAP_IDS[mType];
+    const markers: MapMarker[] = [];
+
+    markers.push({
+      id: `marker-subject-${mId}`,
+      mapId: mId,
+      markerPosition:
+        typeState?.subjectMarkerPosition ??
+        legacy.subject?.markerPosition ??
+        null,
+      bubblePosition:
+        typeState?.subjectBubblePosition ??
+        legacy.subject?.bubblePosition ??
+        null,
+      isTailPinned: typeState?.isSubjectTailPinned ?? true,
+      pinnedTailTipPosition:
+        typeState?.subjectPinnedTailTipPosition ?? null,
+    });
+
+    for (const comp of typeState?.comparables ?? []) {
+      comparables.push({
+        id: comp.id,
+        type: comp.type ?? compType,
+        number: comp.number,
+        address: comp.address ?? "",
+        addressForDisplay: comp.addressForDisplay ?? comp.address ?? "",
+        apn: comp.apn,
+        instrumentNumber: comp.instrumentNumber,
+        folderId: comp.folderId,
+        images: comp.images,
+      });
+
+      markers.push({
+        id: `marker-${comp.id}-${mId}`,
+        mapId: mId,
+        compId: comp.id,
+        markerPosition: comp.markerPosition ?? null,
+        bubblePosition: comp.position ?? null,
+        isTailPinned: comp.isTailPinned ?? true,
+        pinnedTailTipPosition: comp.pinnedTailTipPosition ?? null,
+      });
+    }
+
+    maps.push({
+      id: mId,
+      type: mType,
+      mapCenter: typeState?.mapCenter
+        ? { ...typeState.mapCenter }
+        : { ...DEFAULT_MAP_CENTER },
+      mapZoom: typeState?.mapZoom ?? 17,
+      bubbleSize: typeState?.bubbleSize ?? 1.0,
+      hideUI: typeState?.hideUI ?? false,
+      documentFrameSize: typeState?.documentFrameSize ?? 1.0,
+      drawings: { ...DEFAULT_DRAWINGS },
+      markers,
+    });
+
+    // --- Comp Location Maps ---
+    const locationMaps =
+      compType === "Land"
+        ? typeState?.landLocationMaps
+        : compType === "Sales"
+          ? typeState?.salesLocationMaps
+          : typeState?.rentalsLocationMaps;
+
+    if (locationMaps) {
+      for (const [cId, locState] of Object.entries(locationMaps)) {
+        const clmId = compLocationMapId(cId);
+        maps.push({
+          id: clmId,
+          type: "comp-location",
+          linkedCompId: cId,
+          mapCenter: locState.mapCenter
+            ? { ...locState.mapCenter }
+            : { ...DEFAULT_MAP_CENTER },
+          mapZoom: locState.mapZoom ?? 17,
+          bubbleSize: locState.bubbleSize ?? 1.0,
+          hideUI: locState.hideUI ?? false,
+          documentFrameSize: locState.documentFrameSize ?? 1.0,
+          drawings: migrateDrawings(locState),
+          markers: [
+            {
+              id: `marker-${cId}-${clmId}`,
+              mapId: clmId,
+              compId: cId,
+              markerPosition: locState.markerPosition ?? null,
+              bubblePosition: locState.bubblePosition ?? null,
+              isTailPinned: locState.isSubjectTailPinned ?? true,
+              pinnedTailTipPosition:
+                locState.subjectPinnedTailTipPosition ?? null,
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  return {
+    subject,
+    comparables,
+    maps,
+    subjectPhotosFolderId: legacy.subjectPhotosFolderId,
+    projectFolderId: legacy.projectFolderId,
+    clientCompany: legacy.clientCompany,
+    clientName: legacy.clientName,
+    propertyType: legacy.propertyType,
+  };
+}
+
+function migrateDrawings(
+  loc?: LegacyLocationMapState,
+): MapDrawings {
+  return {
+    polygonPath: (loc?.polygonPath ?? []).map((p) => ({
+      lat: p.lat,
+      lng: p.lng,
+    })),
+    circles: (loc?.circles ?? []).map((c) => ({
+      ...c,
+      center: { lat: c.center.lat, lng: c.center.lng },
+    })),
+    polylines: (loc?.polylines ?? []).map((p) => ({
+      ...p,
+      path: p.path.map((pt) => ({ lat: pt.lat, lng: pt.lng })),
+    })),
+    streetLabels: (loc?.streetLabels ?? []).map((l) => ({
+      id: l.id,
+      position: { lat: l.position.lat, lng: l.position.lng },
+      text: l.text,
+      rotation: l.rotation,
+    })),
+    labelSize: loc?.labelSize ?? DEFAULT_LABEL_SIZE,
+    circleRadius: loc?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    tailDirection: loc?.tailDirection ?? "right",
+  };
+}
+
+// ============================================================
+// Normalization (new shape)
+// ============================================================
+
+function cloneLatLng(value?: LatLng | null): LatLng | null {
+  if (!value) return null;
+  return { lat: value.lat, lng: value.lng };
+}
+
+function normalizeDrawings(d?: Partial<MapDrawings>): MapDrawings {
+  return {
+    polygonPath: Array.isArray(d?.polygonPath)
+      ? d.polygonPath.map((p) => ({ lat: p.lat, lng: p.lng }))
+      : [],
+    circles: Array.isArray(d?.circles)
+      ? d.circles.map((c) => ({
+          ...c,
+          center: { lat: c.center.lat, lng: c.center.lng },
+        }))
+      : [],
+    polylines: Array.isArray(d?.polylines)
+      ? d.polylines.map((p) => ({
+          ...p,
+          path: p.path.map((pt) => ({ lat: pt.lat, lng: pt.lng })),
+        }))
+      : [],
+    streetLabels: Array.isArray(d?.streetLabels)
+      ? d.streetLabels.map((l) => ({
+          id: l.id,
+          position: { lat: l.position.lat, lng: l.position.lng },
+          text: l.text,
+          rotation: l.rotation,
+        }))
+      : [],
+    labelSize:
+      typeof d?.labelSize === "number" ? d.labelSize : DEFAULT_LABEL_SIZE,
+    circleRadius: d?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
+    tailDirection:
+      d?.tailDirection === "left" || d?.tailDirection === "right"
+        ? d.tailDirection
+        : "right",
+  };
+}
+
+function normalizeMarker(
+  m: Partial<MapMarker>,
+  fallbackMapId: string,
+): MapMarker {
+  return {
+    id: m.id ?? `marker-${Date.now()}-${Math.random()}`,
+    mapId: m.mapId ?? fallbackMapId,
+    compId: m.compId,
+    markerPosition: cloneLatLng(m.markerPosition),
+    bubblePosition: cloneLatLng(m.bubblePosition),
+    isTailPinned: typeof m.isTailPinned === "boolean" ? m.isTailPinned : true,
+    pinnedTailTipPosition: cloneLatLng(m.pinnedTailTipPosition),
+  };
+}
+
+function normalizeMapView(m: Partial<MapView>): MapView {
+  const id = m.id ?? `map-${Date.now()}-${Math.random()}`;
+  return {
+    id,
+    type: m.type ?? "subject-location",
+    linkedCompId: m.linkedCompId,
+    mapCenter: cloneLatLng(m.mapCenter) ?? { ...DEFAULT_MAP_CENTER },
+    mapZoom: typeof m.mapZoom === "number" ? m.mapZoom : 17,
+    bubbleSize: typeof m.bubbleSize === "number" ? m.bubbleSize : 1.0,
+    hideUI: typeof m.hideUI === "boolean" ? m.hideUI : false,
+    documentFrameSize:
+      typeof m.documentFrameSize === "number" ? m.documentFrameSize : 1.0,
+    drawings: normalizeDrawings(m.drawings),
+    markers: Array.isArray(m.markers)
+      ? m.markers.map((mk) => normalizeMarker(mk, id))
+      : [],
+  };
+}
+
+function normalizeComparableEntity(
+  c: Partial<Comparable>,
+  fallbackType: ComparableType = "Land",
+): Comparable {
+  const resolvedType =
+    c.type && COMPARABLE_TYPES.includes(c.type) ? c.type : fallbackType;
+  return {
+    id:
+      typeof c.id === "string" && c.id.trim().length > 0
+        ? c.id
+        : `comp-${Date.now()}-${Math.random()}`,
+    type: resolvedType,
+    number: c.number,
+    address: c.address ?? "",
+    addressForDisplay: c.addressForDisplay ?? c.address ?? "",
+    apn:
+      Array.isArray(c.apn) && c.apn.length > 0 ? c.apn : undefined,
+    instrumentNumber:
+      typeof c.instrumentNumber === "string" &&
+      c.instrumentNumber.trim().length > 0
+        ? c.instrumentNumber
+        : undefined,
+    folderId: c.folderId,
+    images: c.images,
+  };
+}
+
+function createDefaultMapView(
+  type: MapType,
+  linkedCompId?: string,
+): MapView {
+  const id =
+    type === "comp-location" && linkedCompId
+      ? compLocationMapId(linkedCompId)
+      : (WELL_KNOWN_MAP_IDS[
+          type as keyof typeof WELL_KNOWN_MAP_IDS
+        ] ?? `map-${type}`);
+  return {
+    id,
+    type,
+    linkedCompId,
+    mapCenter: { ...DEFAULT_MAP_CENTER },
+    mapZoom: 17,
+    bubbleSize: 1.0,
+    hideUI: false,
+    documentFrameSize: 1.0,
+    drawings: {
+      ...DEFAULT_DRAWINGS,
+      polygonPath: [],
+      circles: [],
+      polylines: [],
+      streetLabels: [],
+    },
+    markers: [],
+  };
+}
+
+// ============================================================
+// Public Normalization API
+// ============================================================
+
+export function normalizeProjectData(data?: unknown): ProjectData {
+  if (!data || typeof data !== "object") {
+    return createDefaultProject();
+  }
+
+  if (isLegacyShape(data)) {
+    const migrated = migrateLegacyProject(data as LegacyProjectData);
+    return normalizeNewShape(migrated);
+  }
+
+  return normalizeNewShape(data as Partial<ProjectData>);
+}
+
+function normalizeNewShape(data?: Partial<ProjectData>): ProjectData {
+  const subject: SubjectInfo = {
+    address: data?.subject?.address ?? "",
+    addressForDisplay: data?.subject?.addressForDisplay ?? "",
+    legalDescription: data?.subject?.legalDescription ?? "",
+    acres: data?.subject?.acres ?? "",
+  };
+
+  const comparables = Array.isArray(data?.comparables)
+    ? data.comparables.map((c) => normalizeComparableEntity(c))
+    : [];
+
+  const maps = Array.isArray(data?.maps)
+    ? data.maps.map((m) => normalizeMapView(m))
+    : [];
+
+  const wellKnownTypes: Exclude<MapType, "comp-location">[] = [
+    "subject-location",
+    "neighborhood",
+    "land-comps",
+    "sales-comps",
+    "rentals-comps",
+  ];
+  for (const wkType of wellKnownTypes) {
+    if (!maps.find((m) => m.type === wkType)) {
+      maps.push(createDefaultMapView(wkType));
+    }
+  }
+
+  return {
+    subject,
+    comparables,
+    maps,
+    subjectPhotosFolderId: data?.subjectPhotosFolderId,
+    projectFolderId: data?.projectFolderId,
+    clientCompany: data?.clientCompany,
+    clientName: data?.clientName,
+    propertyType: data?.propertyType,
+  };
+}
+
+export function createDefaultProject(): ProjectData {
+  return normalizeNewShape({});
+}
+
+export function cloneProject(project: ProjectData): ProjectData {
+  return normalizeProjectData(project);
+}
+
+export function normalizeProjectsMap(
+  raw?: Record<string, unknown>,
+): ProjectsMap {
+  if (!raw) return {};
+  return Object.entries(raw).reduce<ProjectsMap>((acc, [key, value]) => {
+    if (typeof key !== "string" || !key.trim()) return acc;
+    acc[key] = normalizeProjectData(value);
+    return acc;
+  }, {});
 }
 
 export function getNextProjectName(existingNames: string[]): string {
@@ -184,393 +854,28 @@ export function getNextProjectName(existingNames: string[]): string {
   return candidate;
 }
 
-function cloneLatLng(value?: LatLng | null): LatLng | null {
-  if (!value) return null;
-  return { lat: value.lat, lng: value.lng };
+/**
+ * Update a specific MapView in a project's maps array.
+ * Returns a new maps array with the specified map replaced.
+ */
+export function updateMapInProject(
+  project: ProjectData,
+  mapId: string,
+  updater: (map: MapView) => MapView,
+): MapView[] {
+  return project.maps.map((m) => (m.id === mapId ? updater(m) : m));
 }
 
-function cloneStreetLabel(label: StreetLabelData): StreetLabelData {
-  return {
-    ...label,
-    position: cloneLatLng(label.position) ?? { lat: 0, lng: 0 },
-  };
-}
-
-function cloneCircle(circle: Circle): Circle {
-  return {
-    ...circle,
-    center: cloneLatLng(circle.center) ?? { lat: 0, lng: 0 },
-  };
-}
-
-function cloneLandLocationState(input?: LocationMapState): LocationMapState {
-const info = input?.propertyInfo ?? SUBJECT_DEFAULT.info;
-  return {
-    propertyInfo: {
-        address: info.address ?? SUBJECT_DEFAULT.info.address,
-        addressForDisplay: info.addressForDisplay ?? SUBJECT_DEFAULT.info.addressForDisplay,
-        legalDescription: info.legalDescription ?? SUBJECT_DEFAULT.info.legalDescription,
-        acres: info.acres ?? SUBJECT_DEFAULT.info.acres
-    },
-    markerPosition: cloneLatLng(input?.markerPosition ?? null),
-    bubblePosition: cloneLatLng(input?.bubblePosition ?? null),
-    polygonPath: Array.isArray(input?.polygonPath)
-      ? input.polygonPath.map((point) => ({ lat: point.lat, lng: point.lng }))
-      : [],
-    circles: Array.isArray(input?.circles)
-      ? input.circles.map(cloneCircle)
-      : [],
-    polylines: Array.isArray(input?.polylines)
-      ? input.polylines.map((polyline) => ({
-          ...polyline,
-          path: polyline.path.map((point) => ({
-            lat: point.lat,
-            lng: point.lng,
-          })),
-        }))
-      : [],
-    mapCenter: cloneLatLng(input?.mapCenter ?? null) ?? {
-      ...DEFAULT_MAP_CENTER,
-    },
-    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
-    tailDirection:
-      input?.tailDirection === "left" || input?.tailDirection === "right"
-        ? input.tailDirection
-        : "right",
-    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    isSubjectTailPinned: typeof input?.isSubjectTailPinned === "boolean" ? input.isSubjectTailPinned : true,
-    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
-    streetLabels: Array.isArray(input?.streetLabels)
-      ? input.streetLabels.map(cloneStreetLabel)
-      : [],
-    labelSize:
-      typeof input?.labelSize === "number"
-        ? input.labelSize
-        : DEFAULT_LABEL_SIZE,
-    circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
-    documentFrameSize:
-      typeof input?.documentFrameSize === "number"
-        ? input.documentFrameSize
-        : 1.0,
-  };
-}
-
-function createEmptyComparablesMapState(
-  subject: ProjectSubjectState,
-  type: ComparableType,
-): ComparablesMapState {
-  return {
-    // subjectInfo removed - use subject.info instead
-    subjectMarkerPosition: subject.markerPosition,
-    subjectBubblePosition: subject.bubblePosition,
-    comparables: [],
-    mapCenter: { ...DEFAULT_MAP_CENTER },
-    mapZoom: 17,
-    bubbleSize: 1.0,
-    hideUI: false,
-    documentFrameSize: 1.0,
-    isSubjectTailPinned: true,
-    subjectPinnedTailTipPosition: null,
-    landLocationMaps: type === "Land" ? {} : undefined,
-  };
-}
-
-function normalizeComparable(
-  comparable: Partial<ComparableInfo> & { propertyType?: string },
-  fallbackType: ComparableType,
-): ComparableInfo {
-  const resolvedType =
-    comparable.type && isComparableType(comparable.type)
-      ? comparable.type
-      : comparable.propertyType && isComparableType(comparable.propertyType)
-        ? comparable.propertyType
-        : fallbackType;
-  return {
-    id:
-      typeof comparable.id === "string" && comparable.id.trim().length > 0
-        ? comparable.id
-        : `comp-${Date.now()}-${Math.random()}`,
-    address: comparable.address ?? "",
-    addressForDisplay: comparable.addressForDisplay ?? comparable.address ?? "",
-    isTailPinned:
-      typeof comparable.isTailPinned === "boolean"
-        ? comparable.isTailPinned
-        : true,
-    type: resolvedType,
-    pinnedTailTipPosition:
-      cloneLatLng(comparable.pinnedTailTipPosition ?? null) ?? undefined,
-    position: cloneLatLng(comparable.position ?? null) ?? undefined,
-    markerPosition: cloneLatLng(comparable.markerPosition ?? null) ?? undefined,
-    distance: comparable.distance,
-    apn:
-      Array.isArray(comparable.apn) && comparable.apn.length > 0
-        ? comparable.apn
-        : undefined,
-    instrumentNumber:
-      typeof comparable.instrumentNumber === "string" &&
-      comparable.instrumentNumber.trim().length > 0
-        ? comparable.instrumentNumber
-        : undefined,
-    number: comparable.number,
-    folderId: comparable.folderId,
-    images: comparable.images,
-  };
-}
-
-export function normalizeSubjectState(
-  input?: Partial<ProjectSubjectState>,
-): ProjectSubjectState {
-  const info = input?.info ?? {
-    address: SUBJECT_DEFAULT.info.address,
-    addressForDisplay: SUBJECT_DEFAULT.info.addressForDisplay,
-    legalDescription: SUBJECT_DEFAULT.info.legalDescription,
-    acres: SUBJECT_DEFAULT.info.acres,
-  };
-  return {
-    info: {
-      address: info.address ?? SUBJECT_DEFAULT.info.address,
-      addressForDisplay:
-        info.addressForDisplay ?? SUBJECT_DEFAULT.info.addressForDisplay,
-      legalDescription:
-        info.legalDescription ?? SUBJECT_DEFAULT.info.legalDescription,
-      acres: info.acres ?? SUBJECT_DEFAULT.info.acres,
-    },
-    markerPosition: cloneLatLng(
-      input?.markerPosition ?? SUBJECT_DEFAULT.markerPosition,
-    ),
-    bubblePosition: cloneLatLng(
-      input?.bubblePosition ?? SUBJECT_DEFAULT.bubblePosition,
-    ),
-    isTailPinned:
-      typeof input?.isTailPinned === "boolean"
-        ? input.isTailPinned
-        : SUBJECT_DEFAULT.isTailPinned,
-    pinnedTailTipPosition: cloneLatLng(
-      input?.pinnedTailTipPosition ?? SUBJECT_DEFAULT.pinnedTailTipPosition,
-    ),
-  };
-}
-
-function normalizeComparablesMapState(
-  subject: ProjectSubjectState,
-  input: ComparablesMapState | undefined,
-  fallbackType: ComparableType,
-): ComparablesMapState {
-  const comparablesArray = Array.isArray(input?.comparables)
-    ? input.comparables
-    : [];
-
-  return {
-    // subjectInfo removed - use subject.info instead
-    subjectMarkerPosition:
-      input?.subjectMarkerPosition !== undefined
-        ? cloneLatLng(input.subjectMarkerPosition)
-        : subject.markerPosition,
-    subjectBubblePosition:
-      input?.subjectBubblePosition !== undefined
-        ? cloneLatLng(input.subjectBubblePosition)
-        : subject.bubblePosition,
-    comparables: comparablesArray.map((comparable) =>
-      normalizeComparable(comparable, fallbackType),
-    ),
-    mapCenter:
-      input?.mapCenter !== undefined
-        ? (cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER })
-        : { ...DEFAULT_MAP_CENTER },
-    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
-    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    documentFrameSize:
-      typeof input?.documentFrameSize === "number"
-        ? input.documentFrameSize
-        : 1.0,
-    isSubjectTailPinned:
-      typeof input?.isSubjectTailPinned === "boolean"
-        ? input.isSubjectTailPinned
-        : true,
-    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
-    landLocationMaps:
-      fallbackType === "Land"
-        ? Object.entries(input?.landLocationMaps ?? {}).reduce<
-            Record<string, LocationMapState>
-          >((acc, [compId, state]) => {
-            acc[compId] = cloneLandLocationState(state);
-            return acc;
-          }, {})
-        : undefined,
-  };
-}
-
-function normalizeProjectComparables(
-  subject: ProjectSubjectState,
-  input?: ProjectComparablesState | ComparablesMapState,
-): ProjectComparablesState {
-
-
-  if (
-    input &&
-    typeof input === "object" &&
-    "byType" in input &&
-    input.byType &&
-    typeof input.byType === "object"
-  ) {
-    const byTypeInput = input.byType ?? {};
-    const activeTypeInput = input.activeType;
-    return {
-      byType: {
-        Land: normalizeComparablesMapState(subject, byTypeInput.Land, "Land"),
-        Sales: normalizeComparablesMapState(
-          subject,
-          byTypeInput.Sales,
-          "Sales",
-        ),
-        Rentals: normalizeComparablesMapState(
-          subject,
-          byTypeInput.Rentals,
-          "Rentals",
-        ),
-      },
-      activeType: isComparableType(activeTypeInput) ? activeTypeInput : "Land",
-    };
-  }
-
-  const legacyState = normalizeComparablesMapState(
-    subject,
-    input as ComparablesMapState | undefined,
-    "Land",
-  );
-
-  return {
-    byType: {
-      Land: legacyState,
-      Sales: createEmptyComparablesMapState(subject, "Sales"),
-      Rentals: createEmptyComparablesMapState(subject, "Rentals"),
-    },
-    activeType: "Land",
-  };
-}
-
-export function normalizeLocationState(
-  subject: ProjectSubjectState,
-  input?: LocationMapState,
-): LocationMapState {
-  return {
-    propertyInfo: input?.propertyInfo
-            ? {
-                address: input.propertyInfo.address ?? SUBJECT_DEFAULT.info.address,
-                addressForDisplay: input.propertyInfo.addressForDisplay ?? SUBJECT_DEFAULT.info.addressForDisplay,
-                legalDescription: input.propertyInfo.legalDescription ?? SUBJECT_DEFAULT.info.legalDescription,
-                acres: input.propertyInfo.acres ?? SUBJECT_DEFAULT.info.acres
-            }
-            : undefined,
-    markerPosition:
-      input?.markerPosition !== undefined
-        ? cloneLatLng(input.markerPosition)
-        : subject.markerPosition,
-    bubblePosition:
-      input?.bubblePosition !== undefined
-        ? cloneLatLng(input.bubblePosition)
-        : subject.bubblePosition,
-    polygonPath: Array.isArray(input?.polygonPath)
-      ? input.polygonPath.map((point) => ({ lat: point.lat, lng: point.lng }))
-      : [],
-    circles: Array.isArray(input?.circles)
-      ? input.circles.map(cloneCircle)
-      : [],
-    polylines: Array.isArray(input?.polylines)
-      ? input.polylines.map((polyline) => ({
-          ...polyline,
-          path: polyline.path.map((point) => ({
-            lat: point.lat,
-            lng: point.lng,
-          })),
-        }))
-      : [],
-    mapCenter:
-      input?.mapCenter !== undefined
-        ? (cloneLatLng(input.mapCenter) ?? { ...DEFAULT_MAP_CENTER })
-        : { ...DEFAULT_MAP_CENTER },
-    mapZoom: typeof input?.mapZoom === "number" ? input.mapZoom : 17,
-    bubbleSize: typeof input?.bubbleSize === "number" ? input.bubbleSize : 1.0,
-    tailDirection:
-      input?.tailDirection === "left" || input?.tailDirection === "right"
-        ? input.tailDirection
-        : "right",
-    hideUI: typeof input?.hideUI === "boolean" ? input.hideUI : false,
-    isSubjectTailPinned: typeof input?.isSubjectTailPinned === "boolean" ? input.isSubjectTailPinned : true,
-    subjectPinnedTailTipPosition: cloneLatLng(input?.subjectPinnedTailTipPosition ?? null),
-    streetLabels: Array.isArray(input?.streetLabels)
-      ? input.streetLabels.map(cloneStreetLabel)
-      : [],
-    labelSize:
-      typeof input?.labelSize === "number"
-        ? input.labelSize
-        : DEFAULT_LABEL_SIZE,
-    circleRadius: input?.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
-    documentFrameSize:
-      typeof input?.documentFrameSize === "number"
-        ? input.documentFrameSize
-        : 1.0,
-  };
-}
-
-function normalizeNeighborhoodState(
-  subject: ProjectSubjectState,
-  input?: NeighborhoodMapState,
-): NeighborhoodMapState {
-  return normalizeLocationState(subject, input);
-}
-
-export function createDefaultProject(): ProjectData {
-  const subject = normalizeSubjectState(SUBJECT_DEFAULT);
-  const comparables = normalizeProjectComparables(subject, undefined);
-  const location = normalizeLocationState(subject, LOCATION_DEFAULT);
-  const neighborhood = normalizeNeighborhoodState(
-    subject,
-    NEIGHBORHOOD_DEFAULT,
-  );
-  return { subject, comparables, location, neighborhood };
-}
-
-export function createDefaultLocationMapState(): LocationMapState {
-  const subject = normalizeSubjectState(SUBJECT_DEFAULT);
-  return normalizeLocationState(subject, LOCATION_DEFAULT);
-}
-
-export function normalizeProjectData(data?: Partial<ProjectData>): ProjectData {
-  const subject = normalizeSubjectState(data?.subject);
-  const comparables = normalizeProjectComparables(subject, data?.comparables);
-  const location = normalizeLocationState(subject, data?.location);
-  const neighborhood = normalizeNeighborhoodState(subject, data?.neighborhood);
-  return {
-    subject,
-    comparables,
-    location,
-    neighborhood,
-    subjectPhotosFolderId: data?.subjectPhotosFolderId,
-    projectFolderId: data?.projectFolderId,
-    clientCompany: data?.clientCompany,
-    clientName: data?.clientName,
-    propertyType: data?.propertyType,
-  };
-}
-
-export function cloneProject(project: ProjectData): ProjectData {
-  return normalizeProjectData(project);
-}
-
-export function normalizeProjectsMap(
-  raw?: Record<string, Partial<ProjectData>>,
-): ProjectsMap {
-  if (!raw) {
-    return {};
-  }
-  return Object.entries(raw).reduce<ProjectsMap>((acc, [key, value]) => {
-    if (typeof key !== "string" || !key.trim()) {
-      return acc;
-    }
-    acc[key] = normalizeProjectData(value);
-    return acc;
-  }, {});
+/**
+ * Ensure a comp-location MapView exists for the given compId.
+ * Returns the existing map or creates a new default one.
+ */
+export function ensureCompLocationMap(
+  project: ProjectData,
+  compId: string,
+): { map: MapView; maps: MapView[] } {
+  const existing = getMapForComp(project, compId);
+  if (existing) return { map: existing, maps: project.maps };
+  const newMap = createDefaultMapView("comp-location", compId);
+  return { map: newMap, maps: [...project.maps, newMap] };
 }

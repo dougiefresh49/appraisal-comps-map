@@ -21,12 +21,14 @@ import {
   PROJECTS_STORAGE_KEY,
   CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
-  DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
+  compLocationMapId,
+  ensureCompLocationMap,
+  getCompMarker,
 } from "~/utils/projectStore";
-import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import type {
-  LocationMapState,
+  MapMarker,
+  MapView,
   ProjectData,
   ProjectsMap,
   SubjectInfo,
@@ -102,64 +104,53 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
   const [isStateHydrated, setIsStateHydrated] = useState(false);
   const [showGisOverlay, setShowGisOverlay] = useState(false);
   const [gisApn, setGisApn] = useState("");
+  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback(
     (project?: ProjectData) => {
       const snapshot = normalizeProjectData(project);
-      
-      // Specifically load Land Location Map state for this compId
-      const mapState =
-        snapshot.comparables.byType.Land.landLocationMaps?.[compId] ?? {};
-        
-      // Also get comparable info for initial address
-      const comparable = snapshot.comparables.byType.Land.comparables?.find(
-        (c) => c.id === compId,
+      const { map: mapState, maps: mapsAfterEnsure } = ensureCompLocationMap(
+        snapshot,
+        compId,
       );
+      if (mapsAfterEnsure !== snapshot.maps && projectName) {
+        projectStoreRef.current[projectName] = {
+          ...snapshot,
+          maps: mapsAfterEnsure,
+        };
+      }
 
-      // If no stored state but we have comparable info, use it
-      const infoAddress =
-        mapState.propertyInfo?.address ?? comparable?.address ?? "";
+      const comparable = snapshot.comparables.find((c) => c.id === compId);
+      const marker = getCompMarker(mapState, compId);
+
+      const infoAddress = comparable?.address ?? "";
       const infoAddressForDisplay =
-        mapState.propertyInfo?.addressForDisplay ??
-        comparable?.addressForDisplay ??
-        infoAddress;
+        comparable?.addressForDisplay ?? infoAddress;
 
       setPropertyInfo({
         address: infoAddress,
         addressForDisplay: infoAddressForDisplay,
-        legalDescription: mapState.propertyInfo?.legalDescription ?? "",
-        acres: mapState.propertyInfo?.acres ?? "",
+        legalDescription: "",
+        acres: "",
       });
       setApn(comparable?.apn);
       setCompNumber(comparable?.number);
-      
-      // Use comparable position as fallback if no map state
-      const initialMarkerPos = mapState.markerPosition ?? comparable?.markerPosition ?? null;
-      setMarkerPosition(
-        initialMarkerPos ? { ...initialMarkerPos } : null,
-      );
-      
-      // Fallback bubble position
+
+      const initialMarkerPos = marker?.markerPosition ?? null;
+      setMarkerPosition(initialMarkerPos ? { ...initialMarkerPos } : null);
       setBubblePosition(
-        mapState.bubblePosition
-          ? { ...mapState.bubblePosition }
-          : initialMarkerPos ? { lat: initialMarkerPos.lat + 0.001, lng: initialMarkerPos.lng + 0.001 } : null
+        marker?.bubblePosition
+          ? { ...marker.bubblePosition }
+          : initialMarkerPos
+            ? {
+                lat: initialMarkerPos.lat + 0.001,
+                lng: initialMarkerPos.lng + 0.001,
+              }
+            : null,
       );
-      
-      setPolygonPath(
-        mapState.polygonPath
-          ? mapState.polygonPath.map((point) => ({ ...point }))
-          : [],
-      );
-      setCircles(
-        mapState.circles
-          ? mapState.circles.map((circle) => ({
-              ...circle,
-              center: { ...circle.center },
-            }))
-          : [],
-      );
+
       setMapCenter(
         mapState.mapCenter
           ? { ...mapState.mapCenter }
@@ -167,49 +158,39 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
             ? { ...initialMarkerPos }
             : { ...DEFAULT_MAP_CENTER },
       );
-      setMapZoom(mapState.mapZoom ?? 17);
-      setBubbleSize(mapState.bubbleSize ?? 1.0);
-      setTailDirection(mapState.tailDirection ?? "right");
-      setHideUI(mapState.hideUI ?? false);
-      setIsSubjectTailPinned(mapState.isSubjectTailPinned ?? true);
+      setMapZoom(mapState.mapZoom);
+      setBubbleSize(mapState.bubbleSize);
+      setHideUI(mapState.hideUI);
+      setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
+
+      setPolygonPath(
+        mapState.drawings.polygonPath.map((p) => ({ ...p })),
+      );
+      setCircles(
+        mapState.drawings.circles.map((c) => ({
+          ...c,
+          center: { ...c.center },
+        })),
+      );
+      setTailDirection(mapState.drawings.tailDirection);
+      setIsSubjectTailPinned(marker?.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        mapState.subjectPinnedTailTipPosition ?? undefined,
+        marker?.pinnedTailTipPosition ?? undefined,
       );
       setStreetLabels(
-        mapState.streetLabels
-          ? mapState.streetLabels.map((label) => ({
-              ...label,
-              position: { ...label.position },
-            }))
-          : [],
+        mapState.drawings.streetLabels.map((l) => ({
+          ...l,
+          position: { ...l.position },
+          isEditing: l.isEditing ?? false,
+        })),
       );
-      setLabelSize(mapState.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(mapState.circleRadius ?? DEFAULT_CIRCLE_RADIUS);
+      setLabelSize(mapState.drawings.labelSize);
+      setCircleRadius(mapState.drawings.circleRadius);
       setIsDrawing(false);
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
-    [
-      compId,
-      setPropertyInfo,
-      setMarkerPosition,
-      setBubblePosition,
-      setPolygonPath,
-      setCircles,
-      setMapCenter,
-      setMapZoom,
-      setBubbleSize,
-      setTailDirection,
-      setHideUI,
-      setIsSubjectTailPinned,
-      setSubjectPinnedTailTipPosition,
-      setStreetLabels,
-      setLabelSize,
-      setCircleRadius,
-      setIsDrawing,
-      setIsDrawingCircle,
-      setIsRepositioningSubjectTail,
-    ],
+    [compId, projectName],
   );
 
   // Sync refs with state
@@ -270,96 +251,56 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    // Construct the LocationMapState for this specific comp
-    const locationState: LocationMapState = {
-      propertyInfo: {
-        address: propertyInfo.address ?? "",
-        addressForDisplay:
-          propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
-        legalDescription: propertyInfo.legalDescription ?? "",
-        acres: propertyInfo.acres ?? "",
-      },
+    const mapId = compLocationMapId(compId);
+
+    const compMarker: MapMarker = {
+      id: `marker-${compId}-${mapId}`,
+      mapId,
+      compId,
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
-      polygonPath: polygonPath.map((point) => ({ ...point })),
-      circles: circles.map((circle) => ({
-        ...circle,
-        center: { ...circle.center },
-      })),
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      tailDirection,
-      hideUI,
-      streetLabels: streetLabels.map((label) => ({
-        ...label,
-        position: { ...label.position },
-      })),
-      labelSize,
-      circleRadius,
-      isSubjectTailPinned: isSubjectTailPinned,
-      subjectPinnedTailTipPosition: subjectPinnedTailTipPosition
+      isTailPinned: isSubjectTailPinned,
+      pinnedTailTipPosition: subjectPinnedTailTipPosition
         ? { ...subjectPinnedTailTipPosition }
         : null,
     };
 
-    // Update the Land Comparables state with this comp's map
-    const landState = baseProject.comparables.byType.Land;
-    const updatedLandLocationMaps = {
-        ...(landState.landLocationMaps ?? {}),
-        [compId]: locationState
+    const mapView: MapView = {
+      id: mapId,
+      type: "comp-location",
+      linkedCompId: compId,
+      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+      mapZoom,
+      bubbleSize,
+      hideUI,
+      documentFrameSize,
+      drawings: {
+        polygonPath: polygonPath.map((p) => ({ ...p })),
+        circles: circles.map((c) => ({
+          ...c,
+          center: { ...c.center },
+        })),
+        polylines: [],
+        streetLabels: streetLabels.map((l) => ({
+          ...l,
+          position: { ...l.position },
+        })),
+        labelSize,
+        circleRadius,
+        tailDirection,
+      },
+      markers: [compMarker],
     };
 
-    // Calculate distance if we have both points
-    let updatedComparables = landState.comparables ?? [];
-    if (markerPosition && baseProject.subject.markerPosition) {
-        const distString = formatDistanceAndDirection(
-            baseProject.subject.markerPosition.lat,
-            baseProject.subject.markerPosition.lng,
-            markerPosition.lat,
-            markerPosition.lng
-        );
-
-        updatedComparables = updatedComparables.map(c => {
-            if (c.id === compId) {
-                return {
-                    ...c,
-                    distance: distString,
-                    markerPosition: { ...markerPosition }
-                };
-            }
-            return c;
-        });
-    } else {
-         // Even if we don't calculate distance, ensure markerPosition is synced to the comp object
-         updatedComparables = updatedComparables.map(c => {
-            if (c.id === compId && markerPosition) {
-                return {
-                    ...c,
-                    markerPosition: { ...markerPosition }
-                };
-            }
-            return c;
-        });
-    }
-
-    const updatedLandState = {
-        ...landState,
-        landLocationMaps: updatedLandLocationMaps,
-        comparables: updatedComparables
-    };
-
-    const comparablesState = {
-        ...baseProject.comparables,
-        byType: {
-          ...baseProject.comparables.byType,
-          Land: updatedLandState
-        }
-    };
+    const existingMapIndex = baseProject.maps.findIndex((m) => m.id === mapId);
+    const updatedMaps =
+      existingMapIndex >= 0
+        ? baseProject.maps.map((m) => (m.id === mapId ? mapView : m))
+        : [...baseProject.maps, mapView];
 
     const snapshot: ProjectData = {
       ...baseProject,
-      comparables: comparablesState,
+      maps: updatedMaps,
     };
 
     projectStoreRef.current[projectName] = snapshot;
@@ -368,6 +309,7 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
     bubblePosition,
     circleRadius,
     circles,
+    documentFrameSize,
     hideUI,
     isSubjectTailPinned,
     labelSize,
@@ -376,7 +318,6 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
     markerPosition,
     polygonPath,
     projectName,
-    propertyInfo,
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
@@ -456,9 +397,6 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
           console.error("Error geocoding address", error);
         }
   };
-
-  const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Placeholder - will use dynamic import for html-to-image to avoid SSR issues
   const handleCaptureScreenshot = async () => {

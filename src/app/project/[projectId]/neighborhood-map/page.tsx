@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, use } from "react";
-import "~/utils/injectCanvasHack"; // Inject WebGL preserveDrawingBuffer hack
+import "~/utils/injectCanvasHack";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
 import { SubjectLocationMarker } from "~/components/SubjectLocationMarker";
@@ -12,7 +12,6 @@ import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
-
 import {
   createDefaultProject,
   normalizeProjectData,
@@ -22,19 +21,24 @@ import {
   DEFAULT_MAP_CENTER,
   DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
+  WELL_KNOWN_MAP_IDS,
+  getMapByType,
+  getSubjectMarker,
+  updateMapInProject,
 } from "~/utils/projectStore";
 import type {
-  NeighborhoodMapState,
   ProjectData,
   ProjectsMap,
-  ProjectSubjectState,
   SubjectInfo,
   StreetLabelData,
   Circle,
   PolygonPath,
+  MapMarker,
 } from "~/utils/projectStore";
 
 type PropertyInfo = SubjectInfo;
+
+const MAP_ID = WELL_KNOWN_MAP_IDS.neighborhood;
 
 interface NeighborhoodMapPageProps {
   params: Promise<{
@@ -45,10 +49,8 @@ interface NeighborhoodMapPageProps {
 export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  
+
   const projectStoreRef = useRef<ProjectsMap>({});
-  
-  // Use simple variable for project name from URL
   const projectName = decodedProjectId;
 
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
@@ -78,20 +80,15 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     }),
   );
   const [mapZoom, setMapZoom] = useState(17);
-  const [bubbleSize, setBubbleSize] = useState(1.0);
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
   const [isSubjectTailPinned, setIsSubjectTailPinned] = useState(true);
   const [subjectPinnedTailTipPosition, setSubjectPinnedTailTipPosition] =
-    useState<
-      | {
-          lat: number;
-          lng: number;
-        }
-      | undefined
-    >(undefined);
+    useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isRepositioningSubjectTail, setIsRepositioningSubjectTail] =
     useState(false);
   const [streetLabels, setStreetLabels] = useState<StreetLabelData[]>([]);
@@ -104,10 +101,12 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
   const applyProjectState = useCallback(
     (project?: ProjectData) => {
       const snapshot = normalizeProjectData(project);
-      const subjectSnapshot = snapshot.subject;
-      const neighborhoodSnapshot = snapshot.neighborhood;
+      const mapView = getMapByType(snapshot, "neighborhood");
+      if (!mapView) return;
 
-      const infoSnapshot = subjectSnapshot.info;
+      const subjectMarker = getSubjectMarker(mapView);
+      const infoSnapshot = snapshot.subject;
+
       setPropertyInfo({
         address: infoSnapshot.address ?? "",
         addressForDisplay:
@@ -116,82 +115,51 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         acres: infoSnapshot.acres ?? "",
       });
       setMarkerPosition(
-        subjectSnapshot.markerPosition
-          ? { ...subjectSnapshot.markerPosition }
+        subjectMarker?.markerPosition
+          ? { ...subjectMarker.markerPosition }
           : null,
       );
       setBubblePosition(
-        subjectSnapshot.bubblePosition
-          ? { ...subjectSnapshot.bubblePosition }
+        subjectMarker?.bubblePosition
+          ? { ...subjectMarker.bubblePosition }
           : null,
       );
       setPolygonPath(
-        neighborhoodSnapshot.polygonPath
-          ? neighborhoodSnapshot.polygonPath.map((point) => ({ ...point }))
-          : [],
+        mapView.drawings.polygonPath.map((point) => ({ ...point })),
       );
       setCircles(
-        neighborhoodSnapshot.circles
-          ? neighborhoodSnapshot.circles.map((circle) => ({
-              ...circle,
-              center: { ...circle.center },
-            }))
-          : [],
+        mapView.drawings.circles.map((circle) => ({
+          ...circle,
+          center: { ...circle.center },
+        })),
       );
       setMapCenter(
-        neighborhoodSnapshot.mapCenter
-          ? { ...neighborhoodSnapshot.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
+        mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
       );
-      setMapZoom(neighborhoodSnapshot.mapZoom ?? 17);
-      setBubbleSize(neighborhoodSnapshot.bubbleSize ?? 1.0);
-      setDocumentFrameSize(neighborhoodSnapshot.documentFrameSize ?? 1.0);
-      setTailDirection(neighborhoodSnapshot.tailDirection ?? "right");
-      setHideUI(neighborhoodSnapshot.hideUI ?? false);
-      setIsSubjectTailPinned(subjectSnapshot.isTailPinned ?? true);
+      setMapZoom(mapView.mapZoom);
+      setBubbleSize(mapView.bubbleSize);
+      setTailDirection(mapView.drawings.tailDirection);
+      setHideUI(mapView.hideUI);
+      setDocumentFrameSize(mapView.documentFrameSize);
+      setIsSubjectTailPinned(subjectMarker?.isTailPinned ?? true);
       setSubjectPinnedTailTipPosition(
-        subjectSnapshot.pinnedTailTipPosition ?? undefined,
+        subjectMarker?.pinnedTailTipPosition ?? undefined,
       );
       setStreetLabels(
-        neighborhoodSnapshot.streetLabels
-          ? neighborhoodSnapshot.streetLabels.map((label) => ({
-              ...label,
-              position: { ...label.position },
-            }))
-          : [],
+        mapView.drawings.streetLabels.map((label) => ({
+          ...label,
+          position: { ...label.position },
+        })),
       );
-      setLabelSize(neighborhoodSnapshot.labelSize ?? DEFAULT_LABEL_SIZE);
-      setCircleRadius(
-        neighborhoodSnapshot.circleRadius ?? DEFAULT_CIRCLE_RADIUS,
-      );
+      setLabelSize(mapView.drawings.labelSize ?? DEFAULT_LABEL_SIZE);
+      setCircleRadius(mapView.drawings.circleRadius);
       setIsDrawing(false);
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
-    [
-      setPropertyInfo,
-      setMarkerPosition,
-      setBubblePosition,
-      setPolygonPath,
-      setCircles,
-      setMapCenter,
-      setMapZoom,
-      setBubbleSize,
-      setDocumentFrameSize,
-      setTailDirection,
-      setHideUI,
-      setIsSubjectTailPinned,
-      setSubjectPinnedTailTipPosition,
-      setStreetLabels,
-      setLabelSize,
-      setCircleRadius,
-      setIsDrawing,
-      setIsDrawingCircle,
-      setIsRepositioningSubjectTail,
-    ],
+    [],
   );
 
-  // Sync refs with state
   useEffect(() => {
     markerPositionRef.current = markerPosition;
   }, [markerPosition]);
@@ -200,7 +168,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
-  // Hydrate state
   useEffect(() => {
     if (isStateHydrated) return;
     if (typeof window === "undefined") return;
@@ -209,10 +176,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
+        const parsed = JSON.parse(stored) as Record<string, unknown>;
         projectStore = normalizeProjectsMap(parsed);
       } catch (error) {
         console.error("Failed to parse stored projects", error);
@@ -220,8 +184,8 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     }
 
     if (!projectStore[projectName]) {
-       console.warn(`Project ${projectName} not found in storage, creating default.`);
-       projectStore[projectName] = createDefaultProject();
+      console.warn(`Project ${projectName} not found in storage, creating default.`);
+      projectStore[projectName] = createDefaultProject();
     }
 
     projectStoreRef.current = projectStore;
@@ -232,10 +196,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         PROJECTS_STORAGE_KEY,
         JSON.stringify(projectStore),
       );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
+      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
     } catch (error) {
       console.error("Failed to persist projects", error);
     }
@@ -249,14 +210,17 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       ? normalizeProjectData(projectStoreRef.current[projectName])
       : createDefaultProject();
 
-    const subject: ProjectSubjectState = {
-      info: {
-        address: propertyInfo.address ?? "",
-        addressForDisplay:
-          propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
-        legalDescription: propertyInfo.legalDescription ?? "",
-        acres: propertyInfo.acres ?? "",
-      },
+    const updatedSubject: SubjectInfo = {
+      address: propertyInfo.address ?? "",
+      addressForDisplay:
+        propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
+      legalDescription: propertyInfo.legalDescription ?? "",
+      acres: propertyInfo.acres ?? "",
+    };
+
+    const subjectMarker: MapMarker = {
+      id: `marker-subject-${MAP_ID}`,
+      mapId: MAP_ID,
       markerPosition: markerPosition ? { ...markerPosition } : null,
       bubblePosition: bubblePosition ? { ...bubblePosition } : null,
       isTailPinned: isSubjectTailPinned,
@@ -265,39 +229,39 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         : null,
     };
 
-    const neighborhoodState: NeighborhoodMapState = {
-      ...baseProject.neighborhood,
-      markerPosition: subject.markerPosition,
-      bubblePosition: subject.bubblePosition,
-      polygonPath: polygonPath.map((point) => ({ ...point })),
-      circles: circles.map((circle) => ({
-        ...circle,
-        center: { ...circle.center },
-      })),
+    const updatedMaps = updateMapInProject(baseProject, MAP_ID, (m) => ({
+      ...m,
       mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
       mapZoom,
       bubbleSize,
-      documentFrameSize,
-      tailDirection,
       hideUI,
-      streetLabels: streetLabels.map((label) => ({
-        ...label,
-        position: { ...label.position },
-      })),
-      labelSize,
-      circleRadius,
-    };
+      documentFrameSize,
+      drawings: {
+        polygonPath: polygonPath.map((p) => ({ ...p })),
+        circles: circles.map((c) => ({ ...c, center: { ...c.center } })),
+        polylines: m.drawings.polylines,
+        streetLabels: streetLabels.map((l) => ({
+          ...l,
+          position: { ...l.position },
+        })),
+        labelSize,
+        circleRadius,
+        tailDirection,
+      },
+      markers: [subjectMarker],
+    }));
 
     const snapshot: ProjectData = {
       ...baseProject,
-      subject,
-      neighborhood: neighborhoodState,
+      subject: updatedSubject,
+      maps: updatedMaps,
     };
 
     projectStoreRef.current[projectName] = snapshot;
     serializedProjectRef.current = snapshot;
   }, [
     bubblePosition,
+    bubbleSize,
     circleRadius,
     circles,
     documentFrameSize,
@@ -313,7 +277,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
-    bubbleSize,
   ]);
 
   const writeProjectsToStorage = useCallback((currentName: string) => {
@@ -329,8 +292,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     }
   }, []);
 
-  // Removed handleProjectNameEdit and handleProjectSwitch as we are locked to a project URL
-
   useEffect(() => {
     if (!isStateHydrated) return;
     if (typeof window === "undefined") return;
@@ -341,7 +302,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       writeProjectsToStorage(projectName);
     };
 
-    // Auto-save
     saveToLocalStorage();
     const intervalId = window.setInterval(saveToLocalStorage, 30000);
 
@@ -361,8 +321,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     writeProjectsToStorage,
   ]);
 
-
-
   const handleAddressSearch = async (address: string) => {
     if (!address.trim()) return;
 
@@ -370,7 +328,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       const geocoder = new google.maps.Geocoder();
       const results = await new Promise<google.maps.GeocoderResult[]>(
         (resolve, reject) => {
-           void geocoder.geocode({ address }, (results, status) => {
+          void geocoder.geocode({ address }, (results, status) => {
             if (status === google.maps.GeocoderStatus.OK && results) {
               resolve(results);
             } else {
@@ -381,10 +339,8 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       );
 
       if (results && results.length > 0) {
-        const result = results[0];
-        if (!result) return;
-        const location = result.geometry.location;
-        const formattedAddress = result.formatted_address ?? address;
+        const location = results[0]!.geometry.location;
+        const formattedAddress = results[0]?.formatted_address ?? address;
         const newPosition = {
           lat: location.lat(),
           lng: location.lng(),
@@ -418,9 +374,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
     }
   };
 
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // Placeholder - will use dynamic import for html-to-image to avoid SSR issues
   const handleCaptureScreenshot = async () => {
     try {
       const { toPng } = await import("html-to-image");
@@ -443,10 +396,7 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
 
       const x = (containerWidth - docWidth) / 2;
       const y = (containerHeight - docHeight) / 2;
-      
-      // Capture the entire map container first
-      // We use pixelRatio: 2 for better quality (simulating 2x scale)
-      // fontEmbedCSS: "" avoids CORS issues with Google Fonts by skipping font embedding
+
       const dataUrl = await toPng(container, {
         cacheBust: true,
         pixelRatio: 2,
@@ -454,7 +404,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         fontEmbedCSS: "",
       });
 
-      // Now crop the image using a temporary canvas
       const img = new Image();
       img.src = dataUrl;
       await new Promise((resolve) => {
@@ -462,7 +411,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       });
 
       const canvas = document.createElement("canvas");
-      // Current pixelRatio used in capture was 2, so dimensions are doubled
       const scale = 2;
       canvas.width = docWidth * scale;
       canvas.height = docHeight * scale;
@@ -470,63 +418,51 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Draw the portion of the image that corresponds to the crop area
-      // sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight
       ctx.drawImage(
-        img, 
-        x * scale, 
-        y * scale, 
-        docWidth * scale, 
-        docHeight * scale, 
-        0, 
-        0, 
-        docWidth * scale, 
-        docHeight * scale
+        img,
+        x * scale,
+        y * scale,
+        docWidth * scale,
+        docHeight * scale,
+        0,
+        0,
+        docWidth * scale,
+        docHeight * scale,
       );
 
-      // Convert canvas to blob for File System Access API
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
       if (!blob) throw new Error("Failed to create image blob");
 
       try {
         /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
         if ((window as any).showSaveFilePicker) {
-            const handle = await (window as any).showSaveFilePicker({
-                suggestedName: "neighborhood.png",
-                types: [{
-                    description: 'PNG Image',
-                    accept: { 'image/png': ['.png'] },
-                }],
-            });
-            const stream = await handle.createWritable();
-            await stream.write(blob);
-            await stream.close();
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: "neighborhood.png",
+            types: [
+              {
+                description: "PNG Image",
+                accept: { "image/png": [".png"] },
+              },
+            ],
+          });
+          const stream = await handle.createWritable();
+          await stream.write(blob);
+          await stream.close();
         } else {
-            throw new Error("File System Access API not supported");
+          throw new Error("File System Access API not supported");
         }
         /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       } catch (err: unknown) {
-        // If user cancelled the picker, do nothing
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === "AbortError") return;
 
-        // Fallback or error handling
-        if (err instanceof Error && err.message === "File System Access API not supported") {
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = "neighborhood.png";
-             link.click();
-        } else {
-            console.error("Screenshot save failed:", err);
-            // Attempt fallback download even if picker failed for other reasons
-             const croppedDataUrl = canvas.toDataURL("image/png");
-             const link = document.createElement("a");
-             link.href = croppedDataUrl;
-             link.download = "neighborhood.png";
-             link.click();
-        }
+        const croppedDataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = croppedDataUrl;
+        link.download = "neighborhood.png";
+        link.click();
       }
-
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");
@@ -535,7 +471,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
 
   return (
     <div className="flex h-screen w-full">
-      {/* Settings Panel */}
       <PropertyInfoPanel
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
@@ -558,49 +493,54 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
         onStreetLabelsChange={setStreetLabels}
         labelSize={labelSize}
         onLabelSizeChange={setLabelSize}
-        mapCenter={mapCenter}
         heading="Neighborhood Map"
+        isCollapsed={isCollapsed}
+        onIsCollapsedChange={setIsCollapsed}
+        mapCenter={mapCenter}
         documentFrameSize={documentFrameSize}
         onDocumentFrameSizeChange={setDocumentFrameSize}
         onCaptureScreenshot={handleCaptureScreenshot}
-        isCollapsed={isCollapsed}
-        onIsCollapsedChange={setIsCollapsed}
-        // Hide project switcher props
       />
 
       {isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
-           <button
-              onClick={() => setHideUI(!hideUI)}
-              className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
-              title="Toggle UI Visibility"
-            >
-              {hideUI ? "Show UI" : "Hide UI"}
-           </button>
-           
-           {showDocumentOverlay && (
-             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
-                <button
-                    onClick={() => setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Decrease Frame Size"
-                >
-                    -
-                </button>
-                <span className="min-w-[3ch] text-center text-sm">{Math.round(documentFrameSize * 100)}%</span>
-                <button
-                    onClick={() => setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))}
-                    className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Increase Frame Size"
-                >
-                    +
-                </button>
-             </div>
-           )}
+          <button
+            onClick={() => setHideUI(!hideUI)}
+            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            title="Toggle UI Visibility"
+          >
+            {hideUI ? "Show UI" : "Hide UI"}
+          </button>
+
+          {showDocumentOverlay && (
+            <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Decrease Frame Size"
+              >
+                -
+              </button>
+              <span className="min-w-[3ch] text-center text-sm">
+                {Math.round(documentFrameSize * 100)}%
+              </span>
+              <button
+                onClick={() =>
+                  setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))
+                }
+                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Increase Frame Size"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      <div id="neighborhood-map-container" className="relative flex-1 bg-gray-100">
+      <div id="neighborhood-map-container" className="relative flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -658,7 +598,6 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
               onIsDrawingChange={setIsDrawing}
               polygonPath={polygonPath}
               onPolygonPathChange={setPolygonPath}
-              readOnly={hideUI}
               hideUI={hideUI}
             />
 
@@ -757,7 +696,9 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
                 onEditToggle={() => {
                   setStreetLabels((prev) =>
                     prev.map((l) =>
-                      l.id === label.id ? { ...l, isEditing: !l.isEditing } : l,
+                      l.id === label.id
+                        ? { ...l, isEditing: !l.isEditing }
+                        : l,
                     ),
                   );
                 }}
@@ -767,7 +708,10 @@ export default function NeighborhoodMapPage({ params }: NeighborhoodMapPageProps
             ))}
           </Map>
         </APIProvider>
-        <DocumentOverlay enabled={showDocumentOverlay} size={documentFrameSize} />
+        <DocumentOverlay
+          enabled={showDocumentOverlay}
+          size={documentFrameSize}
+        />
 
         <MapDrawingControls
           isDrawing={isDrawing}
