@@ -9,16 +9,9 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { useProject } from "~/hooks/useProject";
 import {
-  // encodeState,
-  // MAX_URL_STATE_LENGTH,
-} from "~/utils/statePersistence";
-import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   WELL_KNOWN_MAP_IDS,
   getMapByType,
@@ -34,7 +27,6 @@ import type {
   ComparableInfo,
   Comparable,
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   ComparableType,
   MapMarker,
@@ -85,10 +77,9 @@ interface ComparablesMapPageProps {
 export default function SalesComparablesMapPage({ params }: ComparablesMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
+
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo>({
     address: "",
     addressForDisplay: "",
@@ -134,8 +125,8 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
     lat: number;
     lng: number;
   } | null>(null);
-  const [isStateHydrated, setIsStateHydrated] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
+
+  const hasHydratedRef = useRef(false);
 
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
@@ -206,118 +197,78 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
     subjectBubblePositionRef.current = subjectBubblePosition;
   }, [subjectBubblePosition]);
 
-  // Hydrate state
+  // Hydrate local state from the project hook on first load
   useEffect(() => {
-    if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
+    if (hasHydratedRef.current) return;
+    if (isLoading || !project) return;
 
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
+    applyProjectState(project, PAGE_COMPARABLE_TYPE);
+    hasHydratedRef.current = true;
+  }, [isLoading, project, applyProjectState]);
 
-    if (!projectStore[projectName]) {
-        console.warn(`Project ${projectName} not found in storage, creating default.`);
-        projectStore[projectName] = createDefaultProject();
-    }
+  const persistState = useCallback(() => {
+    updateProject((baseProject) => {
+      const normalized = normalizeProjectData(baseProject);
+      const mapId =
+        WELL_KNOWN_MAP_IDS[mapTypeForCompType(PAGE_COMPARABLE_TYPE)];
 
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName], PAGE_COMPARABLE_TYPE);
+      const updatedSubject: SubjectInfo = {
+        address: subjectInfo.address ?? "",
+        addressForDisplay:
+          subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
+        legalDescription: subjectInfo.legalDescription ?? "",
+        acres: subjectInfo.acres ?? "",
+      };
 
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
+      const subjectMarker: MapMarker = {
+        id: `marker-subject-${mapId}`,
+        mapId,
+        markerPosition: subjectMarkerPosition
+          ? { ...subjectMarkerPosition }
+          : null,
+        bubblePosition: subjectBubblePosition
+          ? { ...subjectBubblePosition }
+          : null,
+        isTailPinned: isSubjectTailPinned,
+        pinnedTailTipPosition: subjectPinnedTailTipPosition
+          ? { ...subjectPinnedTailTipPosition }
+          : null,
+      };
+
+      const compMarkerPairs = comparables.map((info) =>
+        splitComparableInfo(
+          { ...info, type: info.type ?? PAGE_COMPARABLE_TYPE },
+          mapId,
+        ),
       );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
+      const pageComparables: Comparable[] = compMarkerPairs.map((p) => p.comparable);
+      const compMarkers: MapMarker[] = compMarkerPairs.map((p) => p.marker);
 
-    setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
-
-  const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
-
-    const mapId =
-      WELL_KNOWN_MAP_IDS[
-        mapTypeForCompType(PAGE_COMPARABLE_TYPE) as keyof typeof WELL_KNOWN_MAP_IDS
+      const mergedComparables: Comparable[] = [
+        ...normalized.comparables.filter((c) => c.type !== PAGE_COMPARABLE_TYPE),
+        ...pageComparables,
       ];
 
-    const updatedSubject: SubjectInfo = {
-      address: subjectInfo.address ?? "",
-      addressForDisplay:
-        subjectInfo.addressForDisplay ?? subjectInfo.address ?? "",
-      legalDescription: subjectInfo.legalDescription ?? "",
-      acres: subjectInfo.acres ?? "",
-    };
+      const updatedMaps = updateMapInProject(normalized, mapId, (m) => ({
+        ...m,
+        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+        mapZoom,
+        bubbleSize,
+        hideUI,
+        documentFrameSize,
+        drawings: m.drawings,
+        markers: [subjectMarker, ...compMarkers],
+      }));
 
-    const subjectMarker: MapMarker = {
-      id: `marker-subject-${mapId}`,
-      mapId,
-      markerPosition: subjectMarkerPosition
-        ? { ...subjectMarkerPosition }
-        : null,
-      bubblePosition: subjectBubblePosition
-        ? { ...subjectBubblePosition }
-        : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
-
-    const compMarkerPairs = comparables.map((info) =>
-      splitComparableInfo(
-        { ...info, type: info.type ?? PAGE_COMPARABLE_TYPE },
-        mapId,
-      ),
-    );
-    const pageComparables: Comparable[] = compMarkerPairs.map((p) => p.comparable);
-    const compMarkers: MapMarker[] = compMarkerPairs.map((p) => p.marker);
-
-    const mergedComparables: Comparable[] = [
-      ...baseProject.comparables.filter((c) => c.type !== PAGE_COMPARABLE_TYPE),
-      ...pageComparables,
-    ];
-
-    const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
-      ...m,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      hideUI,
-      documentFrameSize,
-      drawings: m.drawings,
-      markers: [subjectMarker, ...compMarkers],
-    }));
-
-    const snapshot: ProjectData = {
-      ...baseProject,
-      subject: updatedSubject,
-      comparables: mergedComparables,
-      maps: updatedMaps,
-    };
-
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return {
+        ...normalized,
+        subject: updatedSubject,
+        comparables: mergedComparables,
+        maps: updatedMaps,
+      };
+    });
   }, [
+    updateProject,
     comparables,
     documentFrameSize,
     hideUI,
@@ -325,25 +276,17 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
     mapCenter,
     mapZoom,
     bubbleSize,
-    projectName,
     subjectBubblePosition,
     subjectInfo,
     subjectMarkerPosition,
     subjectPinnedTailTipPosition,
   ]);
 
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save projects", error);
-    }
-  }, []);
+  // Auto-persist when component state changes (after initial hydration)
+  useEffect(() => {
+    if (!hasHydratedRef.current) return;
+    persistState();
+  }, [persistState]);
 
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
@@ -355,35 +298,6 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
     },
     [projectId],
   );
-
-  useEffect(() => {
-    if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
-
-    const saveToLocalStorage = () => {
-      persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
 
 
 
@@ -469,8 +383,16 @@ export default function SalesComparablesMapPage({ params }: ComparablesMapPagePr
            }));
       }
     } catch (error) { console.error("Error geocoding comparable address:", error); }
-  }; // Simplified dependency to avoid linter error
+  };
 
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">

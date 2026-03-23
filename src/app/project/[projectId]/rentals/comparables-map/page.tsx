@@ -9,16 +9,9 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { useProject } from "~/hooks/useProject";
 import {
-  // encodeState,
-  // MAX_URL_STATE_LENGTH,
-} from "~/utils/statePersistence";
-import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   WELL_KNOWN_MAP_IDS,
   getMapByType,
@@ -34,7 +27,6 @@ import type {
   ComparableInfo,
   Comparable,
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   ComparableType,
   MapMarker,
@@ -85,10 +77,9 @@ interface ComparablesMapPageProps {
 export default function RentalsComparablesMapPage({ params }: ComparablesMapPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
+
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo>({
     address: "",
     addressForDisplay: "",
@@ -135,11 +126,10 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     lng: number;
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback(
-    (project?: ProjectData, typeOverride?: ComparableType) => {
-      const snapshot = normalizeProjectData(project);
+    (projectData?: ProjectData, typeOverride?: ComparableType) => {
+      const snapshot = normalizeProjectData(projectData);
       const nextType = typeOverride ?? PAGE_COMPARABLE_TYPE;
       const mapView = getMapByType(
         snapshot,
@@ -206,59 +196,19 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     subjectBubblePositionRef.current = subjectBubblePosition;
   }, [subjectBubblePosition]);
 
-  // Hydrate state
+  // Hydrate local state from the project loaded by the hook (first load only)
   useEffect(() => {
     if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
+    if (isLoading) return;
+    if (!project) return;
 
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    if (!projectStore[projectName]) {
-        console.warn(`Project ${projectName} not found in storage, creating default.`);
-        projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName], PAGE_COMPARABLE_TYPE);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
+    applyProjectState(project, PAGE_COMPARABLE_TYPE);
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
+  }, [project, isLoading, applyProjectState, isStateHydrated]);
 
-  const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
-
+  const persistToProject = useCallback(() => {
     const mapId =
-      WELL_KNOWN_MAP_IDS[
-        mapTypeForCompType(PAGE_COMPARABLE_TYPE) as keyof typeof WELL_KNOWN_MAP_IDS
-      ];
+      WELL_KNOWN_MAP_IDS[mapTypeForCompType(PAGE_COMPARABLE_TYPE)];
 
     const updatedSubject: SubjectInfo = {
       address: subjectInfo.address ?? "",
@@ -292,31 +242,30 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     const pageComparables: Comparable[] = compMarkerPairs.map((p) => p.comparable);
     const compMarkers: MapMarker[] = compMarkerPairs.map((p) => p.marker);
 
-    const mergedComparables: Comparable[] = [
-      ...baseProject.comparables.filter((c) => c.type !== PAGE_COMPARABLE_TYPE),
-      ...pageComparables,
-    ];
+    updateProject((baseProject) => {
+      const mergedComparables: Comparable[] = [
+        ...baseProject.comparables.filter((c) => c.type !== PAGE_COMPARABLE_TYPE),
+        ...pageComparables,
+      ];
 
-    const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
-      ...m,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      hideUI,
-      documentFrameSize,
-      drawings: m.drawings,
-      markers: [subjectMarker, ...compMarkers],
-    }));
+      const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
+        ...m,
+        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+        mapZoom,
+        bubbleSize,
+        hideUI,
+        documentFrameSize,
+        drawings: m.drawings,
+        markers: [subjectMarker, ...compMarkers],
+      }));
 
-    const snapshot: ProjectData = {
-      ...baseProject,
-      subject: updatedSubject,
-      comparables: mergedComparables,
-      maps: updatedMaps,
-    };
-
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return {
+        ...baseProject,
+        subject: updatedSubject,
+        comparables: mergedComparables,
+        maps: updatedMaps,
+      };
+    });
   }, [
     comparables,
     documentFrameSize,
@@ -325,25 +274,23 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     mapCenter,
     mapZoom,
     bubbleSize,
-    projectName,
     subjectBubblePosition,
     subjectInfo,
     subjectMarkerPosition,
     subjectPinnedTailTipPosition,
+    updateProject,
   ]);
 
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save projects", error);
+  // Auto-persist local state changes (skip the first render after hydration)
+  const isFirstPersistRef = useRef(true);
+  useEffect(() => {
+    if (!isStateHydrated) return;
+    if (isFirstPersistRef.current) {
+      isFirstPersistRef.current = false;
+      return;
     }
-  }, []);
+    persistToProject();
+  }, [isStateHydrated, persistToProject]);
 
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
@@ -355,37 +302,6 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     },
     [projectId],
   );
-
-  useEffect(() => {
-    if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
-
-    const saveToLocalStorage = () => {
-      persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
-
-
 
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
@@ -471,8 +387,13 @@ export default function RentalsComparablesMapPage({ params }: ComparablesMapPage
     } catch (error) { console.error("Error geocoding comparable address:", error); }
   };
 
-
-
+  if (isLoading || !isStateHydrated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">

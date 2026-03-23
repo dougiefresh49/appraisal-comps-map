@@ -13,13 +13,10 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { GisOverlay } from "~/components/GisOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
+import { useProject } from "~/hooks/useProject";
 
 import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   DEFAULT_CIRCLE_RADIUS,
   compLocationMapId,
@@ -30,7 +27,6 @@ import type {
   MapMarker,
   MapView,
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   StreetLabelData,
   Circle,
@@ -49,10 +45,10 @@ interface LandCompLocationMapPageProps {
 export default function LandCompLocationMapPage({ params }: LandCompLocationMapPageProps) {
   const { projectId, compId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
+  const hasHydrated = useRef(false);
+
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
     addressForDisplay: "",
@@ -101,26 +97,15 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
   const [labelSize, setLabelSize] = useState(1.0);
   const markerPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
-  const [isStateHydrated, setIsStateHydrated] = useState(false);
   const [showGisOverlay, setShowGisOverlay] = useState(false);
   const [gisApn, setGisApn] = useState("");
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback(
-    (project?: ProjectData) => {
-      const snapshot = normalizeProjectData(project);
-      const { map: mapState, maps: mapsAfterEnsure } = ensureCompLocationMap(
-        snapshot,
-        compId,
-      );
-      if (mapsAfterEnsure !== snapshot.maps && projectName) {
-        projectStoreRef.current[projectName] = {
-          ...snapshot,
-          maps: mapsAfterEnsure,
-        };
-      }
+    (proj?: ProjectData) => {
+      const snapshot = normalizeProjectData(proj);
+      const { map: mapState } = ensureCompLocationMap(snapshot, compId);
 
       const comparable = snapshot.comparables.find((c) => c.id === compId);
       const marker = getCompMarker(mapState, compId);
@@ -190,7 +175,7 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
-    [compId, projectName],
+    [compId],
   );
 
   // Sync refs with state
@@ -202,109 +187,67 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
-  // Hydrate state
+  // Hydrate local state from hook-provided project (once)
   useEffect(() => {
-    if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
+    if (!project || hasHydrated.current) return;
+    hasHydrated.current = true;
+    applyProjectState(project);
+  }, [project, applyProjectState]);
 
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    if (!projectStore[projectName]) {
-       console.warn(`Project ${projectName} not found in storage, creating default.`);
-       projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName]);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
-    setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
-
-  const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
-
+  // Persist local state back to the project via the hook
+  const persistState = useCallback(() => {
     const mapId = compLocationMapId(compId);
 
-    const compMarker: MapMarker = {
-      id: `marker-${compId}-${mapId}`,
-      mapId,
-      compId,
-      markerPosition: markerPosition ? { ...markerPosition } : null,
-      bubblePosition: bubblePosition ? { ...bubblePosition } : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
+    updateProject((prev) => {
+      const baseProject = normalizeProjectData(prev);
 
-    const mapView: MapView = {
-      id: mapId,
-      type: "comp-location",
-      linkedCompId: compId,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      hideUI,
-      documentFrameSize,
-      drawings: {
-        polygonPath: polygonPath.map((p) => ({ ...p })),
-        circles: circles.map((c) => ({
-          ...c,
-          center: { ...c.center },
-        })),
-        polylines: [],
-        streetLabels: streetLabels.map((l) => ({
-          ...l,
-          position: { ...l.position },
-        })),
-        labelSize,
-        circleRadius,
-        tailDirection,
-      },
-      markers: [compMarker],
-    };
+      const compMarker: MapMarker = {
+        id: `marker-${compId}-${mapId}`,
+        mapId,
+        compId,
+        markerPosition: markerPosition ? { ...markerPosition } : null,
+        bubblePosition: bubblePosition ? { ...bubblePosition } : null,
+        isTailPinned: isSubjectTailPinned,
+        pinnedTailTipPosition: subjectPinnedTailTipPosition
+          ? { ...subjectPinnedTailTipPosition }
+          : null,
+      };
 
-    const existingMapIndex = baseProject.maps.findIndex((m) => m.id === mapId);
-    const updatedMaps =
-      existingMapIndex >= 0
-        ? baseProject.maps.map((m) => (m.id === mapId ? mapView : m))
-        : [...baseProject.maps, mapView];
+      const mapView: MapView = {
+        id: mapId,
+        type: "comp-location",
+        linkedCompId: compId,
+        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+        mapZoom,
+        bubbleSize,
+        hideUI,
+        documentFrameSize,
+        drawings: {
+          polygonPath: polygonPath.map((p) => ({ ...p })),
+          circles: circles.map((c) => ({
+            ...c,
+            center: { ...c.center },
+          })),
+          polylines: [],
+          streetLabels: streetLabels.map((l) => ({
+            ...l,
+            position: { ...l.position },
+          })),
+          labelSize,
+          circleRadius,
+          tailDirection,
+        },
+        markers: [compMarker],
+      };
 
-    const snapshot: ProjectData = {
-      ...baseProject,
-      maps: updatedMaps,
-    };
+      const existingMapIndex = baseProject.maps.findIndex((m) => m.id === mapId);
+      const updatedMaps =
+        existingMapIndex >= 0
+          ? baseProject.maps.map((m) => (m.id === mapId ? mapView : m))
+          : [...baseProject.maps, mapView];
 
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return { ...baseProject, maps: updatedMaps };
+    });
   }, [
     bubblePosition,
     circleRadius,
@@ -317,57 +260,19 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
     mapZoom,
     markerPosition,
     polygonPath,
-    projectName,
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
     bubbleSize,
     compId,
+    updateProject,
   ]);
 
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save location map projects", error);
-    }
-  }, []);
-
+  // Auto-persist whenever local state changes (after initial hydration)
   useEffect(() => {
-    if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
-
-    const saveToLocalStorage = () => {
-      persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
-
-
+    if (!hasHydrated.current) return;
+    persistState();
+  }, [persistState]);
 
   const handleAddressSearch = async (address: string) => {
       // Reuse address search logic
@@ -523,6 +428,14 @@ export default function LandCompLocationMapPage({ params }: LandCompLocationMapP
       }
       return `https://search.ectorcad.org/map/#${apn}`;
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">

@@ -1,15 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, use } from "react";
-import {
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
-  normalizeProjectsMap,
-  createDefaultProject,
-  type ProjectData,
-  type ProjectsMap,
-} from "~/utils/projectStore";
+import { useCallback, useEffect, useState, use } from "react";
+import { useProject } from "~/hooks/useProject";
 import { env } from "~/env";
+import { upsertProjectMetadata } from "~/lib/supabase-queries";
 
 interface CoverPageProps {
   params: Promise<{
@@ -19,150 +13,42 @@ interface CoverPageProps {
 
 export default function ProjectCoverPage({ params }: CoverPageProps) {
   const { projectId } = use(params);
-  const decodedProjectId = decodeURIComponent(projectId);
+  const { project, isLoading, updateProject } = useProject(projectId);
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  
-  // We don't need `projectName` state to be selectable, it's fixed by URL
-  // but we keep it for compatibility with existing logic functions
-  const projectName = decodedProjectId; 
-  
-  const [projectData, setProjectData] = useState<ProjectData | null>(null);
-  const [isStateHydrated, setIsStateHydrated] = useState(false);
   const [clientCompany, setClientCompany] = useState("");
   const [clientName, setClientName] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [coverSize, setCoverSize] = useState(1.5);
-  const [imageSize, setImageSize] = useState(1.0); 
+  const [imageSize, setImageSize] = useState(1.0);
   const [subjectPhotoUrl, setSubjectPhotoUrl] = useState<string | null>(null);
   const [isLoadingCoverData, setIsLoadingCoverData] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  const applyProjectState = useCallback((data: ProjectData) => {
-    setProjectData(data);
-    setClientCompany(data.clientCompany ?? "");
-    setClientName(data.clientName ?? "");
-    setPropertyType(data.propertyType ?? "");
+  useEffect(() => {
+    if (!project || hasInitialized) return;
+    setClientCompany(project.clientCompany ?? "");
+    setClientName(project.clientName ?? "");
+    setPropertyType(project.propertyType ?? "");
     setHasInitialized(true);
-  }, []);
+  }, [project, hasInitialized]);
 
-  const persistCurrentProjectState = useCallback(() => {
-    if (!projectName || !projectData || !hasInitialized) return;
-    if (typeof window === "undefined") return;
+  const persistFields = useCallback(() => {
+    if (!hasInitialized || !project) return;
+    updateProject((prev) => ({
+      ...prev,
+      clientCompany: clientCompany || prev.clientCompany,
+      clientName: clientName || prev.clientName,
+      propertyType: propertyType || prev.propertyType,
+    }));
+  }, [hasInitialized, project, clientCompany, clientName, propertyType, updateProject]);
 
-    // Only update fields that have been explicitly changed by the user
-    const updatedProject: ProjectData = {
-      ...projectData, 
-      clientCompany: clientCompany || projectData.clientCompany,
-      clientName: clientName || projectData.clientName,
-      propertyType: propertyType || projectData.propertyType,
-    };
-
-    projectStoreRef.current[projectName] = updatedProject;
-    setProjectData(updatedProject);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      // Ensure this is marked as current project
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
-    } catch (error) {
-      console.error("Failed to persist project state", error);
-    }
-  }, [projectName, projectData, clientCompany, clientName, propertyType, hasInitialized]);
-
-  // Auto-save every 30 seconds
   useEffect(() => {
-    if (!isStateHydrated) return;
-    const interval = setInterval(() => {
-      persistCurrentProjectState();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [isStateHydrated, persistCurrentProjectState]);
-
-  // Save on field changes
-  useEffect(() => {
-    if (!isStateHydrated || !hasInitialized) return;
-    const timeoutId = setTimeout(() => {
-      persistCurrentProjectState();
-    }, 1000);
+    if (!hasInitialized) return;
+    const timeoutId = setTimeout(persistFields, 1000);
     return () => clearTimeout(timeoutId);
-  }, [
-    clientCompany,
-    clientName,
-    propertyType,
-    isStateHydrated,
-    hasInitialized,
-    persistCurrentProjectState,
-  ]);
+  }, [clientCompany, clientName, propertyType, hasInitialized, persistFields]);
 
-  // Hydrate state from localStorage
-  useEffect(() => {
-    if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
-
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<string, unknown>;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    // Initialize if not exists
-    if (!projectStore[projectName]) {
-       // This is a new project purely from URL? Handle gracefully or create it?
-       // Usually we expect it to exist if navigating here.
-       // But if it doesn't, we might create a default one or show error.
-       // For robustness, let's create default if missing, but preferably warn.
-       console.warn(`Project ${projectName} not found in storage, creating default.`);
-       projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    const project = projectStore[projectName];
-    if (project) {
-      applyProjectState(project);
-    }
-
-    // Persist ensures if we created a default, it saves.
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
-    setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
-
-  // Initialize cover data from project data
-  useEffect(() => {
-    if (!isStateHydrated || !projectData) return;
-
-    if (projectData.propertyType) {
-      setPropertyType(projectData.propertyType);
-    }
-    if (projectData.clientName) {
-      setClientName(projectData.clientName);
-    }
-    if (projectData.clientCompany) {
-      setClientCompany(projectData.clientCompany);
-    }
-  }, [isStateHydrated, projectData]);
-
-  if (!projectData) {
+  if (isLoading || !project) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-gray-50">
         <div className="text-gray-500">Loading...</div>
@@ -171,8 +57,8 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
   }
 
   const subjectAddress =
-    projectData.subject.addressForDisplay ??
-    projectData.subject.address ??
+    project.subject.addressForDisplay ??
+    project.subject.address ??
     "";
 
   /* eslint-disable @next/next/no-img-element */
@@ -192,7 +78,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
       />
 
       <div className="flex h-full w-full bg-white">
-        {/* Settings Panel - simplified as we are already inside a layout with sidebar */}
         <div className="w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm no-print">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">
               Cover Page Settings
@@ -250,8 +135,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                 />
               </div>
 
-              {/* Cover Data Status */}
-              {projectData?.projectFolderId && (
+              {project?.projectFolderId && (
                 <div className="mt-6 border-t border-gray-200 pt-6">
                   <label className="mb-2 block text-sm font-medium text-gray-700">
                     Cover Data
@@ -280,7 +164,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                   )}
                   <button
                     onClick={async () => {
-                      if (!projectData?.projectFolderId) return;
+                      if (!project?.projectFolderId) return;
                       setIsLoadingCoverData(true);
                       try {
                         const response = await fetch(
@@ -288,11 +172,9 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                             "/subject-photo-data",
                           {
                             method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
+                            headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              projectFolderId: projectData.projectFolderId,
+                              projectFolderId: project.projectFolderId,
                             }),
                           },
                         );
@@ -310,31 +192,19 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
 
                         if (photoData) {
                           if (photoData.subjectPhotosFolderId) {
-                            const updatedProject: ProjectData = {
-                              ...projectData, 
-                              subjectPhotosFolderId:
-                                photoData.subjectPhotosFolderId,
-                            };
-                            projectStoreRef.current[projectName] =
-                              updatedProject;
-                            setProjectData(updatedProject);
-
-                            try {
-                              window.localStorage.setItem(
-                                PROJECTS_STORAGE_KEY,
-                                JSON.stringify(projectStoreRef.current),
-                              );
-                            } catch (error) {
-                              console.error(
-                                "Failed to persist subjectPhotosFolderId",
-                                error,
-                              );
-                            }
+                            updateProject((prev) => ({
+                              ...prev,
+                              subjectPhotosFolderId: photoData.subjectPhotosFolderId,
+                            }));
+                            await upsertProjectMetadata(projectId, {
+                              subjectPhotosFolderId: photoData.subjectPhotosFolderId,
+                            });
                           }
 
                           if (photoData.subjectPhotoBase64) {
-                            const dataUrl = `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`;
-                            setSubjectPhotoUrl(dataUrl);
+                            setSubjectPhotoUrl(
+                              `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`,
+                            );
                           } else {
                             setSubjectPhotoUrl(null);
                           }
@@ -353,7 +223,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                 </div>
               )}
 
-              {/* Image Size Controls */}
               <div className="mt-6 border-t border-gray-200 pt-6">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Image Size
@@ -377,7 +246,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                 </div>
               </div>
 
-               {/* Cover Size Controls */}
                <div className="mt-6 border-t border-gray-200 pt-6">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Cover Size
@@ -405,7 +273,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                 </div>
               </div>
 
-              {/* Print to PDF Button */}
               <div className="mt-6 border-t border-gray-200 pt-6">
                 <button
                   onClick={() => {
@@ -419,7 +286,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
             </div>
         </div>
 
-        {/* Cover Page Content */}
         <main className="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-8">
           <div
             className="relative flex flex-col overflow-hidden bg-white shadow-2xl"
@@ -430,11 +296,8 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
               transformOrigin: "center center",
             }}
           >
-            {/* Top Section - Branding (180px tall) */}
             <div className="relative h-[180px]">
-              {/* Logo Section */}
               <div className="flex h-full items-start justify-between px-12 pt-8 pb-4">
-                {/* Logo Mark (left) */}
                 <div className="flex-shrink-0">
                   <img
                     src="/svgs/logo-mark.svg"
@@ -444,8 +307,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                     className="h-auto"
                   />
                 </div>
-
-                {/* Main Logo (center) */}
                 <div className="flex flex-1 flex-col items-center">
                   <img
                     src="/svgs/logo.svg"
@@ -455,21 +316,15 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                     className="h-auto"
                   />
                 </div>
-
-                {/* Spacer for balance */}
                 <div className="w-[67px]"></div>
               </div>
-
-              {/* Teal Band */}
               <div className="absolute right-0 bottom-0 left-0 h-3 bg-[#15616D]"></div>
             </div>
 
-            {/* Main Content Area */}
             <div
               className="flex flex-1 flex-col items-center justify-center"
               style={{ padding: "56px 100px 100px 100px" }}
             >
-              {/* Photo */}
               <div
                 className="overflow-hidden rounded-lg border border-gray-300 shadow-sm"
                 style={{
@@ -491,7 +346,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       }
                     }}
                   />
-                ) : ( // ...
+                ) : (
                   <div className="flex h-full w-full items-center justify-center bg-gray-200">
                     <span className="text-sm text-gray-400">
                       Property Photo
@@ -500,7 +355,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                 )}
               </div>
 
-              {/* Text Section */}
               <div className="flex flex-col items-center justify-center">
                 <p
                   className="font-sans text-[11px] tracking-wider text-[#5A5463] uppercase"
@@ -543,7 +397,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                   </p>
                 )}
 
-                {/* Client Section */}
                 <div className="flex flex-col items-center">
                   <p
                     className="font-sans text-[11px] text-[#5A5463] italic"
@@ -570,10 +423,8 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
               </div>
             </div>
 
-            {/* Blue Ribbon above Footer */}
             <div className="absolute right-0 bottom-14 left-0 h-3 bg-[#15616D]"></div>
 
-            {/* Footer */}
             <div className="absolute right-0 bottom-0 left-0 flex h-14 items-center justify-center bg-[#0E0D0D]">
               <p className="text-[12px] font-medium text-white">
                 Basin Appraisals LLC

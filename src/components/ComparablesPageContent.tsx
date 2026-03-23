@@ -118,12 +118,14 @@ export function ComparablesPageContent({
         const newCompNumber = String(newComp["#"]);
 
         let existingComp = comparables.find((c) => c.number === newCompNumber);
+        /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
         existingComp ??= comparables.find(
           (c) =>
             c.address === newComp.Address ||
             (newComp.APN && (c.apn?.includes(newComp.APN) ?? false)) ||
             (newComp.Recording && c.instrumentNumber === newComp.Recording),
         );
+        /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
 
         if (existingComp) {
           const fieldConflicts: MergeConflict["conflicts"] = [];

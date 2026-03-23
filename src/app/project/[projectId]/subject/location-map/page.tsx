@@ -11,14 +11,10 @@ import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
+import { useProject } from "~/hooks/useProject";
 import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
-  DEFAULT_LABEL_SIZE,
   DEFAULT_CIRCLE_RADIUS,
   WELL_KNOWN_MAP_IDS,
   getMapByType,
@@ -27,12 +23,10 @@ import {
 } from "~/utils/projectStore";
 import type {
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   StreetLabelData,
   Circle,
   PolygonPath,
-  MapView,
   MapMarker,
 } from "~/utils/projectStore";
 
@@ -50,8 +44,8 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  const projectName = decodedProjectId;
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
+  const hasHydratedRef = useRef(false);
 
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
@@ -95,8 +89,6 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
   const [labelSize, setLabelSize] = useState(1.0);
   const markerPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
-  const [isStateHydrated, setIsStateHydrated] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback(
     (project?: ProjectData) => {
@@ -169,97 +161,62 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
   }, [bubblePosition]);
 
   useEffect(() => {
-    if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
+    if (hasHydratedRef.current) return;
+    if (isLoading || !project) return;
 
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<string, unknown>;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    if (!projectStore[projectName]) {
-      console.warn(`Project ${projectName} not found in storage, creating default.`);
-      projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName]);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, projectName);
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
-    setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
+    applyProjectState(project);
+    hasHydratedRef.current = true;
+  }, [project, isLoading, applyProjectState]);
 
   const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
+    updateProject((prev) => {
+      const subjectMarker: MapMarker = {
+        id: `marker-subject-${MAP_ID}`,
+        mapId: MAP_ID,
+        markerPosition: markerPosition ? { ...markerPosition } : null,
+        bubblePosition: bubblePosition ? { ...bubblePosition } : null,
+        isTailPinned: isSubjectTailPinned,
+        pinnedTailTipPosition: subjectPinnedTailTipPosition
+          ? { ...subjectPinnedTailTipPosition }
+          : null,
+      };
 
-    const updatedSubject: SubjectInfo = {
-      address: propertyInfo.address ?? "",
-      addressForDisplay:
-        propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
-      legalDescription: propertyInfo.legalDescription ?? "",
-      acres: propertyInfo.acres ?? "",
-    };
+      const updatedMaps = updateMapInProject(prev, MAP_ID, (m) => ({
+        ...m,
+        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
+        mapZoom,
+        bubbleSize,
+        hideUI,
+        documentFrameSize,
+        drawings: {
+          polygonPath: polygonPath.map((p) => ({ ...p })),
+          circles: circles.map((c) => ({ ...c, center: { ...c.center } })),
+          polylines: m.drawings.polylines,
+          streetLabels: streetLabels.map((l) => ({
+            ...l,
+            position: { ...l.position },
+          })),
+          labelSize,
+          circleRadius,
+          tailDirection,
+        },
+        markers: [subjectMarker],
+      }));
 
-    const subjectMarker: MapMarker = {
-      id: `marker-subject-${MAP_ID}`,
-      mapId: MAP_ID,
-      markerPosition: markerPosition ? { ...markerPosition } : null,
-      bubblePosition: bubblePosition ? { ...bubblePosition } : null,
-      isTailPinned: isSubjectTailPinned,
-      pinnedTailTipPosition: subjectPinnedTailTipPosition
-        ? { ...subjectPinnedTailTipPosition }
-        : null,
-    };
-
-    const updatedMaps = updateMapInProject(baseProject, MAP_ID, (m) => ({
-      ...m,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
-      bubbleSize,
-      hideUI,
-      documentFrameSize,
-      drawings: {
-        polygonPath: polygonPath.map((p) => ({ ...p })),
-        circles: circles.map((c) => ({ ...c, center: { ...c.center } })),
-        polylines: m.drawings.polylines,
-        streetLabels: streetLabels.map((l) => ({
-          ...l,
-          position: { ...l.position },
-        })),
-        labelSize,
-        circleRadius,
-        tailDirection,
-      },
-      markers: [subjectMarker],
-    }));
-
-    const snapshot: ProjectData = {
-      ...baseProject,
-      subject: updatedSubject,
-      maps: updatedMaps,
-    };
-
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return {
+        ...prev,
+        subject: {
+          address: propertyInfo.address ?? "",
+          addressForDisplay:
+            propertyInfo.addressForDisplay ?? propertyInfo.address ?? "",
+          legalDescription: propertyInfo.legalDescription ?? "",
+          acres: propertyInfo.acres ?? "",
+        },
+        maps: updatedMaps,
+      };
+    });
   }, [
+    updateProject,
     bubblePosition,
     bubbleSize,
     circleRadius,
@@ -272,54 +229,23 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
     mapZoom,
     markerPosition,
     polygonPath,
-    projectName,
     propertyInfo,
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
   ]);
 
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save location map projects", error);
-    }
-  }, []);
-
   useEffect(() => {
-    if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
+    if (isLoading || !hasHydratedRef.current) return;
 
-    const saveToLocalStorage = () => {
+    const timeoutId = window.setTimeout(() => {
       persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    }, 1000);
 
     return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.clearTimeout(timeoutId);
     };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
+  }, [isLoading, persistCurrentProjectState]);
 
   const handleAddressSearch = async (address: string) => {
     if (!address.trim()) return;
@@ -468,6 +394,14 @@ export default function SubjectLocationMapPage({ params }: SubjectLocationMapPag
       alert("Failed to capture screenshot. Please try manually.");
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full">

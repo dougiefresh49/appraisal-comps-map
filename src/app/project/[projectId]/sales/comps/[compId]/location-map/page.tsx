@@ -13,13 +13,10 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
 import { GisOverlay } from "~/components/GisOverlay";
+import { useProject } from "~/hooks/useProject";
 
 import {
-  createDefaultProject,
   normalizeProjectData,
-  normalizeProjectsMap,
-  PROJECTS_STORAGE_KEY,
-  CURRENT_PROJECT_STORAGE_KEY,
   DEFAULT_MAP_CENTER,
   DEFAULT_CIRCLE_RADIUS,
   compLocationMapId,
@@ -30,7 +27,6 @@ import type {
   MapMarker,
   MapView,
   ProjectData,
-  ProjectsMap,
   SubjectInfo,
   StreetLabelData,
   Circle,
@@ -49,10 +45,9 @@ interface SalesCompLocationMapPageProps {
 export default function SalesCompLocationMapPage({ params }: SalesCompLocationMapPageProps) {
   const { projectId, compId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
 
-  const projectStoreRef = useRef<ProjectsMap>({});
-  
+  const { project, isLoading, updateProject } = useProject(decodedProjectId);
+
   const [propertyInfo, setPropertyInfo] = useState<PropertyInfo>({
     address: "",
     addressForDisplay: "",
@@ -106,21 +101,11 @@ export default function SalesCompLocationMapPage({ params }: SalesCompLocationMa
   const [gisApn, setGisApn] = useState("");
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const serializedProjectRef = useRef<ProjectData | null>(null);
 
   const applyProjectState = useCallback(
-    (project?: ProjectData) => {
-      const snapshot = normalizeProjectData(project);
-      const { map: mapState, maps: mapsAfterEnsure } = ensureCompLocationMap(
-        snapshot,
-        compId,
-      );
-      if (mapsAfterEnsure !== snapshot.maps && projectName) {
-        projectStoreRef.current[projectName] = {
-          ...snapshot,
-          maps: mapsAfterEnsure,
-        };
-      }
+    (proj?: ProjectData) => {
+      const snapshot = normalizeProjectData(proj);
+      const { map: mapState } = ensureCompLocationMap(snapshot, compId);
 
       const comparable = snapshot.comparables.find((c) => c.id === compId);
       const marker = getCompMarker(mapState, compId);
@@ -190,7 +175,7 @@ export default function SalesCompLocationMapPage({ params }: SalesCompLocationMa
       setIsDrawingCircle(false);
       setIsRepositioningSubjectTail(false);
     },
-    [compId, projectName],
+    [compId],
   );
 
   // Sync refs with state
@@ -202,55 +187,14 @@ export default function SalesCompLocationMapPage({ params }: SalesCompLocationMa
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
-  // Hydrate state
+  // Hydrate local state from hook-provided project (first load only)
   useEffect(() => {
-    if (isStateHydrated) return;
-    if (typeof window === "undefined") return;
-
-    let projectStore: ProjectsMap = {};
-    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Record<
-          string,
-          Partial<ProjectData>
-        >;
-        projectStore = normalizeProjectsMap(parsed);
-      } catch (error) {
-        console.error("Failed to parse stored projects", error);
-      }
-    }
-
-    if (!projectStore[projectName]) {
-       console.warn(`Project ${projectName} not found in storage, creating default.`);
-       projectStore[projectName] = createDefaultProject();
-    }
-
-    projectStoreRef.current = projectStore;
-    applyProjectState(projectStore[projectName]);
-
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStore),
-      );
-      window.localStorage.setItem(
-        CURRENT_PROJECT_STORAGE_KEY,
-        projectName,
-      );
-    } catch (error) {
-      console.error("Failed to persist projects", error);
-    }
-
+    if (isStateHydrated || isLoading || !project) return;
+    applyProjectState(project);
     setIsStateHydrated(true);
-  }, [applyProjectState, isStateHydrated, projectName]);
+  }, [applyProjectState, isStateHydrated, isLoading, project]);
 
   const persistCurrentProjectState = useCallback(() => {
-    if (!projectName) return;
-    const baseProject = projectStoreRef.current[projectName]
-      ? normalizeProjectData(projectStoreRef.current[projectName])
-      : createDefaultProject();
-
     const mapId = compLocationMapId(compId);
 
     const compMarker: MapMarker = {
@@ -292,19 +236,18 @@ export default function SalesCompLocationMapPage({ params }: SalesCompLocationMa
       markers: [compMarker],
     };
 
-    const existingMapIndex = baseProject.maps.findIndex((m) => m.id === mapId);
-    const updatedMaps =
-      existingMapIndex >= 0
-        ? baseProject.maps.map((m) => (m.id === mapId ? mapView : m))
-        : [...baseProject.maps, mapView];
+    updateProject((prev) => {
+      const existingMapIndex = prev.maps.findIndex((m) => m.id === mapId);
+      const updatedMaps =
+        existingMapIndex >= 0
+          ? prev.maps.map((m) => (m.id === mapId ? mapView : m))
+          : [...prev.maps, mapView];
 
-    const snapshot: ProjectData = {
-      ...baseProject,
-      maps: updatedMaps,
-    };
-
-    projectStoreRef.current[projectName] = snapshot;
-    serializedProjectRef.current = snapshot;
+      return {
+        ...prev,
+        maps: updatedMaps,
+      };
+    });
   }, [
     bubblePosition,
     circleRadius,
@@ -317,57 +260,26 @@ export default function SalesCompLocationMapPage({ params }: SalesCompLocationMa
     mapZoom,
     markerPosition,
     polygonPath,
-    projectName,
     streetLabels,
     subjectPinnedTailTipPosition,
     tailDirection,
     bubbleSize,
     compId,
+    updateProject,
   ]);
-
-  const writeProjectsToStorage = useCallback((currentName: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        PROJECTS_STORAGE_KEY,
-        JSON.stringify(projectStoreRef.current),
-      );
-      window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, currentName);
-    } catch (error) {
-      console.error("Failed to save location map projects", error);
-    }
-  }, []);
 
   useEffect(() => {
     if (!isStateHydrated) return;
-    if (typeof window === "undefined") return;
-    if (!projectName) return;
+    persistCurrentProjectState();
+  }, [isStateHydrated, persistCurrentProjectState]);
 
-    const saveToLocalStorage = () => {
-      persistCurrentProjectState();
-      writeProjectsToStorage(projectName);
-    };
-
-    saveToLocalStorage();
-    const intervalId = window.setInterval(saveToLocalStorage, 30000);
-
-    const handleBeforeUnload = () => {
-      saveToLocalStorage();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [
-    isStateHydrated,
-    persistCurrentProjectState,
-    projectName,
-    writeProjectsToStorage,
-  ]);
-
-
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-lg text-gray-500">Loading project…</p>
+      </div>
+    );
+  }
 
   const handleAddressSearch = async (address: string) => {
       // Reuse address search logic

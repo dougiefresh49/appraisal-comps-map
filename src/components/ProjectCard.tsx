@@ -1,15 +1,21 @@
 import Link from "next/link";
-import { type ProjectData } from "~/utils/projectStore";
+import type { SubjectInfo } from "~/utils/projectStore";
 
 interface ProjectCardProps {
+  projectId: string;
   projectName: string;
-  project: ProjectData;
-  onDelete: (name: string) => void;
+  subject: SubjectInfo;
+  clientName?: string;
+  propertyType?: string;
+  onDelete: (projectId: string) => void;
 }
 
 export function ProjectCard({
+  projectId,
   projectName,
-  project,
+  subject,
+  clientName,
+  propertyType,
   onDelete,
 }: ProjectCardProps) {
   const handleDelete = (e: React.MouseEvent) => {
@@ -20,13 +26,13 @@ export function ProjectCard({
         `Are you sure you want to delete "${projectName}"? This action cannot be undone.`,
       )
     ) {
-      onDelete(projectName);
+      onDelete(projectId);
     }
   };
 
   return (
     <Link
-      href={`/project/${encodeURIComponent(projectName)}`}
+      href={`/project/${projectId}`}
       className="group relative flex h-full flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-blue-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500"
     >
       <div className="space-y-4">
@@ -35,7 +41,7 @@ export function ProjectCard({
             {projectName}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {project.subject?.address || "No address provided"}
+            {subject?.address ?? "No address provided"}
           </p>
         </div>
 
@@ -43,13 +49,13 @@ export function ProjectCard({
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>Client</span>
             <span className="font-medium text-gray-700 dark:text-gray-200">
-              {project.clientName || "—"}
+              {clientName ?? "—"}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>Type</span>
             <span className="font-medium text-gray-700 dark:text-gray-200">
-              {project.propertyType || "—"}
+              {propertyType ?? "—"}
             </span>
           </div>
         </div>

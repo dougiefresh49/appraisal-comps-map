@@ -455,7 +455,7 @@ function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
   });
 
   // --- Neighborhood Map ---
-  const nhId = WELL_KNOWN_MAP_IDS["neighborhood"];
+  const nhId = WELL_KNOWN_MAP_IDS.neighborhood;
   maps.push({
     id: nhId,
     type: "neighborhood",
