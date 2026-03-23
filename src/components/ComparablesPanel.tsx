@@ -2,7 +2,7 @@
 
 
 import { useEffect, useState } from "react";
-import { COMPARABLE_TYPES, type ComparableType } from "~/utils/projectStore";
+import { type ComparableType } from "~/utils/projectStore";
 import { GisOverlay } from "./GisOverlay";
 
 type LatLng = { lat: number; lng: number };

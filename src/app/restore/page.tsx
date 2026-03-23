@@ -7,99 +7,267 @@ import {
   normalizeProjectsMap,
   type ProjectsMap,
 } from "~/utils/projectStore";
+import { insertProject } from "~/lib/supabase-queries";
+import { useAuth } from "~/hooks/useAuth";
 
-// RAW BACKUP DATA - Removed to rely on file upload
+interface MigrationResult {
+  name: string;
+  status: "success" | "error";
+  message?: string;
+  supabaseId?: string;
+}
 
-
-export default function RestorePage() {
+export default function SeedPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-  const [message, setMessage] = useState("");
+  const { user } = useAuth();
+  const [results, setResults] = useState<MigrationResult[]>([]);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [source, setSource] = useState<"localStorage" | "file">("localStorage");
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleRestore = () => {
+  const migrateProjects = async (projectsMap: ProjectsMap) => {
+    setIsMigrating(true);
+    const migrationResults: MigrationResult[] = [];
+
+    for (const [name, projectData] of Object.entries(projectsMap)) {
+      try {
+        const newId = await insertProject(name, projectData);
+        migrationResults.push({
+          name,
+          status: "success",
+          supabaseId: newId,
+        });
+      } catch (error) {
+        migrationResults.push({
+          name,
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+      setResults([...migrationResults]);
+    }
+
+    setIsMigrating(false);
+  };
+
+  const handleMigrateFromLocalStorage = async () => {
+    if (typeof window === "undefined") return;
+
+    const stored = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
+    if (!stored) {
+      setResults([
+        {
+          name: "(none)",
+          status: "error",
+          message: "No projects found in localStorage",
+        },
+      ]);
+      return;
+    }
+
     try {
-      // In a real scenario, I would paste the FULL JSON here. 
-      // Since I am an AI constructing this, I will fetch the JSON from the server 
-      // (if I placed it in public) OR I will guide the user to paste it.
-      // BUT, the user asked for a "script". 
-      // I will implement a File Upload input so they can just upload their .json file!
-    } catch (e) {
-      console.error(e);
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      const normalized = normalizeProjectsMap(parsed);
+
+      if (Object.keys(normalized).length === 0) {
+        setResults([
+          {
+            name: "(none)",
+            status: "error",
+            message: "localStorage contains no valid projects",
+          },
+        ]);
+        return;
+      }
+
+      await migrateProjects(normalized);
+    } catch (error) {
+      setResults([
+        {
+          name: "(parse error)",
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to parse localStorage data",
+        },
+      ]);
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const parsed = JSON.parse(content) as ProjectsMap;
-        
-        // Normalize and Validate
-        const normalized = normalizeProjectsMap(parsed);
-        
-        // Save to LocalStorage
-        window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(normalized));
-        
-        setStatus("success");
-        setMessage(`Successfully restored ${Object.keys(normalized).length} projects.`);
-      } catch (error) {
-        setStatus("error");
-        setMessage("Failed to parse or restore backup file.");
-        console.error(error);
+    const content = await file.text();
+    try {
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      const normalized = normalizeProjectsMap(parsed);
+
+      if (Object.keys(normalized).length === 0) {
+        setResults([
+          {
+            name: "(none)",
+            status: "error",
+            message: "File contains no valid projects",
+          },
+        ]);
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      await migrateProjects(normalized);
+    } catch (error) {
+      setResults([
+        {
+          name: "(parse error)",
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to parse backup file",
+        },
+      ]);
+    }
   };
 
+  const handleClearLocalStorage = () => {
+    if (typeof window === "undefined") return;
+    if (
+      window.confirm(
+        "This will remove all project data from localStorage. This cannot be undone. Continue?",
+      )
+    ) {
+      window.localStorage.removeItem(PROJECTS_STORAGE_KEY);
+    }
+  };
+
+  const successCount = results.filter((r) => r.status === "success").length;
+  const errorCount = results.filter((r) => r.status === "error").length;
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-gray-500">Please sign in to migrate data.</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
-        <h1 className="mb-4 text-xl font-bold text-gray-900">Restore Projects</h1>
-        <p className="mb-6 text-sm text-gray-600">
-          Upload your <code>backup-data--full.json</code> file to restore your projects.
-          <br />
-          <strong className="text-red-600">Warning: This will overwrite existing projects!</strong>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-900">
+      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+        <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-gray-100">
+          Seed Supabase from localStorage
+        </h1>
+        <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
+          Push your local project data into the Supabase database. This is a
+          one-time operation. Each user should run this once from their
+          browser.
         </p>
 
-        <div className="mb-6">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Select Backup File
-          </label>
-          <input
-            type="file"
-            accept=".json"
-            onChange={handleFileUpload}
-            className="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm text-gray-900 focus:outline-none"
-          />
+        <div className="mb-6 flex gap-2">
+          <button
+            onClick={() => setSource("localStorage")}
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+              source === "localStorage"
+                ? "bg-blue-600 text-white"
+                : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            }`}
+          >
+            From localStorage
+          </button>
+          <button
+            onClick={() => setSource("file")}
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+              source === "file"
+                ? "bg-blue-600 text-white"
+                : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            }`}
+          >
+            From JSON File
+          </button>
         </div>
 
-        {status === "success" && (
-            <div className="mb-6 rounded-md bg-green-50 p-4 text-sm text-green-700">
-                {message}
-                <div className="mt-2">
-                    <button 
-                        onClick={() => router.push('/projects')}
-                        className="font-bold underline hover:text-green-800"
-                    >
-                        Go to Projects
-                    </button>
-                </div>
-            </div>
+        {source === "localStorage" && (
+          <button
+            onClick={handleMigrateFromLocalStorage}
+            disabled={isMigrating}
+            className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isMigrating ? "Migrating..." : "Migrate localStorage to Supabase"}
+          </button>
         )}
 
-        {status === "error" && (
-            <div className="mb-6 rounded-md bg-red-50 p-4 text-sm text-red-700">
-                {message}
-            </div>
+        {source === "file" && (
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Select Backup JSON File
+            </label>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleFileUpload}
+              disabled={isMigrating}
+              className="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm text-gray-900 focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            />
+          </div>
         )}
-        
-        <div className="border-t pt-4">
-             <a href="/projects" className="text-sm text-gray-500 hover:text-gray-900">Cancel and return to Projects</a>
+
+        {results.length > 0 && (
+          <div className="mt-6 space-y-3">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Results ({successCount} succeeded, {errorCount} failed)
+            </h2>
+            <div className="max-h-60 space-y-2 overflow-y-auto">
+              {results.map((r, i) => (
+                <div
+                  key={i}
+                  className={`rounded-md p-3 text-sm ${
+                    r.status === "success"
+                      ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300"
+                      : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                  }`}
+                >
+                  <span className="font-medium">{r.name}</span>
+                  {r.status === "success" && (
+                    <span className="ml-2 text-xs opacity-75">
+                      ID: {r.supabaseId}
+                    </span>
+                  )}
+                  {r.message && (
+                    <div className="mt-1 text-xs">{r.message}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {successCount > 0 && errorCount === 0 && (
+              <div className="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+                <button
+                  onClick={() => router.push("/projects")}
+                  className="w-full rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700"
+                >
+                  Go to Projects
+                </button>
+                <button
+                  onClick={handleClearLocalStorage}
+                  className="w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  Clear localStorage (optional)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-6 border-t border-gray-200 pt-4 dark:border-gray-700">
+          <a
+            href="/projects"
+            className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Back to Projects
+          </a>
         </div>
       </div>
     </div>

@@ -56,7 +56,9 @@ export function ComparablesPageContent({
   if (!projectExists || !project) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Project not found</div>
+        <div className="text-gray-500 dark:text-gray-400">
+          Project not found
+        </div>
       </div>
     );
   }
@@ -118,12 +120,14 @@ export function ComparablesPageContent({
         const newCompNumber = String(newComp["#"]);
 
         let existingComp = comparables.find((c) => c.number === newCompNumber);
+        /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
         existingComp ??= comparables.find(
           (c) =>
             c.address === newComp.Address ||
             (newComp.APN && (c.apn?.includes(newComp.APN) ?? false)) ||
             (newComp.Recording && c.instrumentNumber === newComp.Recording),
         );
+        /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
 
         if (existingComp) {
           const fieldConflicts: MergeConflict["conflicts"] = [];
@@ -270,7 +274,9 @@ export function ComparablesPageContent({
       const finalComparables: Comparable[] = pendingComps.map(
         ({ comp: newComp, existingId }, i) => {
           if (existingId) {
-            const existing = previousComparables.find((c) => c.id === existingId);
+            const existing = previousComparables.find(
+              (c) => c.id === existingId,
+            );
             if (existing) {
               const updatedComp = { ...existing };
               updatedComp.number = String(newComp["#"]);
@@ -366,7 +372,10 @@ export function ComparablesPageContent({
         if (field === "apn") {
           return {
             ...comp,
-            apn: value.split(",").map((s) => s.trim()).filter(Boolean),
+            apn: value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
           };
         }
 
@@ -418,20 +427,20 @@ export function ComparablesPageContent({
                   ? {
                       ...c,
                       address: displayAddress,
-                      addressForDisplay:
-                        c.addressForDisplay || displayAddress,
+                      addressForDisplay: c.addressForDisplay || displayAddress,
                     }
                   : c,
               ),
             };
           }
 
-          const existingMarker = mapView.markers.find((m) => m.compId === compId);
-          const bubblePosition =
-            existingMarker?.bubblePosition ?? {
-              lat: newPosition.lat + 0.001,
-              lng: newPosition.lng + 0.001,
-            };
+          const existingMarker = mapView.markers.find(
+            (m) => m.compId === compId,
+          );
+          const bubblePosition = existingMarker?.bubblePosition ?? {
+            lat: newPosition.lat + 0.001,
+            lng: newPosition.lng + 0.001,
+          };
           const isTailPinned = existingMarker?.isTailPinned ?? true;
           const pinnedTailTipPosition =
             existingMarker?.pinnedTailTipPosition ??
@@ -518,7 +527,7 @@ export function ComparablesPageContent({
         <button
           onClick={() => void handleRefreshComps()}
           disabled={isRefreshing}
-          className="group flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-700"
+          className="group flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-700"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

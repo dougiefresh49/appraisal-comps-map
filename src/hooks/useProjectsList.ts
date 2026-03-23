@@ -41,7 +41,7 @@ export function useProjectsList() {
       }
     }
 
-    fetchProjects();
+    void fetchProjects();
   }, []);
 
   return { projects, isLoading, error };
