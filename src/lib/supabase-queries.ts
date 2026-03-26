@@ -581,3 +581,199 @@ export async function getPageLock(
     lockedAt: row.locked_at,
   };
 }
+
+// ============================================================
+// Photo analyses (image knowledge base)
+// ============================================================
+
+interface PhotoAnalysisRow {
+  id: string;
+  project_id: string | null;
+  file_name: string;
+  file_id: string | null;
+  category: string;
+  label: string;
+  description: string | null;
+  improvements_observed: Record<string, string>;
+  property_type: string | null;
+  subject_address: string | null;
+  project_folder_id: string | null;
+  sort_order: number;
+  is_included: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhotoAnalysis {
+  id: string;
+  projectId: string | null;
+  fileName: string;
+  fileId: string | null;
+  category: string;
+  label: string;
+  description: string | null;
+  improvementsObserved: Record<string, string>;
+  propertyType: string | null;
+  subjectAddress: string | null;
+  projectFolderId: string | null;
+  sortOrder: number;
+  isIncluded: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function photoFromRow(row: PhotoAnalysisRow): PhotoAnalysis {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    fileName: row.file_name,
+    fileId: row.file_id,
+    category: row.category,
+    label: row.label,
+    description: row.description,
+    improvementsObserved: row.improvements_observed ?? {},
+    propertyType: row.property_type,
+    subjectAddress: row.subject_address,
+    projectFolderId: row.project_folder_id,
+    sortOrder: row.sort_order,
+    isIncluded: row.is_included,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function fetchProjectPhotos(
+  projectId: string,
+): Promise<PhotoAnalysis[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("photo_analyses")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("is_included", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as PhotoAnalysisRow[]).map(photoFromRow);
+}
+
+export async function fetchArchivedPhotos(
+  projectId: string,
+): Promise<PhotoAnalysis[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("photo_analyses")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("is_included", false)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as PhotoAnalysisRow[]).map(photoFromRow);
+}
+
+export async function updatePhotoLabel(photoId: string, label: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("photo_analyses")
+    .update({ label })
+    .eq("id", photoId);
+  if (error) throw error;
+}
+
+export async function updatePhotoSortOrder(
+  photos: { id: string; sortOrder: number }[],
+) {
+  const supabase = createClient();
+  const updates = photos.map((p) =>
+    supabase
+      .from("photo_analyses")
+      .update({ sort_order: p.sortOrder })
+      .eq("id", p.id),
+  );
+  const results = await Promise.all(updates);
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+}
+
+export async function archivePhoto(photoId: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("photo_analyses")
+    .update({ is_included: false })
+    .eq("id", photoId);
+  if (error) throw error;
+}
+
+export async function restorePhoto(photoId: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("photo_analyses")
+    .update({ is_included: true })
+    .eq("id", photoId);
+  if (error) throw error;
+}
+
+export type RealtimePhotoPayload = {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new: PhotoAnalysis | null;
+  old: { id: string } | null;
+};
+
+export function subscribeToProjectPhotos(
+  projectId: string,
+  callback: (payload: RealtimePhotoPayload) => void,
+) {
+  const supabase = createClient();
+  const channel = supabase
+    .channel(`photos:${projectId}`)
+    .on(
+      "postgres_changes" as never,
+      {
+        event: "*",
+        schema: "public",
+        table: "photo_analyses",
+        filter: `project_id=eq.${projectId}`,
+      },
+      (payload: {
+        eventType: "INSERT" | "UPDATE" | "DELETE";
+        new: Record<string, unknown>;
+        old: Record<string, unknown>;
+      }) => {
+        callback({
+          eventType: payload.eventType,
+          new: payload.new?.id
+            ? photoFromRow(payload.new as unknown as PhotoAnalysisRow)
+            : null,
+          old: payload.old?.id
+            ? { id: payload.old.id as string }
+            : null,
+        });
+      },
+    )
+    .subscribe();
+
+  return channel;
+}
+
+export async function fetchIncludedPhotosForExport(
+  projectId: string,
+): Promise<{ image: string; label: string }[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("photo_analyses")
+    .select("file_name, label")
+    .eq("project_id", projectId)
+    .eq("is_included", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+
+  return ((data ?? []) as { file_name: string; label: string }[]).map(
+    (row) => ({
+      image: row.file_name,
+      label: row.label,
+    }),
+  );
+}

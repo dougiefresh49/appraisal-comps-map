@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { processImages } from "~/server/photos/actions";
+import { triggerPhotoAnalysis } from "~/server/photos/actions";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // This triggers the webhook but returns immediately (fire-and-forget)
-    const result = await processImages(projectFolderId);
+    const result = await triggerPhotoAnalysis(projectFolderId);
     return NextResponse.json(result);
   } catch (error) {
     console.error("Error processing images:", error);

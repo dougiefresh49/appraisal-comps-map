@@ -1,77 +1,31 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import {
-  fetchInputsJson,
-  saveChanges,
-  type PhotoInputs,
-} from "~/server/photos/actions";
-
-export async function GET(request: NextRequest) {
-  console.log("🚀 API GET /api/photos called");
-
-  const { searchParams } = new URL(request.url);
-  const folderId = searchParams.get("folderId");
-
-  if (!folderId) {
-    return NextResponse.json(
-      { success: false, error: "folderId query parameter is required" },
-      { status: 400 },
-    );
-  }
-
-  try {
-    console.log("📥 Fetching inputs from server action...");
-    const { photos, fileId } = await fetchInputsJson(folderId);
-    console.log("📦 Photos received from server action:", photos.length);
-    console.log("📦 Sample photos:", photos.slice(0, 2));
-
-    // Photos now come with webViewUrl already included
-    const response = { success: true, data: photos, fileId };
-    console.log("📤 Sending API response:", {
-      success: response.success,
-      dataCount: response.data?.length,
-      fileId: response.fileId,
-    });
-
-    return NextResponse.json(response);
-  } catch (error) {
-    console.error("❌ Error in API route:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch photos" },
-      { status: 500 },
-    );
-  }
-}
+import { exportInputJson } from "~/server/photos/actions";
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
-      photos: PhotoInputs;
-      folderId: string;
-      fileId?: string;
+      projectId: string;
+      projectFolderId: string;
     };
-    const { photos, folderId, fileId } = body;
+    const { projectId, projectFolderId } = body;
 
-    if (!photos || !Array.isArray(photos)) {
+    if (!projectId || !projectFolderId) {
       return NextResponse.json(
-        { success: false, error: "Invalid photos data" },
+        {
+          success: false,
+          error: "projectId and projectFolderId are required",
+        },
         { status: 400 },
       );
     }
 
-    if (!folderId) {
-      return NextResponse.json(
-        { success: false, error: "folderId is required" },
-        { status: 400 },
-      );
-    }
-
-    const result = await saveChanges(photos, folderId, fileId);
+    const result = await exportInputJson(projectId, projectFolderId);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error saving photos:", error);
+    console.error("Error exporting photos:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save photos" },
+      { success: false, error: "Failed to export photos" },
       { status: 500 },
     );
   }

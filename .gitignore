@@ -13,6 +13,9 @@
 /prisma/db.sqlite-journal
 db.sqlite
 
+# supabase (cli cache, linked project metadata — may contain secrets)
+supabase/.temp/
+
 # next.js
 /.next/
 /out/
