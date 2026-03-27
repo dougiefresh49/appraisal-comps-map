@@ -3,21 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
-
-import { useTheme } from "~/components/ThemeProvider";
+import { ProfileMenu } from "~/components/ProfileMenu";
 
 interface ProjectSidebarProps {
   projectId: string;
 }
 
-import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const pathname = usePathname();
-  const decodedProjectId = decodeURIComponent(projectId);
-  const { project } = useProject(projectId);
-  const { theme, toggleTheme } = useTheme();
+  const { project, isLoading: isProjectLoading, projectName } = useProject(projectId);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Helper to check if a path is active
@@ -57,9 +53,9 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
           <div className="overflow-hidden">
              <h2
                 className="truncate text-lg font-bold text-gray-900 dark:text-gray-100"
-                title={decodedProjectId}
+                title={projectName || projectId}
               >
-                {decodedProjectId}
+                {projectName || projectId}
               </h2>
               <Link
                 href="/projects"
@@ -333,14 +329,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
         </nav>
       </div>
 
-      <div className={`border-t border-gray-200 p-4 dark:border-gray-800 ${isCollapsed ? "hidden" : ""}`}>
-        <button
-          onClick={toggleTheme}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
-        </button>
-      </div>
+      <ProfileMenu isCollapsed={isCollapsed} />
     </aside>
   );
 }

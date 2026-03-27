@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState, use } from "react";
 import { useProject } from "~/hooks/useProject";
-import { env } from "~/env";
 import { upsertProjectMetadata } from "~/lib/supabase-queries";
 
 interface CoverPageProps {
@@ -151,7 +150,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                   </div>
                 ) : (
                   <div className="space-y-2 text-xs text-gray-500">
-                    <div>Data fetched from webhook</div>
+                    <div>Data fetched from Drive</div>
                     {subjectPhotoUrl && (
                       <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
                         <div className="font-semibold">Image URL:</div>
@@ -172,21 +171,19 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                     if (!project?.projectFolderId) return;
                     setIsLoadingCoverData(true);
                     try {
-                      const response = await fetch(
-                        env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL +
-                          "/subject-photo-data",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            projectFolderId: project.projectFolderId,
-                          }),
-                        },
-                      );
+                      const response = await fetch("/api/cover-data", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          projectFolderId: project.projectFolderId,
+                          subjectPhotosFolderId:
+                            project.subjectPhotosFolderId ?? undefined,
+                        }),
+                      });
 
                       if (!response.ok) {
                         throw new Error(
-                          `Failed to fetch subject photo data: ${response.statusText}`,
+                          `Failed to fetch cover data: ${response.statusText}`,
                         );
                       }
 

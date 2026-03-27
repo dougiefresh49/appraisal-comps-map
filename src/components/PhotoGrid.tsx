@@ -109,6 +109,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         body: JSON.stringify({
           projectId,
           projectFolderId: project.projectFolderId,
+          subjectPhotosFolderId: project.subjectPhotosFolderId ?? undefined,
         }),
       });
 

@@ -1,6 +1,12 @@
 import "server-only";
 import { env } from "~/env";
 import { createClient } from "~/utils/supabase/server";
+import { getGoogleToken } from "~/utils/supabase/server";
+import {
+  listFolderChildren,
+  findChildByName,
+  uploadOrUpdateFile,
+} from "~/lib/drive-api";
 
 /**
  * Trigger the n8n photo analysis workflow.
@@ -53,14 +59,50 @@ export async function triggerPhotoAnalysis(
 }
 
 /**
- * Export the current photo set as input.json to Google Drive via n8n.
+ * Resolves the subject photos folder ID for a given project Drive folder.
+ * Navigates: projectFolder → subject → photos
+ */
+async function resolveSubjectPhotosFolderId(
+  token: string,
+  projectFolderId: string,
+): Promise<string> {
+  const projectChildren = await listFolderChildren(token, projectFolderId, {
+    foldersOnly: true,
+  });
+
+  const subjectFolder = projectChildren.find(
+    (f) => f.name.toLowerCase() === "subject",
+  );
+  if (!subjectFolder) {
+    throw new Error("Could not find 'subject' folder in project Drive folder");
+  }
+
+  const photosFolder = await findChildByName(
+    token,
+    subjectFolder.id,
+    "photos",
+    "application/vnd.google-apps.folder",
+  );
+  if (!photosFolder) {
+    throw new Error("Could not find 'photos' subfolder inside subject folder");
+  }
+
+  return photosFolder.id;
+}
+
+/**
+ * Export the current photo set as input.json to Google Drive.
  * Reads included photos from Supabase ordered by sort_order, maps them to
- * the `[{image, label}]` format that Google Apps Script expects, and calls
- * n8n to write the file.
+ * the `[{image, label}]` format that Google Apps Script expects, and writes
+ * the file directly to Drive using the user's OAuth token.
+ *
+ * If subjectPhotosFolderId is not provided, it is discovered by traversing
+ * the project folder structure (projectFolder → subject → photos).
  */
 export async function exportInputJson(
   projectId: string,
   projectFolderId: string,
+  subjectPhotosFolderId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!projectId || !projectFolderId) {
@@ -70,8 +112,13 @@ export async function exportInputJson(
       };
     }
 
-    if (!env.N8N_WEBHOOK_BASE_URL) {
-      return { success: false, error: "N8N_WEBHOOK_BASE_URL is not set" };
+    const token = await getGoogleToken();
+    if (!token) {
+      return {
+        success: false,
+        error:
+          "Not authenticated — please sign in again to grant Drive access",
+      };
     }
 
     const supabase = await createClient();
@@ -91,24 +138,18 @@ export async function exportInputJson(
       }),
     );
 
-    const response = await fetch(
-      env.N8N_WEBHOOK_BASE_URL + "/subject-photos-save-input",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectFolderId,
-          photos,
-        }),
-      },
-    );
+    // Resolve the photos folder if not already known
+    const folderId =
+      subjectPhotosFolderId ??
+      (await resolveSubjectPhotosFolderId(token, projectFolderId));
 
-    if (!response.ok) {
-      return {
-        success: false,
-        error: `n8n returned ${response.status}: ${response.statusText}`,
-      };
-    }
+    await uploadOrUpdateFile(
+      token,
+      folderId,
+      "input.json",
+      JSON.stringify(photos, null, 2),
+      "application/json",
+    );
 
     return { success: true };
   } catch (error) {

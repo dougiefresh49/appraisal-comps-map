@@ -1,40 +1,35 @@
-import {
-  GoogleGenerativeAI,
-  type Part,
-} from "@google/generative-ai";
+import { GoogleGenAI, type Part } from "@google/genai";
 
-const GENERATION_MODEL = "gemini-3.1-flash-lite-preview";
+const GENERATION_MODEL = "gemini-2.5-flash-lite";
 
-let genAI: GoogleGenerativeAI | null = null;
+let ai: GoogleGenAI | null = null;
 
-function getGenAI(): GoogleGenerativeAI {
-  if (!genAI) {
+function getAI(): GoogleGenAI {
+  if (!ai) {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error(
         "GOOGLE_GEMINI_API_KEY is not set — Gemini generation requires an API key",
       );
     }
-    genAI = new GoogleGenerativeAI(apiKey);
+    ai = new GoogleGenAI({ apiKey });
   }
-  return genAI;
+  return ai;
 }
 
 /**
  * Generate report section text from a prompt string.
  */
 export async function generateReportSection(prompt: string): Promise<string> {
-  const model = getGenAI().getGenerativeModel({
+  const response = await getAI().models.generateContent({
     model: GENERATION_MODEL,
-    generationConfig: {
+    contents: prompt,
+    config: {
       temperature: 0.7,
       maxOutputTokens: 4096,
     },
   });
-
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  return response.text();
+  return response.text ?? "";
 }
 
 /**
@@ -46,14 +41,6 @@ export async function generateWithAttachment(
   fileBuffer: Buffer,
   mimeType: string,
 ): Promise<string> {
-  const model = getGenAI().getGenerativeModel({
-    model: GENERATION_MODEL,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 4096,
-    },
-  });
-
   const parts: Part[] = [
     {
       inlineData: {
@@ -64,9 +51,15 @@ export async function generateWithAttachment(
     { text: prompt },
   ];
 
-  const result = await model.generateContent(parts);
-  const response = result.response;
-  return response.text();
+  const response = await getAI().models.generateContent({
+    model: GENERATION_MODEL,
+    contents: parts,
+    config: {
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+    },
+  });
+  return response.text ?? "";
 }
 
 /**
@@ -78,15 +71,6 @@ export async function extractDocumentContent(
   mimeType: string,
   extractionPrompt: string,
 ): Promise<{ extractedText: string; structuredData: Record<string, unknown> }> {
-  const model = getGenAI().getGenerativeModel({
-    model: GENERATION_MODEL,
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 4096,
-      responseMimeType: "application/json",
-    },
-  });
-
   const parts: Part[] = [
     {
       inlineData: {
@@ -97,9 +81,16 @@ export async function extractDocumentContent(
     { text: extractionPrompt },
   ];
 
-  const result = await model.generateContent(parts);
-  const response = result.response;
-  const text = response.text();
+  const response = await getAI().models.generateContent({
+    model: GENERATION_MODEL,
+    contents: parts,
+    config: {
+      temperature: 0.2,
+      maxOutputTokens: 4096,
+      responseMimeType: "application/json",
+    },
+  });
+  const text = response.text ?? "";
 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
