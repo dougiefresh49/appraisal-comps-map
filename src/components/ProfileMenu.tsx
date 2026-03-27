@@ -7,6 +7,7 @@ import {
   SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
+import { useRouter } from "next/navigation";
 import { useTheme } from "~/components/ThemeProvider";
 import { useAuth } from "~/hooks/useAuth";
 
@@ -17,6 +18,7 @@ interface ProfileMenuProps {
 export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -48,6 +50,7 @@ export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
   async function handleSignOut() {
     setIsOpen(false);
     await signOut();
+    router.replace("/login");
   }
 
   return (
