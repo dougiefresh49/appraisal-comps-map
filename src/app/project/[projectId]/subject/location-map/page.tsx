@@ -12,6 +12,7 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
 import { useProject } from "~/hooks/useProject";
+import { registerMapContext } from "~/lib/map-context";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -386,6 +387,7 @@ export default function SubjectLocationMapPage({
         link.download = "subject-location-map.png";
         link.click();
       }
+      void registerMapContext(decodedProjectId, "location_map", {});
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");

@@ -4,62 +4,47 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { type ReportSection } from "~/server/reports/actions";
+import { useReportSection } from "~/hooks/useReportSection";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
 });
 
-type ReportAction = "generate" | "get" | "update" | "regenerate";
-
 interface ReportSectionContentProps {
+  projectId: string;
   projectFolderId?: string;
   section: ReportSection;
   title: string;
   description?: string;
 }
 
-interface RequestState {
-  isLoading: boolean;
-  isSaving: boolean;
-  isGenerating: boolean;
-  isRegenerating: boolean;
-}
-
-const DEFAULT_STATE: RequestState = {
-  isLoading: false,
-  isSaving: false,
-  isGenerating: false,
-  isRegenerating: false,
-};
-
 export function ReportSectionContent({
+  projectId,
   projectFolderId,
   section,
   title,
   description,
 }: ReportSectionContentProps) {
-  const [content, setContent] = useState<string>("");
-  const [exists, setExists] = useState<boolean | null>(null);
-  const [state, setState] = useState<RequestState>(DEFAULT_STATE);
+  const {
+    content,
+    exists: hasContent,
+    isLoading,
+    updateContent,
+    refreshSection,
+  } = useReportSection(projectId, section);
+
+  const [editContent, setEditContent] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
   const [regenerationContext, setRegenerationContext] = useState("");
-
-  const hasContent = useMemo(() => {
-    const trimmed = content.trim();
-    if (exists === false) return false;
-    if (exists === true) return trimmed.length > 0;
-    return trimmed.length > 0;
-  }, [content, exists]);
-
-  const updateState = useCallback((partial: Partial<RequestState>) => {
-    setState((prev) => ({ ...prev, ...partial }));
-  }, []);
 
   const resetTransient = () => {
     setError(null);
@@ -76,118 +61,91 @@ export function ReportSectionContent({
       await navigator.clipboard.writeText(content);
       setMessage("Copied to clipboard.");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to copy content.";
-      setError(message);
+      setError(
+        err instanceof Error ? err.message : "Failed to copy content.",
+      );
     }
   }, [content]);
 
-  const postAction = useCallback(
-    async (
-      action: ReportAction,
-      nextContent?: string,
-      context?: string,
-      previousContent?: string,
-    ) => {
-      if (!projectFolderId) {
-        setError("Missing Project Folder ID for this project.");
-        return null;
-      }
+  const handleStartEdit = () => {
+    setEditContent(content);
+    setIsEditing(true);
+  };
 
-      resetTransient();
+  const handleSave = async () => {
+    resetTransient();
+    setIsSaving(true);
+    try {
+      await updateContent(editContent);
+      setMessage("Saved successfully.");
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-      const flags: Partial<RequestState> = {
-        isLoading: action === "get",
-        isSaving: action === "update",
-        isGenerating: action === "generate",
-        isRegenerating: action === "regenerate",
-      };
-      updateState(flags);
-
-      try {
-        const body: Record<string, unknown> = {
-          projectFolderId,
-          action,
-          section,
-          content: nextContent,
-        };
-
-        if (action === "regenerate") {
-          if (previousContent) {
-            body.previousContent = previousContent;
-          }
-          if (context) {
-            body.regenerationContext = context;
-          }
-        }
-
-        const response = await fetch("/api/report-content", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        const payload = (await response.json()) as {
-          content?: string;
-          error?: string;
-          exists?: boolean;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Failed to process request");
-        }
-
-        const received = payload.content ?? "";
-        const existsFlag =
-          typeof payload.exists === "boolean"
-            ? payload.exists
-            : received.trim().length > 0;
-        setContent(received);
-        setExists(existsFlag);
-
-        if (action === "update") {
-          setMessage("Saved successfully.");
-          setIsEditing(false);
-        } else if (action === "generate") {
-          setMessage("Content generated.");
-          // Refresh content immediately after a successful generate.
-          void postAction("get");
-        } else if (action === "regenerate") {
-          setMessage("Content regenerated.");
-          setIsEditing(false);
-          // Refresh content immediately after a successful regenerate.
-          void postAction("get");
-        } else {
-          setMessage(null);
-        }
-
-        return received;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Unexpected error occurred";
-        setError(message);
-        setExists(null);
-        return null;
-      } finally {
-        updateState(DEFAULT_STATE);
-      }
-    },
-    [projectFolderId, section, updateState],
-  );
-
-  useEffect(() => {
+  const callGenerateApi = async (
+    action: "generate" | "regenerate",
+    previousContent?: string,
+    context?: string,
+  ) => {
     if (!projectFolderId) {
-      setExists(null);
+      setError("Project Folder ID is required for generation.");
       return;
     }
-    void postAction("get");
-  }, [postAction, projectFolderId]);
 
-  const isBusy =
-    state.isLoading ||
-    state.isSaving ||
-    state.isGenerating ||
-    state.isRegenerating;
+    resetTransient();
+    if (action === "regenerate") {
+      setIsRegenerating(true);
+    } else {
+      setIsGenerating(true);
+    }
+
+    try {
+      const body: Record<string, unknown> = {
+        projectId,
+        projectFolderId,
+        action,
+        section,
+      };
+
+      if (previousContent) body.previousContent = previousContent;
+      if (context) body.regenerationContext = context;
+
+      const response = await fetch("/api/report-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const payload = (await response.json()) as {
+        content?: string;
+        error?: string;
+        exists?: boolean;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to process request");
+      }
+
+      setMessage(
+        action === "generate"
+          ? "Content generated."
+          : "Content regenerated.",
+      );
+      setIsEditing(false);
+      void refreshSection();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setIsGenerating(false);
+      setIsRegenerating(false);
+    }
+  };
+
+  const isBusy = isLoading || isSaving || isGenerating || isRegenerating;
 
   return (
     <div className="space-y-4">
@@ -199,13 +157,13 @@ export function ReportSectionContent({
           ) : null}
         </div>
         <div className="text-xs text-gray-500">
-          {state.isLoading
+          {isLoading
             ? "Loading..."
-            : state.isSaving
+            : isSaving
               ? "Saving..."
-              : state.isGenerating
+              : isGenerating
                 ? "Generating..."
-                : state.isRegenerating
+                : isRegenerating
                   ? "Regenerating..."
                   : null}
         </div>
@@ -222,9 +180,9 @@ export function ReportSectionContent({
         </div>
       ) : null}
 
-      {!projectFolderId ? (
+      {!projectId ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Add a Project Folder ID to the project to enable report actions.
+          A project must be selected to enable report actions.
         </div>
       ) : null}
 
@@ -235,9 +193,9 @@ export function ReportSectionContent({
           </p>
           <button
             type="button"
-            onClick={() => postAction("generate")}
+            onClick={() => callGenerateApi("generate")}
             className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            disabled={!projectFolderId}
+            disabled={!projectFolderId || isBusy}
           >
             Generate Content
           </button>
@@ -249,9 +207,9 @@ export function ReportSectionContent({
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => setIsEditing((prev) => !prev)}
+              onClick={() => (isEditing ? setIsEditing(false) : handleStartEdit())}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isBusy || !projectFolderId}
+              disabled={isBusy}
             >
               {isEditing ? "Cancel Edit" : "Edit"}
             </button>
@@ -276,16 +234,16 @@ export function ReportSectionContent({
           {isEditing ? (
             <div className="space-y-4" data-color-mode="light">
               <MDEditor
-                value={content}
-                onChange={(value) => setContent(value ?? "")}
+                value={editContent}
+                onChange={(value) => setEditContent(value ?? "")}
                 height={480}
               />
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => postAction("update", content)}
+                  onClick={handleSave}
                   className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
-                  disabled={isBusy || !projectFolderId}
+                  disabled={isBusy}
                 >
                   Save
                 </button>
@@ -310,9 +268,8 @@ export function ReportSectionContent({
         </div>
       ) : null}
 
-      {/* Regenerate Dialog */}
       {showRegenerateDialog && (
-        <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-gray-900">
@@ -363,11 +320,10 @@ export function ReportSectionContent({
                 type="button"
                 onClick={() => {
                   setShowRegenerateDialog(false);
-                  void postAction(
+                  void callGenerateApi(
                     "regenerate",
-                    undefined,
-                    regenerationContext.trim() || undefined,
                     content,
+                    regenerationContext.trim() || undefined,
                   );
                   setRegenerationContext("");
                 }}
