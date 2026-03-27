@@ -54,12 +54,22 @@ export default function ProjectReportsLayout({
               </Link>
             );
           })}
-          {/* Add explicit link to Neighborhood Map since it's related but technically outside reports folder in this new structure it is /project/[id]/neighborhood-map */}
+          <div className="my-3 border-t border-gray-100" />
           <Link
-                href={`/project/${projectId}/neighborhood-map`}
-                className={`block rounded-md px-3 py-2 text-sm font-medium transition text-gray-700 hover:bg-gray-100`}
-              >
-                Neighborhood Map
+            href={`/project/${projectId}/documents`}
+            className={`block rounded-md px-3 py-2 text-sm font-medium transition ${
+              pathname?.startsWith(`/project/${projectId}/documents`)
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            Documents
+          </Link>
+          <Link
+            href={`/project/${projectId}/neighborhood-map`}
+            className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+          >
+            Neighborhood Map
           </Link>
         </nav>
       </aside>

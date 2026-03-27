@@ -64,6 +64,7 @@ export function ReportSectionPage({
       ) : null}
 
       <ReportSectionContent
+        projectId={projectId}
         projectFolderId={projectFolderId}
         section={section}
         title={title}

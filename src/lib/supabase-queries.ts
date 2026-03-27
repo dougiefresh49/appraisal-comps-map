@@ -777,3 +777,574 @@ export async function fetchIncludedPhotosForExport(
     }),
   );
 }
+
+// ============================================================
+// Report sections
+// ============================================================
+
+interface ReportSectionRow {
+  id: string;
+  project_id: string;
+  section_key: string;
+  content: string;
+  version: number;
+  generation_context: Record<string, unknown>;
+  property_type: string | null;
+  city: string | null;
+  county: string | null;
+  subject_address: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportSection {
+  id: string;
+  projectId: string;
+  sectionKey: string;
+  content: string;
+  version: number;
+  generationContext: Record<string, unknown>;
+  propertyType: string | null;
+  city: string | null;
+  county: string | null;
+  subjectAddress: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function reportSectionFromRow(row: ReportSectionRow): ReportSection {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    sectionKey: row.section_key,
+    content: row.content,
+    version: row.version,
+    generationContext: row.generation_context ?? {},
+    propertyType: row.property_type,
+    city: row.city,
+    county: row.county,
+    subjectAddress: row.subject_address,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function fetchReportSection(
+  projectId: string,
+  sectionKey: string,
+): Promise<ReportSection | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("report_sections")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("section_key", sectionKey)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  if (!data) return null;
+  return reportSectionFromRow(data as ReportSectionRow);
+}
+
+export async function fetchAllReportSections(
+  projectId: string,
+): Promise<ReportSection[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("report_sections")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("section_key");
+
+  if (error) throw error;
+  return ((data ?? []) as ReportSectionRow[]).map(reportSectionFromRow);
+}
+
+export async function upsertReportSection(
+  projectId: string,
+  sectionKey: string,
+  content: string,
+  generationContext?: Record<string, unknown>,
+): Promise<ReportSection> {
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from("report_sections")
+    .select("id, content, version, generation_context")
+    .eq("project_id", projectId)
+    .eq("section_key", sectionKey)
+    .single();
+
+  const existingRow = existing as {
+    id: string;
+    content: string;
+    version: number;
+    generation_context: Record<string, unknown>;
+  } | null;
+
+  if (existingRow) {
+    await supabase.from("report_section_history").insert({
+      report_section_id: existingRow.id,
+      content: existingRow.content,
+      version: existingRow.version,
+      generation_context: existingRow.generation_context ?? {},
+    });
+
+    const { data, error } = await supabase
+      .from("report_sections")
+      .update({
+        content,
+        version: existingRow.version + 1,
+        generation_context: generationContext ?? {},
+      })
+      .eq("id", existingRow.id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+    return reportSectionFromRow(data as ReportSectionRow);
+  }
+
+  const { data, error } = await supabase
+    .from("report_sections")
+    .insert({
+      project_id: projectId,
+      section_key: sectionKey,
+      content,
+      version: 1,
+      generation_context: generationContext ?? {},
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return reportSectionFromRow(data as ReportSectionRow);
+}
+
+export type RealtimeReportSectionPayload = {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new: ReportSection | null;
+  old: { id: string } | null;
+};
+
+export function subscribeToReportSections(
+  projectId: string,
+  callback: (payload: RealtimeReportSectionPayload) => void,
+) {
+  const supabase = createClient();
+  const channel = supabase
+    .channel(`report-sections:${projectId}`)
+    .on(
+      "postgres_changes" as never,
+      {
+        event: "*",
+        schema: "public",
+        table: "report_sections",
+        filter: `project_id=eq.${projectId}`,
+      },
+      (payload: {
+        eventType: "INSERT" | "UPDATE" | "DELETE";
+        new: Record<string, unknown>;
+        old: Record<string, unknown>;
+      }) => {
+        callback({
+          eventType: payload.eventType,
+          new: payload.new?.id
+            ? reportSectionFromRow(
+                payload.new as unknown as ReportSectionRow,
+              )
+            : null,
+          old: payload.old?.id
+            ? { id: payload.old.id as string }
+            : null,
+        });
+      },
+    )
+    .subscribe();
+
+  return channel;
+}
+
+// ============================================================
+// Project documents (context store)
+// ============================================================
+
+interface ProjectDocumentRow {
+  id: string;
+  project_id: string;
+  document_type: string;
+  document_label: string | null;
+  file_id: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  extracted_text: string | null;
+  structured_data: Record<string, unknown>;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDocument {
+  id: string;
+  projectId: string;
+  documentType: string;
+  documentLabel: string | null;
+  fileId: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  extractedText: string | null;
+  structuredData: Record<string, unknown>;
+  processedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function projectDocumentFromRow(row: ProjectDocumentRow): ProjectDocument {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    documentType: row.document_type,
+    documentLabel: row.document_label,
+    fileId: row.file_id,
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    extractedText: row.extracted_text,
+    structuredData: row.structured_data ?? {},
+    processedAt: row.processed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function fetchProjectDocuments(
+  projectId: string,
+): Promise<ProjectDocument[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("project_documents")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as ProjectDocumentRow[]).map(projectDocumentFromRow);
+}
+
+export async function fetchDocumentsByType(
+  projectId: string,
+  documentType: string,
+): Promise<ProjectDocument[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("project_documents")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("document_type", documentType)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as ProjectDocumentRow[]).map(projectDocumentFromRow);
+}
+
+export async function insertProjectDocument(
+  projectId: string,
+  doc: {
+    documentType: string;
+    documentLabel?: string;
+    fileId?: string;
+    fileName?: string;
+    mimeType?: string;
+  },
+): Promise<ProjectDocument> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("project_documents")
+    .insert({
+      project_id: projectId,
+      document_type: doc.documentType,
+      document_label: doc.documentLabel ?? null,
+      file_id: doc.fileId ?? null,
+      file_name: doc.fileName ?? null,
+      mime_type: doc.mimeType ?? null,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return projectDocumentFromRow(data as ProjectDocumentRow);
+}
+
+export async function updateDocumentProcessingResult(
+  documentId: string,
+  extractedText: string,
+  structuredData: Record<string, unknown>,
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("project_documents")
+    .update({
+      extracted_text: extractedText,
+      structured_data: structuredData,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("id", documentId);
+  if (error) throw error;
+}
+
+export async function deleteProjectDocument(documentId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("project_documents")
+    .delete()
+    .eq("id", documentId);
+  if (error) throw error;
+}
+
+export function subscribeToProjectDocuments(
+  projectId: string,
+  callback: (payload: {
+    eventType: "INSERT" | "UPDATE" | "DELETE";
+    new: ProjectDocument | null;
+    old: { id: string } | null;
+  }) => void,
+) {
+  const supabase = createClient();
+  const channel = supabase
+    .channel(`documents:${projectId}`)
+    .on(
+      "postgres_changes" as never,
+      {
+        event: "*",
+        schema: "public",
+        table: "project_documents",
+        filter: `project_id=eq.${projectId}`,
+      },
+      (payload: {
+        eventType: "INSERT" | "UPDATE" | "DELETE";
+        new: Record<string, unknown>;
+        old: Record<string, unknown>;
+      }) => {
+        callback({
+          eventType: payload.eventType,
+          new: payload.new?.id
+            ? projectDocumentFromRow(
+                payload.new as unknown as ProjectDocumentRow,
+              )
+            : null,
+          old: payload.old?.id
+            ? { id: payload.old.id as string }
+            : null,
+        });
+      },
+    )
+    .subscribe();
+
+  return channel;
+}
+
+// ============================================================
+// Knowledge base
+// ============================================================
+
+export interface KnowledgeBaseEntry {
+  id: string;
+  gemName: string;
+  contentType: string;
+  input: string | null;
+  output: string;
+  createdAt: string;
+}
+
+export async function fetchKnowledgeBase(
+  gemName: string,
+  contentType?: string,
+): Promise<KnowledgeBaseEntry[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from("knowledge_base")
+    .select("*")
+    .eq("gem_name", gemName);
+
+  if (contentType) {
+    query = query.eq("content_type", contentType);
+  }
+
+  const { data, error } = await query.order("created_at");
+
+  if (error) throw error;
+  return ((data ?? []) as {
+    id: string;
+    gem_name: string;
+    content_type: string;
+    input: string | null;
+    output: string;
+    created_at: string;
+  }[]).map((row) => ({
+    id: row.id,
+    gemName: row.gem_name,
+    contentType: row.content_type,
+    input: row.input,
+    output: row.output,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function insertKnowledgeBaseEntry(entry: {
+  gemName: string;
+  contentType: string;
+  input?: string;
+  output: string;
+}): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("knowledge_base").insert({
+    gem_name: entry.gemName,
+    content_type: entry.contentType,
+    input: entry.input ?? null,
+    output: entry.output,
+  });
+  if (error) throw error;
+}
+
+// ============================================================
+// Vector similarity search (pgvector RPC functions)
+// ============================================================
+
+export interface SimilarReportSection {
+  id: string;
+  projectId: string;
+  sectionKey: string;
+  content: string;
+  version: number;
+  propertyType: string | null;
+  city: string | null;
+  county: string | null;
+  subjectAddress: string | null;
+  similarity: number;
+}
+
+export async function searchSimilarReportSections(
+  embedding: number[],
+  sectionKey?: string,
+  limit = 5,
+): Promise<SimilarReportSection[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("search_similar_report_sections", {
+    query_embedding: JSON.stringify(embedding),
+    match_section_key: sectionKey ?? null,
+    match_limit: limit,
+    similarity_threshold: 0.3,
+  });
+
+  if (error) throw error;
+
+  return ((data ?? []) as {
+    id: string;
+    project_id: string;
+    section_key: string;
+    content: string;
+    version: number;
+    property_type: string | null;
+    city: string | null;
+    county: string | null;
+    subject_address: string | null;
+    similarity: number;
+  }[]).map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    sectionKey: row.section_key,
+    content: row.content,
+    version: row.version,
+    propertyType: row.property_type,
+    city: row.city,
+    county: row.county,
+    subjectAddress: row.subject_address,
+    similarity: row.similarity,
+  }));
+}
+
+export interface SimilarDocument {
+  id: string;
+  projectId: string;
+  documentType: string;
+  documentLabel: string | null;
+  extractedText: string | null;
+  structuredData: Record<string, unknown>;
+  similarity: number;
+}
+
+export async function searchSimilarDocuments(
+  embedding: number[],
+  documentType?: string,
+  limit = 5,
+): Promise<SimilarDocument[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("search_similar_documents", {
+    query_embedding: JSON.stringify(embedding),
+    match_document_type: documentType ?? null,
+    match_limit: limit,
+    similarity_threshold: 0.3,
+  });
+
+  if (error) throw error;
+
+  return ((data ?? []) as {
+    id: string;
+    project_id: string;
+    document_type: string;
+    document_label: string | null;
+    extracted_text: string | null;
+    structured_data: Record<string, unknown>;
+    similarity: number;
+  }[]).map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    documentType: row.document_type,
+    documentLabel: row.document_label,
+    extractedText: row.extracted_text,
+    structuredData: row.structured_data ?? {},
+    similarity: row.similarity,
+  }));
+}
+
+export interface SimilarKnowledge {
+  id: string;
+  gemName: string;
+  contentType: string;
+  input: string | null;
+  output: string;
+  similarity: number;
+}
+
+export async function searchSimilarKnowledge(
+  embedding: number[],
+  gemName?: string,
+  contentType?: string,
+  limit = 5,
+): Promise<SimilarKnowledge[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("search_similar_knowledge", {
+    query_embedding: JSON.stringify(embedding),
+    match_gem_name: gemName ?? null,
+    match_content_type: contentType ?? null,
+    match_limit: limit,
+    similarity_threshold: 0.3,
+  });
+
+  if (error) throw error;
+
+  return ((data ?? []) as {
+    id: string;
+    gem_name: string;
+    content_type: string;
+    input: string | null;
+    output: string;
+    similarity: number;
+  }[]).map((row) => ({
+    id: row.id,
+    gemName: row.gem_name,
+    contentType: row.content_type,
+    input: row.input,
+    output: row.output,
+    similarity: row.similarity,
+  }));
+}

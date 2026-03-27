@@ -13,6 +13,7 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
 import { useProject } from "~/hooks/useProject";
+import { registerMapContext } from "~/lib/map-context";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -388,6 +389,7 @@ export default function NeighborhoodMapPage({
         link.download = "neighborhood.png";
         link.click();
       }
+      void registerMapContext(decodedProjectId, "neighborhood_map", {});
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");
