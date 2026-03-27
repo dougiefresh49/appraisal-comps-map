@@ -7,8 +7,9 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       projectId: string;
       projectFolderId: string;
+      subjectPhotosFolderId?: string;
     };
-    const { projectId, projectFolderId } = body;
+    const { projectId, projectFolderId, subjectPhotosFolderId } = body;
 
     if (!projectId || !projectFolderId) {
       return NextResponse.json(
@@ -20,7 +21,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await exportInputJson(projectId, projectFolderId);
+    const result = await exportInputJson(
+      projectId,
+      projectFolderId,
+      subjectPhotosFolderId,
+    );
     return NextResponse.json(result);
   } catch (error) {
     console.error("Error exporting photos:", error);

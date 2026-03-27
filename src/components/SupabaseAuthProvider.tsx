@@ -29,7 +29,12 @@ export function SupabaseAuthProvider({
   const signIn = useCallback(async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { access_type: "offline" },
+        scopes:
+          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file",
+      },
     });
   }, [supabase]);
 

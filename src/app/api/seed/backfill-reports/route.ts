@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createClient } from "~/utils/supabase/server";
 import { generateEmbedding } from "~/lib/embeddings";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const SECTION_KEYS = [
   "neighborhood",
@@ -75,15 +75,7 @@ export async function POST() {
       });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.1-flash-lite-preview",
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json",
-      },
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
     const results: {
       file: string;
@@ -97,17 +89,25 @@ export async function POST() {
         const fileBuffer = fs.readFileSync(filePath);
         const base64Data = fileBuffer.toString("base64");
 
-        const result = await model.generateContent([
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: "application/pdf",
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-lite",
+          contents: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: "application/pdf",
+              },
             },
+            { text: EXTRACTION_PROMPT },
+          ],
+          config: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+            responseMimeType: "application/json",
           },
-          { text: EXTRACTION_PROMPT },
-        ]);
+        });
 
-        const responseText = result.response.text();
+        const responseText = response.text ?? "";
         let parsed: Record<string, string>;
 
         try {
