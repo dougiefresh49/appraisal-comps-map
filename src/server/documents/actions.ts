@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { PostgrestResponse } from "@supabase/supabase-js";
 import { createClient } from "~/utils/supabase/server";
 import { extractDocumentContent } from "~/lib/gemini";
 import { generateEmbedding } from "~/lib/embeddings";
@@ -182,15 +183,19 @@ export async function reprocessDocument(
   return { ok: true, documentId };
 }
 
-export async function listProjectDocuments(projectId: string) {
+export async function listProjectDocuments(
+  projectId: string,
+): Promise<Record<string, unknown>[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const listResult = (await supabase
     .from("project_documents")
     .select("*")
     .eq("project_id", projectId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })) as PostgrestResponse<
+    Record<string, unknown>
+  >;
 
-  if (error) throw error;
-  return data ?? [];
+  if (listResult.error) throw listResult.error;
+  return listResult.data ?? [];
 }

@@ -24,7 +24,9 @@ function parseCSV(raw: string): KnowledgeBaseRow[] {
     if (row.fields.length >= 4) {
       const gemName = row.fields[0]!.trim();
       const contentType = row.fields[1]!.trim().toLowerCase().replace(/\s+/g, "_");
-      const input = row.fields[2]?.trim() || null;
+      const inputRaw = row.fields[2]?.trim();
+      const input =
+        inputRaw !== undefined && inputRaw !== "" ? inputRaw : null;
       const output = row.fields[3]!.trim();
 
       if (gemName && contentType && output) {
