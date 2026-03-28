@@ -138,6 +138,35 @@ export async function downloadFile(
 }
 
 /**
+ * Grants "anyone with the link" reader access to a Drive file.
+ * Required before downloading with an API key, which can only access publicly-shared files.
+ */
+export async function shareDriveFile(
+  token: string,
+  fileId: string,
+): Promise<void> {
+  const url = `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}/permissions`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      role: "reader",
+      type: "anyone",
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Drive shareDriveFile failed (${res.status}): ${text.slice(0, 300)}`,
+    );
+  }
+}
+
+/**
  * Creates or updates a file in a Drive folder.
  * Searches for an existing file by name; if found, updates its content.
  * If not found, creates a new file using multipart upload.

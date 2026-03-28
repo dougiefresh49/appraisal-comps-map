@@ -2,24 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { ProfileMenu } from "~/components/ProfileMenu";
+import { getComparablesByType } from "~/utils/projectStore";
 
 interface ProjectSidebarProps {
   projectId: string;
 }
 
-interface NavItem {
-  label: string;
-  href: string;
-}
-
-interface NavSection {
-  key: string;
-  label: string;
-  items: NavItem[];
+interface FolderStructure {
+  costReportFolderId?: string;
+  subjectSketchesFolderId?: string;
+  subjectPhotosFolderId?: string;
+  [key: string]: unknown;
 }
 
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
@@ -34,80 +31,78 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
     return pathname?.startsWith(path) ?? false;
   };
 
-  const isActiveExact = (path: string, excludes?: string[]) => {
-    if (!pathname?.startsWith(path)) return false;
-    if (excludes) {
-      return !excludes.some((e) => pathname.startsWith(e));
-    }
-    return true;
-  };
+  const raw = project as unknown as Record<string, unknown> | undefined;
+  const folderStructure = (raw?.folderStructure ??
+    raw?.folder_structure) as FolderStructure | undefined;
+  const hasCostReport = !!folderStructure?.costReportFolderId;
+  const hasSketches = !!folderStructure?.subjectSketchesFolderId;
 
+  const rawPhotosId = folderStructure?.subjectPhotosFolderId;
+  const photosFolderId = typeof rawPhotosId === "string" ? rawPhotosId : "";
   const subjectPhotoHref = project?.projectFolderId
-    ? `${p}/subject/photos?folderId=${project.subjectPhotosFolderId ?? ""}&projectFolderId=${project.projectFolderId}`
+    ? `${p}/subject/photos?folderId=${photosFolderId}&projectFolderId=${project.projectFolderId}`
     : `${p}/subject/photos`;
 
-  const navSections: NavSection[] = [
-    {
-      key: "subject",
-      label: "Subject",
-      items: [
-        { label: "Overview", href: `${p}/subject/overview` },
-        { label: "Improvements", href: `${p}/subject/improvements` },
-        { label: "Location Map", href: `${p}/subject/location-map` },
-        { label: "Photos", href: subjectPhotoHref },
-      ],
-    },
-    {
-      key: "neighborhood",
-      label: "Neighborhood",
-      items: [
-        { label: "Map & Analysis", href: `${p}/neighborhood` },
-      ],
-    },
-    {
-      key: "landSales",
-      label: "Land Sales",
-      items: [
-        { label: "Comps", href: `${p}/land-sales/comparables` },
-        { label: "Map", href: `${p}/land-sales/comparables-map` },
-      ],
-    },
-    {
-      key: "sales",
-      label: "Sales",
-      items: [
-        { label: "Comps", href: `${p}/sales/comparables` },
-        { label: "Map", href: `${p}/sales/comparables-map` },
-        { label: "Comp UI", href: `${p}/sales/ui` },
-      ],
-    },
-    {
-      key: "rentals",
-      label: "Rentals",
-      items: [
-        { label: "Comps", href: `${p}/rentals/comparables` },
-        { label: "Map", href: `${p}/rentals/comparables-map` },
-      ],
-    },
-    {
-      key: "analysis",
-      label: "Analysis",
-      items: [
-        { label: "Zoning", href: `${p}/analysis/zoning` },
-        { label: "Ownership", href: `${p}/analysis/ownership` },
-        { label: "Subject Site Summary", href: `${p}/analysis/subject-site-summary` },
-        { label: "Highest and Best Use", href: `${p}/analysis/highest-best-use` },
-      ],
-    },
-  ];
-
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(navSections.map((s) => [s.key, true])),
+  const landComps = useMemo(
+    () => (project ? getComparablesByType(project, "Land") : []),
+    [project],
   );
+  const salesComps = useMemo(
+    () => (project ? getComparablesByType(project, "Sales") : []),
+    [project],
+  );
+  const rentalComps = useMemo(
+    () => (project ? getComparablesByType(project, "Rentals") : []),
+    [project],
+  );
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    subject: true,
+    landSales: true,
+    sales: true,
+    rentals: true,
+  });
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const linkClass = (href: string) =>
+    `block rounded-md px-3 py-1.5 text-sm transition ${
+      isActive(href)
+        ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+    }`;
+
+  const subLinkClass = (href: string) =>
+    `block rounded px-3 py-1 text-xs transition truncate ${
+      isActive(href)
+        ? "text-blue-600 font-medium dark:text-blue-400"
+        : "text-gray-500 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300"
+    }`;
+
+  const sectionHeaderClass =
+    "flex w-full items-center justify-between px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200";
+
+  function renderCompSublinks(
+    comps: { id: string; number?: string; address: string }[],
+    typeSlug: string,
+  ) {
+    if (comps.length === 0) return null;
+    return (
+      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2 dark:border-gray-800">
+        {comps.map((c, i) => {
+          const href = `${p}/${typeSlug}/comps/${c.id}`;
+          const label = `#${c.number ?? i + 1} — ${c.address || "No address"}`;
+          return (
+            <Link key={c.id} href={href} className={subLinkClass(href)} title={label}>
+              {label}
+            </Link>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <aside
@@ -147,79 +142,95 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
       </div>
 
       {/* Nav */}
-      <div
-        className={`flex-1 overflow-y-auto p-4 pt-0 ${isCollapsed ? "hidden" : ""}`}
-      >
-        <nav className="mt-4 space-y-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-          {/* Dashboard */}
-          <Link
-            href={p}
-            className={`block rounded-md px-3 py-2 transition ${
-              pathname === p
-                ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
-          >
-            Dashboard
-          </Link>
+      <div className={`flex-1 overflow-y-auto p-4 pt-0 ${isCollapsed ? "hidden" : ""}`}>
+        <nav className="mt-4 space-y-1">
+          {/* Top-level links */}
+          <Link href={p} className={linkClass(p)}>Dashboard</Link>
+          <Link href={`${p}/cover`} className={linkClass(`${p}/cover`)}>Cover Page</Link>
+          <Link href={`${p}/neighborhood`} className={linkClass(`${p}/neighborhood`)}>Neighborhood</Link>
 
-          {/* Cover Page */}
-          <Link
-            href={`${p}/cover`}
-            className={`block rounded-md px-3 py-2 transition ${
-              isActive(`${p}/cover`)
-                ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
-          >
-            Cover Page
-          </Link>
+          {/* SUBJECT section */}
+          <div className="pt-3">
+            <button onClick={() => toggleSection("subject")} className={sectionHeaderClass}>
+              <span>Subject</span>
+              <span className="text-[10px]">{expandedSections.subject ? "▼" : "▶"}</span>
+            </button>
+            {expandedSections.subject && (
+              <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+                <Link href={`${p}/subject/overview`} className={linkClass(`${p}/subject/overview`)}>Overview</Link>
+                <Link href={`${p}/subject/improvements`} className={linkClass(`${p}/subject/improvements`)}>Improvements</Link>
+                <Link href={`${p}/subject/location-map`} className={linkClass(`${p}/subject/location-map`)}>Location Map</Link>
+                <Link href={subjectPhotoHref} className={linkClass(`${p}/subject/photos`)}>Photos</Link>
+                <Link href={`${p}/subject/flood-map`} className={linkClass(`${p}/subject/flood-map`)}>Flood Map</Link>
+                {hasSketches && (
+                  <Link href={`${p}/subject/sketches`} className={linkClass(`${p}/subject/sketches`)}>Building Sketches</Link>
+                )}
+                {hasCostReport && (
+                  <Link href={`${p}/subject/cost-report`} className={linkClass(`${p}/subject/cost-report`)}>Cost Report</Link>
+                )}
 
-          {/* Collapsible sections */}
-          {navSections.map((section) => (
-            <div key={section.key} className="pt-2">
-              <button
-                onClick={() => toggleSection(section.key)}
-                className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold uppercase text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <span>{section.label}</span>
-                <span>{expandedSections[section.key] ? "▼" : "▶"}</span>
-              </button>
+                {/* Divider before analysis writeups */}
+                <div className="my-2 border-t border-gray-100 dark:border-gray-800" />
 
-              {expandedSections[section.key] && (
-                <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                  {section.items.map((item) => {
-                    const hrefBase = item.href.split("?")[0]!;
-                    const active = isActiveExact(hrefBase);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`block rounded-md px-3 py-2 transition ${
-                          active
-                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+                <Link href={`${p}/analysis/zoning`} className={linkClass(`${p}/analysis/zoning`)}>Zoning</Link>
+                <Link href={`${p}/analysis/ownership`} className={linkClass(`${p}/analysis/ownership`)}>Ownership</Link>
+                <Link href={`${p}/analysis/subject-site-summary`} className={linkClass(`${p}/analysis/subject-site-summary`)}>Subject Site Summary</Link>
+                <Link href={`${p}/analysis/highest-best-use`} className={linkClass(`${p}/analysis/highest-best-use`)}>Highest and Best Use</Link>
+              </div>
+            )}
+          </div>
+
+          {/* LAND SALES section */}
+          <div className="pt-3">
+            <button onClick={() => toggleSection("landSales")} className={sectionHeaderClass}>
+              <span>Land Sales</span>
+              <span className="text-[10px]">{expandedSections.landSales ? "▼" : "▶"}</span>
+            </button>
+            {expandedSections.landSales && (
+              <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+                <Link href={`${p}/land-sales/comparables`} className={linkClass(`${p}/land-sales/comparables`)}>Comps</Link>
+                {renderCompSublinks(landComps, "land-sales")}
+                <Link href={`${p}/land-sales/comparables-map`} className={linkClass(`${p}/land-sales/comparables-map`)}>Map</Link>
+                <Link href={`${p}/land-sales/ui`} className={linkClass(`${p}/land-sales/ui`)}>Comp UI</Link>
+              </div>
+            )}
+          </div>
+
+          {/* SALES section */}
+          <div className="pt-3">
+            <button onClick={() => toggleSection("sales")} className={sectionHeaderClass}>
+              <span>Sales</span>
+              <span className="text-[10px]">{expandedSections.sales ? "▼" : "▶"}</span>
+            </button>
+            {expandedSections.sales && (
+              <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+                <Link href={`${p}/sales/comparables`} className={linkClass(`${p}/sales/comparables`)}>Comps</Link>
+                {renderCompSublinks(salesComps, "sales")}
+                <Link href={`${p}/sales/comparables-map`} className={linkClass(`${p}/sales/comparables-map`)}>Map</Link>
+                <Link href={`${p}/sales/ui`} className={linkClass(`${p}/sales/ui`)}>Comp UI</Link>
+              </div>
+            )}
+          </div>
+
+          {/* RENTALS section */}
+          <div className="pt-3">
+            <button onClick={() => toggleSection("rentals")} className={sectionHeaderClass}>
+              <span>Rentals</span>
+              <span className="text-[10px]">{expandedSections.rentals ? "▼" : "▶"}</span>
+            </button>
+            {expandedSections.rentals && (
+              <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+                <Link href={`${p}/rentals/comparables`} className={linkClass(`${p}/rentals/comparables`)}>Comps</Link>
+                {renderCompSublinks(rentalComps, "rentals")}
+                <Link href={`${p}/rentals/comparables-map`} className={linkClass(`${p}/rentals/comparables-map`)}>Map</Link>
+                <Link href={`${p}/rentals/ui`} className={linkClass(`${p}/rentals/ui`)}>Comp UI</Link>
+              </div>
+            )}
+          </div>
 
           {/* Documents */}
-          <div className="pt-2">
-            <Link
-              href={`${p}/documents`}
-              className={`block rounded-md px-3 py-2 transition ${
-                isActive(`${p}/documents`)
-                  ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-800"
-              }`}
-            >
+          <div className="pt-3">
+            <Link href={`${p}/documents`} className={linkClass(`${p}/documents`)}>
               Documents
             </Link>
           </div>

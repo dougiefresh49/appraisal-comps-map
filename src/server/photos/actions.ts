@@ -112,11 +112,12 @@ export async function exportInputJson(
       };
     }
 
-    const token = await getGoogleToken();
+    const { token, error: driveAuthError } = await getGoogleToken();
     if (!token) {
       return {
         success: false,
         error:
+          driveAuthError ??
           "Not authenticated — please sign in again to grant Drive access",
       };
     }

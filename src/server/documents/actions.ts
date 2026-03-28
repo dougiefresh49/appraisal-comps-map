@@ -6,6 +6,7 @@ import { extractDocumentContent } from "~/lib/gemini";
 import { generateEmbedding } from "~/lib/embeddings";
 import { getExtractionPrompt } from "~/lib/document-prompts";
 import { downloadDriveFile } from "~/lib/drive-download";
+import { mergeDocumentIntoSubjectData } from "~/server/subject-data/merge";
 
 export interface AddDocumentInput {
   projectId: string;
@@ -50,6 +51,7 @@ export async function addDocument(
   if (input.fileBuffer || input.fileId) {
     void processDocument(
       documentId,
+      input.projectId,
       input.documentType,
       input.fileBuffer,
       input.fileId,
@@ -62,6 +64,7 @@ export async function addDocument(
 
 async function processDocument(
   documentId: string,
+  projectId: string,
   documentType: string,
   fileBuffer?: Buffer,
   fileId?: string,
@@ -119,6 +122,18 @@ async function processDocument(
     if (error) {
       console.error("Failed to save document processing result", error);
     }
+
+    if (structuredData && typeof structuredData === "object") {
+      try {
+        await mergeDocumentIntoSubjectData(
+          projectId,
+          documentType,
+          structuredData,
+        );
+      } catch (mergeErr) {
+        console.error("Failed to merge document data into subject_data", mergeErr);
+      }
+    }
   } catch (err) {
     console.error("Document processing failed", err);
 
@@ -146,7 +161,7 @@ export async function reprocessDocument(
 
   const { data, error } = await supabase
     .from("project_documents")
-    .select("document_type, file_id, mime_type")
+    .select("project_id, document_type, file_id, mime_type")
     .eq("id", documentId)
     .single();
 
@@ -155,6 +170,7 @@ export async function reprocessDocument(
   }
 
   const row = data as {
+    project_id: string;
     document_type: string;
     file_id: string | null;
     mime_type: string | null;
@@ -174,6 +190,7 @@ export async function reprocessDocument(
 
   void processDocument(
     documentId,
+    row.project_id,
     row.document_type,
     undefined,
     row.file_id,

@@ -19,7 +19,12 @@ export function useCompParsedData(compId: string): UseCompParsedDataReturn {
   const isMountedRef = useRef(true);
 
   const loadParsedData = useCallback(async () => {
-    if (!compId) return;
+    if (!compId) {
+      setParsedData(null);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     setIsLoading(true);
     setError(null);
 

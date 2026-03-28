@@ -5,6 +5,8 @@ import {
   listProjectDocuments,
   reprocessDocument,
 } from "~/server/documents/actions";
+import { shareDriveFile } from "~/lib/drive-api";
+import { getGoogleToken } from "~/utils/supabase/server";
 
 export async function GET(request: NextRequest) {
   const projectId = request.nextUrl.searchParams.get("projectId");
@@ -115,6 +117,22 @@ async function handleJson(request: NextRequest) {
       { error: "projectId and documentType are required" },
       { status: 400 },
     );
+  }
+
+  if (body.fileId) {
+    const { token, error: driveAuthError, code } = await getGoogleToken();
+    if (!token) {
+      return NextResponse.json(
+        {
+          error:
+            driveAuthError ??
+            "Not authenticated — please sign in to grant Drive access",
+          code,
+        },
+        { status: 401 },
+      );
+    }
+    await shareDriveFile(token, body.fileId);
   }
 
   const result = await addDocument({

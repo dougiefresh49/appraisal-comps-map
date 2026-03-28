@@ -4,7 +4,7 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { type ReportSection } from "~/server/reports/actions";
 import { useReportSection } from "~/hooks/useReportSection";
 
@@ -19,6 +19,8 @@ interface ReportSectionContentProps {
   section: ReportSection;
   title: string;
   description?: string;
+  /** Shown inside the dashed empty state above the generate button */
+  emptyStateNote?: ReactNode;
 }
 
 export function ReportSectionContent({
@@ -27,6 +29,7 @@ export function ReportSectionContent({
   section,
   title,
   description,
+  emptyStateNote,
 }: ReportSectionContentProps) {
   const {
     content,
@@ -191,6 +194,9 @@ export function ReportSectionContent({
           <p className="mb-3 text-sm text-gray-600">
             No content found for this section.
           </p>
+          {emptyStateNote ? (
+            <p className="mb-3 text-xs text-gray-500">{emptyStateNote}</p>
+          ) : null}
           <button
             type="button"
             onClick={() => callGenerateApi("generate")}

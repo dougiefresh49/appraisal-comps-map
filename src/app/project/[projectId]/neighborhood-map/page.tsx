@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useRef, useEffect, useCallback, use } from "react";
 import "~/utils/injectCanvasHack";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
@@ -405,7 +406,13 @@ export default function NeighborhoodMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="relative flex h-screen w-full">
+      <Link
+        href={`/project/${projectId}/neighborhood`}
+        className="absolute top-4 left-4 z-[100] inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-200"
+      >
+        ← Back to Neighborhood
+      </Link>
       <PropertyInfoPanel
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}

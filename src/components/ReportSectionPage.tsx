@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { ReportSectionContent } from "~/components/ReportSectionContent";
 import { type ReportSection } from "~/server/reports/actions";
@@ -10,12 +10,14 @@ interface ReportSectionPageProps {
   section: ReportSection;
   title: string;
   description?: string;
+  emptyStateNote?: ReactNode;
 }
 
 export function ReportSectionPage({
   section,
   title,
   description,
+  emptyStateNote,
 }: ReportSectionPageProps) {
   const routeParams = useParams<{ projectId: string }>();
   const projectId = routeParams.projectId ?? "";
@@ -69,6 +71,7 @@ export function ReportSectionPage({
         section={section}
         title={title}
         description={description}
+        emptyStateNote={emptyStateNote}
       />
     </div>
   );
