@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ name: metadata.name, parsedContent });
+    return NextResponse.json({ name: metadata.name, parsedContent, files });
   } catch (error) {
     console.error("Error fetching folder details:", error);
     return NextResponse.json(

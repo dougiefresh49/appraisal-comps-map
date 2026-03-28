@@ -1,6 +1,6 @@
 import { ReportSectionPage } from "~/components/ReportSectionPage";
 
-export default function HighestBestUseReportPage() {
+export default function HighestBestUsePage() {
   return (
     <ReportSectionPage
       section="highest-best-use"

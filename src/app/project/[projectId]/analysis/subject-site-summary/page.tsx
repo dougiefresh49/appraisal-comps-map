@@ -1,6 +1,6 @@
 import { ReportSectionPage } from "~/components/ReportSectionPage";
 
-export default function SubjectSiteSummaryReportPage() {
+export default function SubjectSiteSummaryPage() {
   return (
     <ReportSectionPage
       section="subject-site-summary"

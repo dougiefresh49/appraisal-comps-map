@@ -53,12 +53,6 @@ export function ComparablesList({
             >
               + Add {type}
             </button>
-            <button
-                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-                title="Refresh (Placeholder)"
-              >
-                🔄
-            </button>
         </div>
       </div>
 
@@ -102,6 +96,15 @@ export function ComparablesList({
                       Map
                     </Link>
                   )}
+                  {/* Comp detail page link */}
+                  <Link
+                    href={`/project/${projectId}/${
+                      type === "Land" ? "land-sales" : type === "Sales" ? "sales" : "rentals"
+                    }/comps/${comparable.id}`}
+                    className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 transition hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                  >
+                    Details
+                  </Link>
                   <button
                     onClick={() => onRemove(comparable.id)}
                     className="text-[10px] font-medium text-red-600 hover:text-red-700 opacity-50 transition group-hover:opacity-100 dark:text-red-400 dark:hover:text-red-300"
