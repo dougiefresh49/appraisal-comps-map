@@ -1,0 +1,176 @@
+{
+  "name": "Get report-data fileId",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.reports }}",
+            "mode": "id"
+          },
+          "whatToSearch": "files",
+          "fileTypes": [
+            "application/vnd.google-apps.spreadsheet"
+          ]
+        },
+        "options": {
+          "fields": [
+            "name",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        496,
+        144
+      ],
+      "id": "dd12ada7-7d1f-4af2-98a9-5f2466053e04",
+      "name": "Search files and folders2",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "report-data -",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            },
+            {
+              "id": "3328ede4-e0c5-465c-abf1-d39cdedd3270",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "report-data",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        144
+      ],
+      "id": "9c7f3df5-e9e5-4c7e-930d-32331961bc60",
+      "name": "Filter1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e8c339b2-3b72-41a3-9d24-ad0098c0d903",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        928,
+        144
+      ],
+      "id": "c6e08b0a-5c78-4e06-968d-b0e865707750",
+      "name": "Return"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "reports"
+            }
+          ]
+        }
+      },
+      "id": "ac15d4dd-7fa6-40ea-8f4d-3d7a811ac0f8",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        288,
+        144
+      ]
+    }
+  ],
+  "connections": {
+    "Search files and folders2": {
+      "main": [
+        [
+          {
+            "node": "Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter1": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "reports": "1ogQiuVoM9L_DRrVdOghEbl4hiLUCg7uY"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

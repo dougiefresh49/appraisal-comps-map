@@ -1,0 +1,685 @@
+{
+  "name": "[POST] Comp Folder Details",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comps-folder-details",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1680,
+        -912
+      ],
+      "id": "1d79a154-e4ab-4580-bcb2-7596176e2cfb",
+      "name": "Webhook",
+      "webhookId": "97a321ac-0a7a-4585-9e55-dcef406a9e43",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "projectFolderId",
+              "value": "={{ $json.body.projectFolderId }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "type",
+              "value": "={{ $json.body.type }}",
+              "type": "string"
+            },
+            {
+              "id": "51da0819-87f8-41b1-9eb8-dcd8978d47df",
+              "name": "folderId",
+              "value": "={{ $json.body.folderId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1456,
+        -912
+      ],
+      "id": "454c6c10-4589-4f80-995b-168517dd864c",
+      "name": "wh body"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "riAFXAxXWS7tszk3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/riAFXAxXWS7tszk3",
+          "cachedResultName": "Get Project Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "projectFolderId": "={{ $json.projectFolderId }}"
+          },
+          "matchingColumns": [
+            "projectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "projectFolderId",
+              "displayName": "projectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -1232,
+        -912
+      ],
+      "id": "b3bd7974-74d6-4434-a6bc-ab2cb1b264e0",
+      "name": "Call 'Get Project Subfolder Ids'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "GMCXPjlVI3stu0bY",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/GMCXPjlVI3stu0bY",
+          "cachedResultName": "Get comps Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "compsFolderId": "={{ $json.comps }}"
+          },
+          "matchingColumns": [
+            "compsFolderId"
+          ],
+          "schema": [
+            {
+              "id": "compsFolderId",
+              "displayName": "compsFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -1008,
+        -912
+      ],
+      "id": "a25e1a1d-64b0-4b8a-ac23-e50f9a86c306",
+      "name": "Call 'Get comps Subfolder Ids'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "uLMhHA4lmqVDqJ9a",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/uLMhHA4lmqVDqJ9a",
+          "cachedResultName": "Get comps Subfolders details"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "folderId": "={{ $json[$('wh body').item.json.type] }}"
+          },
+          "matchingColumns": [
+            "folderId"
+          ],
+          "schema": [
+            {
+              "id": "folderId",
+              "displayName": "folderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -784,
+        -912
+      ],
+      "id": "4508291f-7291-4152-8694-2c92baaf9edb",
+      "name": "Call 'Get comps Subfolders details'"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cb1b7812-89d3-478e-a6fe-90af2bbfb058",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "={{ $('wh body').item.json.folderId }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -560,
+        -912
+      ],
+      "id": "f3d173d9-da43-4a8d-9d81-61c0ec659503",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.id }}",
+            "mode": "id"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "kind",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -336,
+        -912
+      ],
+      "id": "88b3c1d9-628c-44b4-9ab7-798c7eae9622",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cb1b7812-89d3-478e-a6fe-90af2bbfb058",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "=parsed.json",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -112,
+        -912
+      ],
+      "id": "95be642a-b9bc-4a40-96ad-80c2f2f7c303",
+      "name": "Filter1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.parsedFile[0].id }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        560,
+        -1008
+      ],
+      "id": "eb1a36d3-feb6-4411-b25c-473ab791b6ce",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "parsedContent",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        784,
+        -1008
+      ],
+      "id": "f6f6740e-b59b-453c-a5e4-a5c9a20fe479",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1232,
+        -912
+      ],
+      "id": "611ea2f7-7aef-4abb-aa1d-f6cb9882c689",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0c37a9fb-941b-4e63-bf0a-428ea8d4bd97",
+              "name": "parsedContent",
+              "value": "={{ $json.parsedContent }}",
+              "type": "object"
+            },
+            {
+              "id": "abd8a520-6ace-461f-9592-72dc936cf299",
+              "name": "name",
+              "value": "={{ $('Filter').item.json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        -1008
+      ],
+      "id": "25f4bdb6-d473-4eab-a417-cbf6a4ecb5c7",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cd379856-5a01-4528-a116-85e7f44e3c7f",
+              "leftValue": "={{ $json.parsedFile }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "3bf64908-5f30-4c49-b782-7396a667625d",
+              "leftValue": "={{ $json.parsedFile[0] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "a5a8004f-26a3-405c-aae0-39d427e68a50",
+              "leftValue": "={{ $json.parsedFile[0].id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        -912
+      ],
+      "id": "74e57272-30a1-4d6c-9e01-faed64a9a22b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "parsedFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -912
+      ],
+      "id": "06d37b27-80fa-4411-9e6e-5b38eff84eb3",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0c37a9fb-941b-4e63-bf0a-428ea8d4bd97",
+              "name": "parsedContent",
+              "value": "=null",
+              "type": "object"
+            },
+            {
+              "id": "abd8a520-6ace-461f-9592-72dc936cf299",
+              "name": "name",
+              "value": "={{ $('Filter').item.json.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        -816
+      ],
+      "id": "5bb0e4bd-8f96-4c0b-9518-f44587658cf5",
+      "name": "Edit Fields1"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "wh body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wh body": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get Project Subfolder Ids'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get Project Subfolder Ids'": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get comps Subfolder Ids'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get comps Subfolder Ids'": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get comps Subfolders details'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get comps Subfolders details'": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "projectFolderId": "1sCYiOv0d09VLQpxI_xa11EIxiabVzUHh",
+            "type": "land",
+            "folderId": "1iAqJkcrX9P5IPDFosBhrmohX7kS9kHvs"
+          },
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/comps-folder-list",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,271 @@
+{
+  "name": "Get comps Subfolder Ids",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.compsFolderId }}",
+            "mode": "id"
+          },
+          "whatToSearch": "all",
+          "fileTypes": [
+            "application/vnd.google-apps.folder"
+          ]
+        },
+        "options": {
+          "fields": [
+            "name",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1424,
+        -272
+      ],
+      "id": "ddfadc3d-1873-407e-bd42-3feaecc0ea0a",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "land",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "3328ede4-e0c5-465c-abf1-d39cdedd3270",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "sales",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "510fa157-de71-4456-ae90-e63b023c2ae0",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "rentals",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -1200,
+        -272
+      ],
+      "id": "def2ddb7-e627-495f-b96e-a2bf3e080e0d",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -272
+      ],
+      "id": "c2ad14f3-2296-4e02-bf75-7750ae3310f9",
+      "name": "Aggregate3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "land",
+              "value": "={{ $json.data.find(item => item.name === 'land').id }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "sales",
+              "value": "={{ $json.data.find(item => item.name === 'sales').id }}",
+              "type": "string"
+            },
+            {
+              "id": "5bd33647-3988-4525-af3a-744601baff15",
+              "name": "rentals",
+              "value": "={{ $json.data.find(item => item.name === 'rentals').id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -752,
+        -272
+      ],
+      "id": "dd1d9daa-8aeb-4ca9-a4c6-8ff75b21e5b4",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e8995d12-39a6-414a-8eb5-eb1faff75293",
+              "name": "land",
+              "value": "={{ $json.land }}",
+              "type": "string"
+            },
+            {
+              "id": "551c6c9f-d2a8-44af-bd77-fecf5917abf6",
+              "name": "sales",
+              "value": "={{ $json.sales }}",
+              "type": "string"
+            },
+            {
+              "id": "d7ee0751-4aab-414b-819c-2a4a7ef21e90",
+              "name": "rentals",
+              "value": "={{ $json.rentals }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -544,
+        -272
+      ],
+      "id": "0431ccdc-1d28-47a3-bfc7-85e21bb0290d",
+      "name": "Return"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "compsFolderId"
+            }
+          ]
+        }
+      },
+      "id": "1dbe3a22-94a8-4fda-8af7-59a78293bbbd",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -1632,
+        -272
+      ]
+    }
+  ],
+  "connections": {
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Aggregate3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "compsFolderId": "1ZHjNCgIROMip5A5RDr2Qnktbobd5V2Ax"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

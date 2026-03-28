@@ -1,0 +1,121 @@
+key,prompt
+legalDescriptions,"given a list of legal descriptions for county parcels in Texas, each seperated by a CHAR(10), consolidate them to be more consise if they are legal descriptions for properties with the same block or neighborhood. For example, if the list is ""MARCO INDUSTRIAL SITES BLOCK 3 LOT 17
+MARCO INDUSTRIAL SITES BLOCK 3 LOT 16"", then the output should be ""MARCO INDUSTRIAL SITES BLOCK 3 LOT 16-17"". If the list looks like ""MARCO INDUSTRIAL SITES BLOCK 2 LOT 17
+MARCO INDUSTRIAL SITES BLOCK 3 LOT 16"" then the output should be something like ""MARCO INDUSTRIAL SITES BLOCK 2 LOT 17, BLOCK 3 LOT 16""
+More examples:
+
+input: ""Acres: 0.161, BLK: 013, N.50 OF SE/4, ADDN: ORIGINAL TOWN
+Acres: 0.241, BLK: 013, S/2 OF NE/4, ADDN: ORIGINAL TOWN""
+output: ""Acres: 0.161, BLK: 013, N.50 OF SE/4
+Acres: 0.241, BLK: 013, S/2 OF NE/4
+ADDN: ORIGINAL TOWN""
+
+input: ""Acres: 0.482, BLK: 011, LOTS: 004 THRU 6, ADDN: MIDLAND HEIGHTS
+Acres: 0.161, BLK: 011, LOT: 003, ADDN: MIDLAND HEIGHTS""
+output: ""Acres: 0.643, BLK: 011, LOTS: 003 THRU 6, ADDN: MIDLAND HEIGHTS"""
+compSalesAdjSummary,"given a list of indicated market values and a building size in square feet, write a summary paragraph of the indicated market values in the format of the example below. Below is example input and output. If the input ""Include Extremes Sentence"" is FALSE, do not include the sentence starting with ""If we eleminate the extremes"". If the median is also included in the indicated values md table, update the last sentence statement about ""the value generally in-line with the mean"" to say ""the value generally in-line with the mean and medaian"" 
+example input:
+
+Building Size (SF): 19,500
+Include Extremes Sentence: TRUE
+Indicated Value (SF): 102.00
+Indicated Value: 1989000
+Indicated Indicated Market Values csv
+
+```
+Sale #,Indicated Market Value
+6,$53.22
+1,$73.98
+4,$100.42
+2,$101.04
+3,$121.01
+5,$129.36
+7,$132.03
+Mean,$102.00
+```
+
+example output paragraph
+Based on these sales, the indicated range of value for the subject property is $53.22/SF to $132.03/SF. This means the property is valued between $1,037,790 and $2,574,585. If we eliminate the extremes on each end of the spectrum we have a more reasonable credible value range of $1,958,190 to $2,359,695. The value is generally in-line with the mean and is considered well supported at $102.00/SF or $1,989,000."
+compSalesCapRateSummary,"given a list of capitalization rates and a building size in square feet, write a summary paragraph of the indicated market capitalization rate in the format of the example below. Below is example input and output. If the input ""Exclude Extremes"" is FALSE, do not include the sentence starting with ""Eliminating the low and high rates"".
+
+example input:
+
+Exclude Extremes: TRUE
+Indicated Market Capitalization Rates csv
+
+```
+Sale #,        Overall
+1,        9.80%
+2,        12.92%
+3,        9.47%
+4,        9.99%
+5,        10.68%
+6,        9.58%
+7,        7.82%
+Mean,        10.04%
+```
+example output paragraph
+
+The range of capitalization rates for the subject indicated by the estimated market rents in the Sales Comparison Approach pro forma analysis is a fairly close range specifically 7.82% - 12.92%. Eliminating the low and high rates, we have a very close and applicable range. The Permian Basin Area is considered a tertiary market and no official reports are done by any of the National Cap Rate statisticians. Therefore, the best information available along with the analysis by appraiser of sales with estimated cap rates based on reasonable market rents based on a rental survey, an overall rate of approximately 10% for the subject is considered reasonable as it is near the most predominant rate."
+compSalesYearBuilt,"given a comma seperated list of years that multiple buildings were built on a single property, return a consolidated list of years with as few list items as possible. Example: "
+compLandAdjSummary,"given a list of indicated market values for vacant land sales and a Land Size in square feet, write a summary paragraph of the indicated market values in the format of the example below. 
+If the If the input ""Exclude Extremes"" is FALSE, do not include the sentence starting with ""if we eliminate the extremes"". Adjust the first sentence to update ""excess land"" according to the Land Type input (use either ""excess land"" or ""improved land"" or ""raw land"")
+
+Make sure to properly format currencies in the output
+
+Below is example input and output
+example input:
+
+Land Type: Excess
+Exclude Extremes: FALSE
+Land Size (SF): 203,399
+Indicated Value: 345778
+Indicated Value per sf: 1.70
+Indicated Value per AC: 74,052
+Indicated Indicated Market Values csv
+
+```
+Sale #,Indicated Market Value
+1,$1.32
+4,$1.62
+2,$1.77
+6,$1.78
+3,$1.81
+5,$1.82
+Mean,$1.69
+```
+
+example output paragraph
+Based on these sales, the estimated range of value for the subject property excess land is from $1.32/SF to $1.82/SF. This translates to a per acreage range of $57,500/AC to $79,280/AC and means the excess land is valued between $268,486 and $370,186. If we eliminate the extremes on each end of the spectrum we have a more reasonable credible value range of x and y. The value is generally in-line with the mean and is considered well supported at $1.70/SF or $74,052/AC or $345,778."
+subjectTaxesFinal,"given the following text string, fill out the text with the variables:
+
+The subject displays a combined assessment of {AppraisedValue}. With the appraised value on the effective date of {ReportFinalValue} the taxes of the market value would be approximately {ReportTaxesNew}.
+
+Please ensure all variables are in proper dollar currency format
+
+Example input:
+AppraisedValue: $292,840.00
+ReportFinalValue: 540,000
+ReportTaxesNew: 8394
+
+Example Output:
+The subject displays a combined assessment of $292,840.00. With the appraised value on the effective date of $540,000 the taxes of the market value would be approximately $8,394."
+subjectTaxesBlab,"given the following text string, fill out the text with the variables:
+
+The subject property is located in ${City}, ${County} County, ${State} and is taxed based on values established by the county tax assessors. The tax rates are applied to the assessed value of the subject property, and the taxes for the subject property are then estimated. The taxes are estimated per $100 of assessed value. This property is subject to taxes for the ${TaxAuthorities}. The ${TaxYear} combined tax rate for these authorities is $${CombinedTaxRate}. The ${TaxYear} taxes were ${TaxAmount} with an evaluation by the ${County} County Appraisal District of ${AssessedValue} net assessed value for each parcel as noted in the Property Identification section above.
+
+Please ensure all variables are in proper dollar currency format
+
+Example input:
+City: McCamey
+County: Upton
+State: Texas
+TaxAuthorities: McCamey City, Upton CO Emergency Dist \#2, Upton County M\&O, Upton County I\&S, McCamey Hospital District M\&O, McCamey Hospital District I\&S, McCamey ISD M\&O, McCamey ISD I\&S, Upton Co Water District
+TaxYear: 2024
+CombinedTaxRate: 2.51
+TaxAmount: 932.48
+AssessedValue: 37088
+
+
+Example Output:
+The subject property is located in McCamey, Upton County, Texas and is taxed based on values established by the county tax assessors. The tax rates are applied to the assessed value of the subject property, and the taxes for the subject property are then estimated. The taxes are estimated per $100 of assessed value. This property is subject to taxes for the McCamey City, Upton CO Emergency Dist \#2, Upton County M\&O, Upton County I\&S, McCamey Hospital District M\&O, McCamey Hospital District I\&S, McCamey ISD M\&O, McCamey ISD I\&S, Upton Co Water District. The 2024 combined tax rate for these authorities is $2.51. The 2024 taxes were $932.48 with an evaluation by the Upton County Appraisal District of $37,088.00 net assessed value for each parcel as noted in the Property Identification section above."

@@ -1,0 +1,307 @@
+{
+  "name": "get content file text",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a7ec29f-8a08-413e-9d16-cf90b262cfcb",
+              "name": "content",
+              "value": "=",
+              "type": "string"
+            },
+            {
+              "id": "bcffa2e9-a3d6-4b16-8132-a57d7227c418",
+              "name": "exists",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        -1424
+      ],
+      "id": "96d162a2-9d54-4840-beb4-b0465fa4cf12",
+      "name": "Prep Content Response3"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "v2SOmavI8aT9OgZY",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/v2SOmavI8aT9OgZY",
+          "cachedResultName": "Get Content File Id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $json.reportSubFolderIds_content }}",
+            "section": "={{ $('Start').item.json.section }}"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        -1440
+      ],
+      "name": "Call Get Content File Id",
+      "id": "86e496e3-dbd6-4a58-8fe3-bd4112868ac7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0a2a3307-bc4d-4cf7-9bc5-e06450d404a3",
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        -1440
+      ],
+      "id": "7afb9a5e-7ff0-4ff3-94d5-3f770b08d9a5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.contentFileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        928,
+        -1616
+      ],
+      "id": "65263778-cdcd-4ca9-8c91-bf07ad538b8d",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "destinationKey": "content",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        -1616
+      ],
+      "id": "39375dea-b027-425c-adb2-86f0742c359f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a7ec29f-8a08-413e-9d16-cf90b262cfcb",
+              "name": "content",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            },
+            {
+              "id": "bcffa2e9-a3d6-4b16-8132-a57d7227c418",
+              "name": "exists",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1328,
+        -1616
+      ],
+      "id": "1268b867-8563-4ac1-9b44-2707a436867a",
+      "name": "Prep Content Response"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "reportSubFolderIds_content"
+            },
+            {
+              "name": "section"
+            }
+          ]
+        }
+      },
+      "id": "5687c796-94bd-4f5e-8cb9-bfcd45836468",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        256,
+        -1440
+      ]
+    }
+  ],
+  "connections": {
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Prep Content Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Content File Id": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Content Response3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Content Response": {
+      "main": [
+        []
+      ]
+    },
+    "Prep Content Response3": {
+      "main": [
+        []
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Call Get Content File Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

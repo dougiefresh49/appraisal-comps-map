@@ -1,0 +1,445 @@
+{
+  "name": "Get comp photo",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.folderId }}",
+            "mode": "id"
+          },
+          "whatToSearch": "all"
+        },
+        "options": {
+          "fields": [
+            "name",
+            "kind",
+            "id",
+            "mimeType",
+            "webViewLink",
+            "*"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1552,
+        -176
+      ],
+      "id": "a139d799-d223-493d-8170-9e9b15e96bb4",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "f65c778d-5c9c-4c24-93e3-3457aae53062",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "front",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "42dded7e-50ee-4354-a8cd-5ead08c5ab3b",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "areal",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -1328,
+        -176
+      ],
+      "id": "b0f87c3c-e77b-4db1-9cd7-d2cc2367814f",
+      "name": "Filter",
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "folderId"
+            }
+          ]
+        }
+      },
+      "id": "17446f86-706b-408d-a9bb-b01a43736bf2",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -1776,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "62476603-e6a6-40ba-9ab6-945af4f815b2",
+              "name": "folderId",
+              "value": "={{ $('Filter').item.json.parents[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "acc8bd52-e7d9-4a00-8c81-0dac2b633654",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "661cd988-4865-4eef-b44e-529b414e3e78",
+              "name": "name",
+              "value": "={{ $('Filter').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "b448a04a-1f7a-4ee9-9919-b380fdf6cb65",
+              "name": "webViewLink",
+              "value": "={{ $('Filter').item.json.webViewLink }}",
+              "type": "string"
+            },
+            {
+              "id": "79c16a5d-7168-4565-b705-4c62231dd4bd",
+              "name": "mimeType",
+              "value": "={{ $('Filter').item.json.mimeType }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        -368
+      ],
+      "id": "0c6f241f-409a-4d0f-9005-c043f42691a8",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "images",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        -368
+      ],
+      "id": "c0a1230d-d198-428a-9861-9c669af71cd2",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "30ce0230-9c11-4c27-9623-350e66e29e19",
+              "name": "imageMap",
+              "value": "={{ \n$json.images.reduce((acc, i) => ({ \n    ...acc, \n    [i.folderId]: [ ...(acc[i.folderId] || []), i ] \n}), {}) \n}}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -208,
+        -368
+      ],
+      "id": "67619d24-f829-4e5e-94e4-a4f0c424ac0d",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -880,
+        -368
+      ],
+      "id": "a71f8475-88ee-45f3-af2f-396fbabc98dd",
+      "name": "Share file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aec4a1a5-fc4d-4033-9b83-71a600c71d68",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        -192
+      ],
+      "id": "cbbc9917-1cbc-40e1-a6cc-e16390e6eb17",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "30ce0230-9c11-4c27-9623-350e66e29e19",
+              "name": "imageMap",
+              "value": "={}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1152,
+        0
+      ],
+      "id": "b2ba84c7-030c-48e9-bafc-e53e44179919",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "30ce0230-9c11-4c27-9623-350e66e29e19",
+              "name": "imageMap",
+              "value": "={}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        -160
+      ],
+      "id": "5092ad22-3212-4424-b2da-11aeee7b9b6a",
+      "name": "Edit Fields3"
+    }
+  ],
+  "connections": {
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Share file": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Share file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "folderId": "1T5cxZaKgPlMWSKumcWA0PU_B1WfIo7Y6"
+        }
+      },
+      {
+        "json": {
+          "folderId": "17qzDkM9C7a3GQ0vIa2LwSvKIQftVZl1p"
+        }
+      },
+      {
+        "json": {
+          "folderId": "16PHANQbhVumVWt4TI9qc38HiLRMfwfig"
+        }
+      },
+      {
+        "json": {
+          "folderId": "1_EFWSBOhGGXgFO7bI07crKQqy5-Qc7kj"
+        }
+      },
+      {
+        "json": {
+          "folderId": "1FyOOQrj1FtxFoZiRkY1rGemyI3Nbqapr"
+        }
+      },
+      {
+        "json": {
+          "folderId": "115alsYKQGg5r5cym2tVv8rgqBjoNtKA4"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

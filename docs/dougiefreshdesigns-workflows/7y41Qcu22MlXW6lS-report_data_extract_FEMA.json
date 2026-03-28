@@ -1,0 +1,153 @@
+{
+  "name": "report-data -- extract FEMA",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1442425557,
+          "mode": "list",
+          "cachedResultName": "report-inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1L0ymDuvJ2VyMMDeZ18eLHVa3-BqfSzkTGJRLKC-gheg/edit#gid=1442425557"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "K1:M5"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1136,
+        -80
+      ],
+      "id": "2fc25956-6ec6-4374-824c-041a0c629e8e",
+      "name": "Get Report Data - FEMA Data1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "id",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "a7b908b3-996a-4563-82f0-fe9b7d849064",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        928,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "82d1b44f-edeb-42d2-9bd0-a3ee8c3da2f4",
+              "name": "femaData",
+              "value": "={{ $json.femaData.map(i => `* ${i.label}: ${i.value}`).join(`\\n`)  }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1536,
+        -80
+      ],
+      "id": "40e29c21-55c5-4ce0-9c17-537434b27655",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "femaData",
+        "include": "allFieldsExcept",
+        "fieldsToExclude": "row_number,variableName",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -80
+      ],
+      "id": "a0137fe6-237b-4107-8451-268bde3cb26d",
+      "name": "Aggregate7"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get Report Data - FEMA Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - FEMA Data1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate7": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "id": "1L0ymDuvJ2VyMMDeZ18eLHVa3-BqfSzkTGJRLKC-gheg"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

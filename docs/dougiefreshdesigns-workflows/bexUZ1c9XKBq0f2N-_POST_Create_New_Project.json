@@ -1,0 +1,167 @@
+{
+  "name": "[POST] Create New Project",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "projects-new",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -464
+      ],
+      "id": "ba38ed45-b4fa-4aa6-9c50-8e0e6ee394ab",
+      "name": "Webhook",
+      "webhookId": "ff6de55d-c266-4ca6-9602-fbb003d3cd25",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "=10PN0dqokZzlT-5wNvjnyQ7vebfkBrqtK",
+            "mode": "id"
+          },
+          "whatToSearch": "all",
+          "fileTypes": [
+            "application/vnd.google-apps.folder"
+          ]
+        },
+        "options": {
+          "fields": [
+            "name",
+            "id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        -464
+      ],
+      "id": "76fb9226-81b0-4515-bf25-406a9da747e7",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "projects",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -464
+      ],
+      "id": "32b40011-4e7a-487f-9da7-003b88abd3e3",
+      "name": "Aggregate3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        352,
+        -464
+      ],
+      "id": "4db60249-2e61-4ac9-9ec8-6bd2af8b2b52",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Aggregate3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate3": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {},
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/cover-data",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": null
+}

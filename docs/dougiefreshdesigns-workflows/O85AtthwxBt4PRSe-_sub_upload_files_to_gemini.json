@@ -1,0 +1,211 @@
+{
+  "name": "[sub] upload files to gemini",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        528,
+        -1120
+      ],
+      "id": "015c6a40-5812-4756-bbbe-8d782516a9d6",
+      "name": "Share file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "files",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "dc24fe70-1727-46e1-8ac9-058de8a729f9",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -48,
+        -720
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "files",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        272,
+        -704
+      ],
+      "id": "547e42f8-19bf-4212-adff-d69574cb3609",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "geminiFileUrls",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        -720
+      ],
+      "id": "16728ba5-1eb8-470d-af9b-4c38a1ad8823",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "inputType": "binary"
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        688,
+        -704
+      ],
+      "id": "6a81eb4b-57d0-4720-99b2-86d4012445e2",
+      "name": "Upload a file",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "72f1yYOIUOwDmWkY",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        496,
+        -704
+      ],
+      "id": "cddd35b5-e667-4e11-a959-4f1b26618d85",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Share file": {
+      "main": [
+        []
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a file": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Upload a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "files": [
+            {
+              "kind": "drive#file",
+              "id": "18au-kurqjMReycBnOFxsPhzrMMJuromA",
+              "name": "320 N Moss Ave Odessa - MLS.pdf",
+              "mimeType": "application/pdf",
+              "webViewLink": "https://drive.google.com/file/d/18au-kurqjMReycBnOFxsPhzrMMJuromA/view?usp=drivesdk"
+            },
+            {
+              "kind": "drive#file",
+              "id": "1HeimaGlLOYDCSmA3KA9KU3WyVA-VDT82",
+              "name": "320 N MOSS AVE - cad.pdf",
+              "mimeType": "application/pdf",
+              "webViewLink": "https://drive.google.com/file/d/1HeimaGlLOYDCSmA3KA9KU3WyVA-VDT82/view?usp=drivesdk"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

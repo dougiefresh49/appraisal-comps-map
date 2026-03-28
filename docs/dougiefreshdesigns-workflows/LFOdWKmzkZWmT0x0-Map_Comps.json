@@ -1,0 +1,590 @@
+{
+  "name": "Map Comps",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Subject Details Generation",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "reportDocId",
+              "placeholder": "The ID of the final Google Doc to update (optional for now)."
+            },
+            {
+              "fieldLabel": "neighborhoodMapId",
+              "placeholder": "The Google Drive ID of the GIS/Neighborhood Map PDF or image.",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "zoningMapId",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "sheetId",
+              "placeholder": "The ID of your main \"Report Data\" Google Sheet.",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "ownershipContext",
+              "fieldType": "textarea",
+              "placeholder": "free-form text field for extra sales history details",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -960,
+        528
+      ],
+      "id": "c9e5c36a-1ec5-453e-8eff-644c09752536",
+      "name": "On form submission",
+      "webhookId": "ce418042-1746-4ed0-87e7-d9cdc8eba80b"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1375562926,
+          "mode": "list",
+          "cachedResultName": "subject",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iJnUV92aQ246Qv6IhetpaVVwuGEfgiataBEr5z8qRwE/edit#gid=1375562926"
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "UNFORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -576,
+        208
+      ],
+      "id": "53a42cbd-4618-4b23-af8c-4ab59629755b",
+      "name": "Get Report Data - Subject",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "landSales",
+        "include": "specifiedFields",
+        "fieldsToInclude": "#,Address",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        1008
+      ],
+      "id": "4b6b830d-e251-43ba-ac06-cd5793985007",
+      "name": "Aggregate1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        448
+      ],
+      "id": "1fb908be-7cbc-4aa5-9a0c-918d196bc04e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0c23295d-1cd1-487e-acc6-cd924f96a712",
+              "name": "subject",
+              "value": "={{ $json.AddressLocal }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "74026df1-e4be-46cf-b339-300c4234d8a5",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.kml }}",
+        "name": "=Comp Sales - {{ $now.toFormat(\"yyyy-MM-dd\") }}.kml",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1OZxMOY-SOPgk9uCkVkwIB3pRraCVEZpT",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1232,
+        464
+      ],
+      "id": "faf644dd-11c6-4bb5-b7f8-9053d66bce21",
+      "name": "Google Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "JWTFgqpgxtb3icp3",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 894429084,
+          "mode": "list",
+          "cachedResultName": "land comps",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12f-qzfJbDZL_fdG-VBes2ye-b3EyPDfHTtSk0iNTfIo/edit#gid=894429084"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Sale"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -448,
+        1008
+      ],
+      "id": "114cb787-6420-436c-b86b-96640bdaa33c",
+      "name": "Get Report Data - Land Comps",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 302816535,
+          "mode": "list",
+          "cachedResultName": "sale comps",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12f-qzfJbDZL_fdG-VBes2ye-b3EyPDfHTtSk0iNTfIo/edit#gid=302816535"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Sale"
+            },
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Listing"
+            }
+          ]
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -576,
+        624
+      ],
+      "id": "d29235e2-fba2-44d8-b602-cfd3325bda6f",
+      "name": "Get Report Data - Sale Comps",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address={{ $json.Address }}&benchmark=2020&format=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -384,
+        624
+      ],
+      "id": "afe4d368-a2e8-4e07-9df4-aabbb9df5c65",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc1683d5-e502-49ff-8bda-eac00d4c2761",
+              "name": "longitude",
+              "value": "={{ $json.result.addressMatches[0].coordinates.x }}",
+              "type": "number"
+            },
+            {
+              "id": "7a3f8888-ec8c-4b3c-8dfa-f52fe784f9a2",
+              "name": "latitude",
+              "value": "={{ $json.result.addressMatches[0].coordinates.y }}",
+              "type": "number"
+            },
+            {
+              "id": "ea99bc78-a594-4e80-918d-bdc6981673c9",
+              "name": "#",
+              "value": "={{ $('Get Report Data - Sale Comps').item.json['#'] }}",
+              "type": "number"
+            },
+            {
+              "id": "4e7be730-298a-44da-ab3f-fcb214785af8",
+              "name": "Address",
+              "value": "={{ $('Get Report Data - Sale Comps').item.json.Address }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -160,
+        624
+      ],
+      "id": "fb5699c7-a1ea-409f-bba5-e3564c6f993d",
+      "name": "Map Lat / Long"
+    },
+    {
+      "parameters": {
+        "url": "=https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address={{ $json.AddressLabel }}&benchmark=2020&format=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        208
+      ],
+      "id": "eed6db64-f143-4e5e-ac1b-152cc298da30",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc1683d5-e502-49ff-8bda-eac00d4c2761",
+              "name": "longitude",
+              "value": "={{ $json.result.addressMatches[0].coordinates.x }}",
+              "type": "number"
+            },
+            {
+              "id": "7a3f8888-ec8c-4b3c-8dfa-f52fe784f9a2",
+              "name": "latitude",
+              "value": "={{ $json.result.addressMatches[0].coordinates.y }}",
+              "type": "number"
+            },
+            {
+              "id": "ea99bc78-a594-4e80-918d-bdc6981673c9",
+              "name": "#",
+              "value": "=0",
+              "type": "number"
+            },
+            {
+              "id": "4e7be730-298a-44da-ab3f-fcb214785af8",
+              "name": "Address",
+              "value": "={{ $('Get Report Data - Subject').item.json.AddressLabel }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -96,
+        208
+      ],
+      "id": "00cf9022-dd0a-43cc-ade7-47121d160255",
+      "name": "Map Lat / Long1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "49eb1f33-6c6a-43a0-8cc4-a4cdec00982b",
+              "name": "subjet",
+              "value": "={{ $json.data.filter(item => item['#'] === 0)[0] }}",
+              "type": "object"
+            },
+            {
+              "id": "eccf8ade-cb88-4750-b8a6-2d13cd23cc4a",
+              "name": "comps",
+              "value": "={{ $json.data.filter(item => item['#'] !== 0) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        448
+      ],
+      "id": "2d72314c-4c24-4ac1-9863-047ed5845d85",
+      "name": "Separate Comps and Subject"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        432,
+        448
+      ],
+      "id": "cabba99f-427e-43da-963c-e45c2d13a1bf",
+      "name": "Join all data to one list"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d709b442-607e-48d4-b834-4e2aa246f15a",
+              "name": "kml",
+              "value": "=<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n  <Document>\n    <name>Comparable Sales Map</name>\n    \n    <!-- Style for the Subject Property Pin (Red) -->\n    <Style id=\"subjectStyle\">\n      <IconStyle>\n        <color>ff1a1aff</color> <!-- KML color is AABBGGRR (Alpha, Blue, Green, Red) -->\n        <scale>1.3</scale>\n        <Icon>\n          <href>http://maps.google.com/mapfiles/kml/pushpin/red-pushpin.png</href>\n        </Icon>\n      </IconStyle>\n      <LabelStyle>\n        <scale>1.1</scale>\n      </LabelStyle>\n    </Style>\n\n    <!-- Style for the Comparable Properties Pin (Blue) -->\n    <Style id=\"compStyle\">\n      <IconStyle>\n        <color>ffff0000</color> <!-- AABBGGRR format -->\n        <scale>1.1</scale>\n        <Icon>\n          <href>http://maps.google.com/mapfiles/kml/pushpin/blue-pushpin.png</href>\n        </Icon>\n      </IconStyle>\n       <LabelStyle>\n        <scale>1.0</scale>\n      </LabelStyle>\n    </Style>\n\n    <!-- Placemark for the Subject Property -->\n    <Placemark>\n      <name>SUBJECT</name>\n      <description><![CDATA[{{ $json.subjet.Address }}]]></description>\n      <styleUrl>#subjectStyle</styleUrl>\n      <Point>\n        <coordinates>{{ $json.subjet.longitude }},{{ $json.subjet.latitude }},0</coordinates>\n      </Point>\n    </Placemark>\n\n    <!-- Loop through the comps and create a Placemark for each one -->\n{{ $json.comps.map(comp => `\n    <Placemark>\n      <name>COMPARABLE No. ${comp['#']}</name>\n      <description><![CDATA[${comp.Address}<br>Distance: [Distance will go here] miles]]></description>\n      <styleUrl>#compStyle</styleUrl>\n      <Point>\n        <coordinates>${comp.longitude},${comp.latitude},0</coordinates>\n      </Point>\n    </Placemark>\n    `).join('') }}\n</Document>\n</kml>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        864,
+        448
+      ],
+      "id": "b63a06b7-aa4a-4685-a27c-fa896215c1a2",
+      "name": "Create KML"
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Get Report Data - Subject",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Report Data - Sale Comps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Subject": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Join all data to one list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Land Comps": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Sale Comps": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Map Lat / Long",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Map Lat / Long1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Lat / Long1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Lat / Long": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Join all data to one list": {
+      "main": [
+        [
+          {
+            "node": "Separate Comps and Subject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separate Comps and Subject": {
+      "main": [
+        [
+          {
+            "node": "Create KML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create KML": {
+      "main": [
+        [
+          {
+            "node": "Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "On form submission": [
+      {
+        "json": {
+          "reportDocId": "",
+          "neighborhoodMapId": "1erWuxJNJeJXAA8CUJJEiNFCNCEnu7am_",
+          "zoningMapId": "1vx76VbjEk7FD6zbgzxYhTIK4ccUpxL5P",
+          "sheetId": "12f-qzfJbDZL_fdG-VBes2ye-b3EyPDfHTtSk0iNTfIo",
+          "ownershipContext": "on 03/19/2003 My Community Credit Union purchased lots 8-17 from RW PROPERTIES as recorded in document number 2003-6063 and then a replat was done in document 2003-7778 on 4/8/2003 to combine all lots into lot 18",
+          "submittedAt": "2025-06-23T13:30:01.881-05:00",
+          "formMode": "test"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

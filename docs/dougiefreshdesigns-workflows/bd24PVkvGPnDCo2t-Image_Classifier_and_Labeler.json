@@ -1,0 +1,372 @@
+{
+  "name": "Image Classifier and Labeler",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.fileData.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1616,
+        304
+      ],
+      "id": "90dd2865-7042-45d0-959a-7c24722197c3",
+      "name": "Download Photo",
+      "executeOnce": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -208,
+        272
+      ],
+      "id": "51a36def-82dd-4b46-b161-34b8650ba5e1",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c963252-fb01-4970-b39f-3004293c50c8",
+              "name": "examplesText",
+              "value": "={{  $json.data.map(item => `EXAMPLE:\\nImageName: ${item.ImageName}\\nLabelText: ${item.Label}`).join('\\n---\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -496,
+        96
+      ],
+      "id": "7e5bbb95-4e8c-4368-9fad-9d938ac16467",
+      "name": "Create Examples Text Paragraph"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Xjks1CL9hkpw35M6E6JYUJhAj7mTqqhmnIg-J55XhMI",
+          "mode": "list",
+          "cachedResultName": "AI Photo Labeling Knowledge Base",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Xjks1CL9hkpw35M6E6JYUJhAj7mTqqhmnIg-J55XhMI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Xjks1CL9hkpw35M6E6JYUJhAj7mTqqhmnIg-J55XhMI/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Category",
+              "lookupValue": "={{ $json.content.parts[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -944,
+        96
+      ],
+      "id": "259a42c8-5fe9-40d8-b77b-8a84c5f2c9a8",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {
+          "includeBinaries": false
+        }
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        96
+      ],
+      "id": "aca752dd-1701-4d27-9c2d-50ce256c5797",
+      "name": "Join Examples From Category to One List"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"fileData\": {\n    \"kind\": \"drive#file\",\n    \"id\": \"15vi-VfkQ15k6RnncMZxaCHpBmbA9xOdS\",\n    \"name\": \"PXL_20250602_161304038.jpg\",\n    \"mimeType\": \"image/jpeg\",\n    \"webViewLink\": \"https://drive.google.com/file/d/15vi-VfkQ15k6RnncMZxaCHpBmbA9xOdS/view?usp=drivesdk\"\n  },\n \n    \"propertyType\": \"Warehouse\",\n    \"description\": \"a bunch of text info\",\n\n  \"photosFolderId\": \"16q_97kUy0I9dVY6nRfkjhKM4UOlH4oXg\"\n}"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1840,
+        304
+      ],
+      "id": "e9b4c8c7-3b36-4758-bd44-096b7013d42e",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "resize",
+        "width": 1024,
+        "height": 1024,
+        "options": {
+          "format": "jpeg"
+        }
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1392,
+        304
+      ],
+      "id": "57901959-4a02-42af-8e03-5e62518ae1cd",
+      "name": "Edit Image"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3-flash-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3-flash-preview"
+        },
+        "text": "=You are an expert real estate appraiser's assistant. \nYour task is to generate a concise, descriptive label for an image of a commercial property that is the subject of the report. \nThe output must be ONLY a single JSON object with a \"label\" key and a \"image\" key that has the value of the image file name {{ $json.fileData.name }}.\nDo not add any other text or formatting. Do NOT generate any images, just reference the provided image\n\nHere are some highly relevant examples of how to label this type of image, which has been identified as a specific category:\n---\n{{ $json.examplesText }}\n---\n\nHere are more details about the subject property:\nProperty Type: {{ $json.propertyType }}\nSubject Details: \n{{ $json.description }}\n\nNow, analyze the image at and generate the JSON output for it:",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        0,
+        272
+      ],
+      "id": "4dbe2425-c0ef-47c5-929c-1d9f2aa43630",
+      "name": "Analyze an image1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "72f1yYOIUOwDmWkY",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "58723d0e-8fb4-4bb1-8da9-4ddabe2a400f",
+              "name": "output",
+              "value": "={{ $json.content.parts[0].text.replace('```json', '').replace('```', '') }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        272
+      ],
+      "id": "eea71cf1-20ef-42bd-a359-7a6b0069d965",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3-flash-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3-flash-preview"
+        },
+        "text": "=You are an AI assistant classifying photos for a commercial real estate appraisal.\n\nThe overall property type is: {{ $json.propertyType }}\n\nAdditional context about the subject property are as follows:\n{{ $json.description }}\n\nBased on this context and the image attached below, classify the image into ONE of the following categories: \n* Site & Grounds\n* Building Exterior\n* Building Interior\n* Residential / Apartment Unit\n* Damage & Deferred Maintenance.\n\nRespond with only the single category name and nothing else.\n",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1168,
+        96
+      ],
+      "id": "7f8e88fd-ca47-40e5-9b28-1b02da3cd8a4",
+      "name": "Classify Image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "72f1yYOIUOwDmWkY",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Join Examples From Category to One List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Photo": {
+      "main": [
+        [
+          {
+            "node": "Edit Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Examples From Category to One List": {
+      "main": [
+        [
+          {
+            "node": "Create Examples Text Paragraph",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Examples Text Paragraph": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Download Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Image": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Classify Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Image": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "fileData": {
+            "kind": "drive#file",
+            "id": "15vi-VfkQ15k6RnncMZxaCHpBmbA9xOdS",
+            "name": "PXL_20250602_161304038.jpg",
+            "mimeType": "image/jpeg",
+            "webViewLink": "https://drive.google.com/file/d/15vi-VfkQ15k6RnncMZxaCHpBmbA9xOdS/view?usp=drivesdk"
+          },
+          "propertyType": "Warehouse",
+          "description": "a bunch of text info",
+          "photosFolderId": "16q_97kUy0I9dVY6nRfkjhKM4UOlH4oXg"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
