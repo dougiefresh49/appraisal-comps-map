@@ -18,21 +18,12 @@ export function useProjectsList() {
   useEffect(() => {
     async function fetchProjects() {
       try {
-        // Try local API route first, fallback to N8N webhook
-        let response;
-        try {
-          response = await fetch("/api/projects-list", {
+        const response = await fetch(
+          env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/projects-new",
+          {
             method: "POST",
-          });
-        } catch (localErr) {
-          // Fallback to N8N webhook
-          response = await fetch(
-            env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/projects-new",
-            {
-              method: "POST",
-            },
-          );
-        }
+          },
+        );
 
         if (!response.ok) {
           throw new Error("Failed to fetch projects list");
