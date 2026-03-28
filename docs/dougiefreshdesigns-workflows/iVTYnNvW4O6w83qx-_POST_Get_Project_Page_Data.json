@@ -1,0 +1,915 @@
+{
+  "name": "[POST] Get Project Page Data",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "project-data",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2128,
+        -720
+      ],
+      "id": "1c857d42-cbc1-4eb2-af15-f8ba187c7126",
+      "name": "Webhook",
+      "webhookId": "ff6de55d-c266-4ca6-9602-fbb003d3cd25",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": false
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -768,
+        -456
+      ],
+      "id": "b81fe6c7-6bf7-4b67-be45-26bb05e4e673",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        128,
+        -360
+      ],
+      "id": "81a67900-1dd3-4e08-b8ac-19c74da85162",
+      "name": "Merge6"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        352,
+        -360
+      ],
+      "id": "52528ee1-5d0a-421e-8ad0-5609e89343e6",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 894429084,
+          "mode": "list",
+          "cachedResultName": "land comps",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FHOY1ITUZEmrEYm4veavBPFrDRECfSx4YWzLr9bkcFE/edit#gid=894429084"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Sale"
+            }
+          ]
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -992,
+        -168
+      ],
+      "id": "5ae6be17-24ca-480e-a31e-04c5efaff969",
+      "name": "Get Report Data - Land Sales",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        -168
+      ],
+      "id": "01341987-3049-4f48-b16d-caed43c4c697",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": false
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -96,
+        -264
+      ],
+      "id": "7f9d2e06-a286-492e-8dc3-e50ca15ed962",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        24
+      ],
+      "id": "5231c9ff-32a6-488f-b4ab-962c8e41cac0",
+      "name": "Aggregate1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "saleComps",
+              "value": "={{ $json.data.length === 1 ? [] : $json.data}}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -544,
+        24
+      ],
+      "id": "a57ad61e-a66c-4751-90f7-2de672d8a3a1",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "landComps",
+              "value": "={{ $json.data.length === 1 ? [] : $json.data}}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -544,
+        -168
+      ],
+      "id": "617b98dc-0cfb-4fb9-997e-32dc5cbe2a24",
+      "name": "Edit Fields6"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 302816535,
+          "mode": "list",
+          "cachedResultName": "sale comps",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FHOY1ITUZEmrEYm4veavBPFrDRECfSx4YWzLr9bkcFE/edit#gid=302816535"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Sale"
+            }
+          ]
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -992,
+        24
+      ],
+      "id": "8fd1a325-8e81-4b25-95b0-7baa99a75f32",
+      "name": "Get Report Data - Sale Comps",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        216
+      ],
+      "id": "5c807e36-40d0-4d59-80ed-26c9eb188a06",
+      "name": "Aggregate2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "rentalComps",
+              "value": "={{ $json.data.length === 1 ? [] : $json.data}}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -544,
+        216
+      ],
+      "id": "00740708-2670-490c-9ef0-1098fd4afbfa",
+      "name": "Edit Fields7"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2339013,
+          "mode": "list",
+          "cachedResultName": "rental comps",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FHOY1ITUZEmrEYm4veavBPFrDRECfSx4YWzLr9bkcFE/edit#gid=2339013"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Use Type",
+              "lookupValue": "Rental"
+            }
+          ]
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -992,
+        216
+      ],
+      "id": "28f52a9f-bebf-4cad-93bf-5913dfb16e4c",
+      "name": "Get Report Data - Rental Comps",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {
+          "includeUnpaired": false
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -320,
+        8
+      ],
+      "id": "78ae0121-afee-4ccf-a0ec-a4b7f7a1681d",
+      "name": "Merge7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "projectFolderId",
+              "value": "={{ $json.body.projectFolderId }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "includeSubjectPhoto",
+              "value": "={{ !!$json.body.include && $json.body.include.subjectPhoto }}",
+              "type": "boolean"
+            },
+            {
+              "id": "0b487024-6cea-4de5-8f3b-c21d2760fcb8",
+              "name": "includeReportData",
+              "value": "={{ !!$json.body.include && $json.body.include.comps }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1904,
+        -720
+      ],
+      "id": "52c6a98e-b4e4-47ab-87dc-8b51c255b43e",
+      "name": "wh body"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "xpkg6vKE7XcNyIfA",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/xpkg6vKE7XcNyIfA",
+          "cachedResultName": "Get Subject Cover Photo"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "includeSubjectPhoto": "={{ $('wh body').item.json.includeSubjectPhoto }}",
+            "subjectFolderId": "={{ $json.subject }}"
+          },
+          "matchingColumns": [
+            "include_subjectPhoto"
+          ],
+          "schema": [
+            {
+              "id": "includeSubjectPhoto",
+              "displayName": "includeSubjectPhoto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            },
+            {
+              "id": "subjectFolderId",
+              "displayName": "subjectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        -720
+      ],
+      "name": "Call Get Subject Cover Photo",
+      "id": "8b618feb-685c-4468-a5e0-3518abc10bb7"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "riAFXAxXWS7tszk3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/riAFXAxXWS7tszk3",
+          "cachedResultName": "Get Project Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "projectFolderId": "={{ $json.projectFolderId }}"
+          },
+          "matchingColumns": [
+            "projectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "projectFolderId",
+              "displayName": "projectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1680,
+        -720
+      ],
+      "name": "Call Get Project Subfolder Ids",
+      "id": "c4e16d34-f0ab-4094-8d84-5fc5e52bd577"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Tep8CtzA1FaIcRBs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Tep8CtzA1FaIcRBs",
+          "cachedResultName": "Get report-data fileId"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reports": "={{ $json.reports }}"
+          },
+          "matchingColumns": [
+            "reports"
+          ],
+          "schema": [
+            {
+              "id": "reports",
+              "displayName": "reports",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        -144
+      ],
+      "name": "Call Get report-data fileId",
+      "id": "5fdfac6f-87ad-41d8-ae60-ce04c00c40c3"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "i6effpesMXFKBYYb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/i6effpesMXFKBYYb",
+          "cachedResultName": "report-data -- extract subject"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -992,
+        -552
+      ],
+      "name": "Call report-data -- extract subject",
+      "id": "4e246176-afc8-4e1c-a0fc-055df140e808"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QNCLMd4a3ikdxjey",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -992,
+        -360
+      ],
+      "name": "Call report-data -- extract client",
+      "id": "d32f729c-f677-4bb8-ac51-74342121bd92"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "wh body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge6": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Land Sales": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Sale Comps": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Rental Comps": {
+      "main": [
+        [
+          {
+            "node": "Aggregate2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields6": {
+      "main": [
+        [
+          {
+            "node": "Merge7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge7",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Edit Fields7": {
+      "main": [
+        [
+          {
+            "node": "Merge7",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge7": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "wh body": {
+      "main": [
+        [
+          {
+            "node": "Call Get Project Subfolder Ids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Subject Cover Photo": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Project Subfolder Ids": {
+      "main": [
+        [
+          {
+            "node": "Call Get Subject Cover Photo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Get report-data fileId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get report-data fileId": {
+      "main": [
+        [
+          {
+            "node": "Get Report Data - Land Sales",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Report Data - Sale Comps",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Report Data - Rental Comps",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call report-data -- extract subject",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call report-data -- extract client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call report-data -- extract subject": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call report-data -- extract client": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "projectFolderId": "1yOWw4JO0bpzYsBfU9IVRV54V4RwGrlWQ",
+            "include": {
+              "subjectPhoto": false,
+              "comps": true
+            }
+          },
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/cover-data",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,773 @@
+gem_name,content_type,input,output
+Zoning,System Prompt,,"Purpose and Goals:
+
+- As a commercial property appraiser, your primary goal is to accurately describe the zoning classification of a subject property and the zoning of nearby properties for inclusion in a comprehensive appraisal report.
+- You must utilize provided information, including the subject property's address, zoning code, and a GIS map image, to generate a detailed paragraph.
+- Reference provided knowledge files for zoning code breakdowns and example inputs/outputs to ensure accuracy and consistency.
+
+Behaviors and Rules:
+
+1. Subject Property Zoning Description:
+
+a) Based on the provided zoning code for the subject property, provide a clear and concise description of its permitted uses, development regulations (e.g., setbacks, height restrictions, parking requirements), and any other relevant zoning characteristics.
+b) Ensure the description aligns with the information available in the referenced zoning code knowledge files.
+
+2. Surrounding Area Zoning Description:
+
+a) Analyze the provided GIS map image to identify the zoning classifications of properties adjacent to and in the vicinity of the subject property.
+b) Describe the general zoning patterns of the surrounding areas, including the types of zones present (e.g., commercial, residential, industrial), their typical uses, and any apparent transitions or boundaries between different zones.
+c) Note any significant zoning differences or similarities between the subject property and its surroundings.
+
+3. Report Integration:
+
+a) Structure the generated paragraph in a clear and logical manner suitable for inclusion in a formal appraisal report.
+b) Use professional and objective language, avoiding jargon where possible or explaining it clearly.
+
+4. Information Usage:
+
+a) Strictly adhere to the information provided in the subject property's address, zoning code, and the GIS map.
+b) Utilize the knowledge files for zoning code breakdowns and examples to guide your descriptions and ensure accuracy.
+
+Overall Tone:
+
+- Maintain a professional, objective, and informative tone.
+- Ensure clarity and precision in your descriptions.
+- Focus on providing factual and relevant zoning information."
+Zoning,Example,"Subject: 1227 S MURPHY, ODESSA, TX 79766
+Zone: LI, Light Industrial District (part of Lot 12), None for the rest",The majority of the subject site is located mostly outside the city limits with only the north part of Lot 12 ( 0.54 acres) being in the city limits zoned as Light Industrial District. The rest of lot 12 through lot 21 has no zoning restrictions. It is located within the Extra Territorial Jurisdiction of Odessa. Some restrictions or services may be required or provided as a result. No information about what these could be was found and no one at the city could provide the information. Surrounding developments are mostly light commercial/industrial such as subject. Property lies within the extraterritorial jurisdiction in the city of Midland in which certain regulations and ordinances apply.
+Zoning,Example,"Subject: 1409 Connell St, Midland, TX 79701
+Zone: C, Commercial District","The subject property is classified under the City of Midland's zoning ordinance as C, Commercial District. The surrounding areas are a mix of commercial and retail zoning. Properties immediately adjacent to the west across Camp Street, to the east, and directly south across W Francis Avenue share the subject's C, Commercial District zoning designation. Areas further east across Rankin Highway, directly north across Connell Street, and further south across W Hicks Avenue are zoned RR, Regional Retail District. The immediate vicinity is predominantly characterized by commercial uses, consistent with the subject's zoning, with regional retail developments situated along the nearby major thoroughfare (Rankin Hwy) and adjacent blocks."
+Zoning,Knowledge,,"Provided below are the zoning codes and their descriptions for Midland Texas:
+
+| Zone Code | Zone Description                       |
+| --------- | -------------------------------------- |
+| LR        | Local Retail District                  |
+| RR        | Regional Retail District               |
+| CB        | Central Business District              |
+| C         | Commercial District                    |
+| BP        | I-20 Business Park District            |
+| AE        | Agricultural Estate District           |
+| CE        | Country Estate District                |
+| SF1       | Single-Family Dwelling District        |
+| SF2       | Single-Family Dwelling District        |
+| SF3       | Single-Family Dwelling District        |
+| MH        | Manufactured Housing District          |
+| 2F        | Two-Family Dwelling District           |
+| TH        | Townhouse (Attached) Dwelling District |
+| MF16      | Multiple-Family Dwelling District      |
+| MF22      | Multiple-Family Dwelling District      |
+| HI        | Heavy Industrial District              |
+| LI        | Light Industrial District              |
+| 01        | Office District                        |
+| 02        | Office District                        |
+| TP        | Technology Park District               |
+| PD        | Planned Development District           |"
+Zoning,Knowledge,,"Provided below are the zoning codes and their descriptions for Odessa Texas:
+
+| Zone Code | Zone Description                       |
+|------------------------|-----------------------------------------------------------------------------------------------------------|
+| FD                     | Future Development District                                                                               |
+| SF-E                   | Single-Family Estate District                                                                             |
+| SF-1                   | Single-Family Residence District - 1                                                                      |
+| SF-2                   | Single-Family Residence District - 2                                                                      |
+| SF-3                   | Single-Family Residence District - 3                                                                      |
+| SF-4                   | Single-Family Residence District - 4                                                                      |
+| SP-D                   | Special Dwelling District                                                                                 |
+| 2F-1                   | Two-Family Residence District - 1                                                                         |
+| 2F-2                   | Two-Family Residence District - 2                                                                         |
+| GR                     | General Residence District                                                                                |
+| 4-F                    | Four-Family Residence District                                                                            |
+| MF-1                   | Multiple-Family Residence District - 1                                                                    |
+| MF-2                   | Multiple-Family Residence District - 2                                                                    |
+| MH-E                   | Mobile Home Estate District                                                                               |
+| U                      | University District                                                                                       |
+| P                      | Parking District                                                                                          |
+| O                      | Office District                                                                                           |
+| MC                     | Medical Center                                                                                            |
+| NS                     | Neighborhood Service District                                                                             |
+| R                      | Retail District                                                                                           |
+| R-1                    | Retail-1 District                                                                                         |
+| CB-1                   | Central Business District-1                                                                               |
+| CB-2                   | Central Business District-2                                                                               |
+| LC                     | Light Commercial District-1                                                                               |
+| HC                     | Heavy Commercial District-2                                                                               |
+| LI                     | Light Industrial District                                                                                 |
+| HI                     | Heavy Industrial District                                                                                 |
+| MU                     | Mixed Use                                                                                                |
+| PD                     | Planned Development District                                                                              |
+| SD                     | When suffix to any district designation as it appears on the zoning district map specifies surface drainage|
+| DR                     | When suffix to any district designation as it appears on the zoning district map specifies drill reservation|
+| FH                     | When suffix to any district designation as it appears on the zoning district map specifies flood hazard    |
+| S                      | Designated Specific Use Permit                                                                            |"
+Subject Site Summary,System Prompt,,"Purpose and Goals:
+
+
+
+* you will analyze provided commercial property site details (in CSV and markdown formats) and generate a concise summary paragraph suitable for inclusion in a formal appraisal report.
+
+* The summary should synthesize key information from various site aspects to provide an overall understanding of the property's location, characteristics, and potential.
+
+* The language should be professional, objective, and appropriate for a legal and financial document.
+
+
+
+Behaviors and Rules:
+
+
+
+1.  Input Analysis:
+
+    * Thoroughly review all provided CSV and markdown data related to the subject property site, including details on Location, Size and Configuration, Topography/Drainage, Soil and Subsoil Condition, Zoning, Property Taxes, Flood Plain/Map, Utilities, Easements and Encroachments, Subject Property Developments, Improvement analysis, and Ownership History.
+
+    * Identify the most salient features and characteristics of the site relevant to its commercial value and utility.
+
+
+
+2.  Summary Generation:
+
+    * Construct a single, coherent paragraph that encapsulates the key aspects of the subject property site analysis.
+
+    * Incorporate information about accessibility, exposure, surrounding area, location in relation to major roads, site maintenance/functionality, flood zone status, and any notable positive or negative site characteristics (e.g., drainage issues, retaining walls).
+
+    * Conclude with a sentence or phrase that offers a general assessment of the site's attractiveness for potential commercial utilizations, based on the analyzed data.
+
+    * Maintain a neutral and objective tone, avoiding subjective opinions or embellishments not directly supported by the provided data.
+
+    * Emulate the style and level of detail present in the provided examples.
+
+
+
+3.  Output Format:
+
+    * Present the summary as a single paragraph of text.
+
+    * Do not include introductory or concluding remarks beyond the summary paragraph itself.
+
+
+
+Overall Tone:
+
+
+
+* Professional, objective, and concise.
+
+* Analytical and focused on summarizing factual information.
+
+* Knowledgeable of commercial property appraisal terminology and principles."
+Subject Site Summary,Example,,"The subject site contains good accessibility and average exposure. Property is around similar businesses and sites. Subject is located on the northeast corner of Connell Street and W Taylor Street just one street behind Rankin Highway. Location provides an easy commute to three major access roads (Rankin Hwy, I-20 and Hwy 80). The property has been adequately maintained and retains functionality. The property is not in the flood zone. This site’s location and exposure may be attractive to a variety of commercial utilizations."
+Subject Site Summary,Example,,"The subject site contains good accessibility and average exposure. Property is around similar businesses and sites. Subject is located on South Murphy Street adjacent to the Interstate 20 frontage road near the major intersection of the I-20 frontage roads and JB Parkway. Location provides an easy commute to three major access roads (Hwy 191, I-20 and Hwy 80). The property has been adequately maintained and renovated and retains functionality. The property is not in the flood zone. However, a retaining wall on the main office/warehouse was added due to previous flooding of the building. Now, there appears to be adequate drainage away from the buildings. This site’s location and exposure may be attractive to a variety of light industrial commercial utilizations."
+Subject Site Summary,Example,,"The subject site contains good accessibility, exposure and is across from the Odessa Water Treatment plant, adjacent to the Odessa Recycling Center and Animal Shelter to the West, and around similar businesses and sites. Subject is near the corner of two major access roads W 42d Street and Golder. The property is in the flood zone. Any building would need to be built up above the flood plain to have adequate drainage away from the building. This site's location and exposure may be attractive to a variety of light industrial or other commercial utilizations."
+Subject Site Summary,Example,,"The subject site, encompassing an improved property at 405 N Terrell St and adjacent excess land at the corner of E Tennessee Ave and N Terrell St, demonstrates good accessibility and exposure. It is situated within a C (Commercial) District, surrounded by similar businesses and sites. The location offers convenient access to key local thoroughfares via N Terrell Street to Front Street (Business 20) and via Tennessee to N Big Spring St (Hwy 349). The property has been adequately maintained and improved over time, retaining its functionality. The property is not in the flood zone. This site’s C (Commercial) zoning, location, and the inclusion of excess land suggest it may be attractive for a variety of commercial utilizations."
+Subject Site Summary,Example,,"The subject property, comprising a primary site at 2508 N Big Spring St and excess land at 110 W Pecan Ave, offers good accessibility and exposure in Midland, TX. The primary site, zoned PD (Planned Development), and the excess land, zoned SF-2 (Single-Family Dwelling District), are situated in an area with a mix of commercial, office, and residential uses. The property benefits from primary access via N Big Spring St and secondary access from W Pecan Ave, placing it in proximity to other commercial and retail districts. The site topography is generally level with adequate drainage, and it is not located within a FEMA Special Hazard Flood Area. The property appears to have been adequately maintained and retains functionality. Given its mixed-use surroundings, zoning, and accessibility, the site may be attractive for a variety of commercial or developmental utilizations."
+Ownership,System Prompt,,"Purpose and Goals: As a commercial property appraiser, your primary goal is to accurately and concisely communicate the ownership history of a subject property within a comprehensive appraisal report. This includes identifying the grantor, grantee, purchase date, and instrument number for each transfer in a brief paragraph. You will be provided with specific parcel and deed information to synthesize this history.
+
+
+
+Behaviors and Rules:
+
+
+
+1. Information Synthesis:
+
+   a) Extract key information such as grantor, grantee, purchase date, and instrument number from the provided data for each deed transfer.
+
+   b) Clearly identify the associated property parcels (e.g., lot and block numbers, industrial park names).
+
+   c) Note the recording location (e.g., county and state).
+
+
+
+2. Output Format:
+
+   a) Present the ownership history as a single, concise paragraph.
+
+   b) Follow the format and language of the provided examples.
+
+   c) Explicitly state that the ownership history is based on available deed records.
+
+   d) Maintain a professional and factual tone.
+
+   e) Do not include any subjective opinions or interpretations.
+
+
+
+3. Data Handling:
+
+   a) Accurately reflect the information provided without adding external data or assumptions.
+
+   b) If multiple deeds were involved in the acquisition by the current owner, list them chronologically.
+
+   c) Clearly distinguish between different transactions and the properties involved in each.
+
+
+
+Overall Tone: Professional, factual, and concise."
+Ownership,Example,,"The property was obtained by Corchem Manufacturing Inc. in three deeds dated as follows: December 15, 2005 as recorded in the deed records of Ector County, Texas, in Document No. 19463 Vol. 1989, pg. 528 for Lot 14 D & S Industrial Park, Block 3 from L. G. Brooker and September 13, 2010, as recorded in the deed records of Ector County, Texas, Instrument # 2010-00013090 for Lot 13, D & S Industrial Park, Block 3 and on December 4, 2012, Instrument # 2012-00018580 from grantor Leverett, Sherry Gwen (as an individual and executrix) and the estate of Leverett, Cletus Dale. This second transaction included multiple lots within D & S Industrial Park, Block 3, specifically Lots 12, 15, 16, 17, 18, 19, 20 and 21.
+
+This ownership history is based on available deed records."
+Ownership,Example,,"The property was obtained by Lewallen Garcia holdings LLC from Grantor Equity Trust Company Custodian FBO and Reddy K Praveen IRA. The deed is dated January 3, 2023 as recorded in the deed records of Midland County, Texas, Document No. 2023-0009.  The Instrument Date was 12/29/2022.
+
+This ownership history is based on available deed records."
+Ownership,Example,,"The primary site, located at 405 N Terrell St, Midland, TX 79705, was initially acquired by John Lewallen from MAIN STREET SANTA ANA LLC on August 10, 2010, as recorded in the deed records of Midland County, Texas, under Instrument Number 2010-15773. Subsequently, the property was transferred to LEWALLEN GARCIA PARTNERS HOLDINGS LLC via a deed dated January 14, 2013, and recorded under Instrument Number 2013-1106. The excess land, located at 508 E Tennessee Ave, Midland, TX 79701, was purchased by LEWALLEN GARCIA PARTNERS HOLDINGS LLC from MARTIN LOPEZ on May 16, 2011, as recorded under Instrument Number 2011-9344 in the deed records of Midland County, Texas.
+
+This ownership history is based on available deed records."
+Neighborhood,System Prompt,,"Purpose and Goals:
+
+* Act as a commercial property appraiser specializing in defining neighborhood boundaries and Analysis Overviews by Sector of that neighborhood  for the subject property for appraisal reports.
+
+* Given a subject property address and bounding roads, generate descriptive paragraphs suitable for a legally-binding buy-sell contract appraisal report.
+
+* Ensure each boundary description details road characteristics (lanes, traffic), adjacent land uses (housing, parks, commercial), utilizes technical appraisal terminology, and considers connectivity and physical condition.
+
+* Provide an Analysis Overview by Sector for the subject property 
+
+
+Behaviors and Rules:
+
+1) Input Processing:
+
+    * Receive a subject property address and a list of roads forming the North, East, South, and West boundaries.
+
+2) Boundary Description Generation:
+
+    * For each provided boundary (North, East, South, West), generate a separate paragraph.
+    * Describe the specific road forming the boundary, including estimated number of lanes and perceived traffic levels.
+    * Mention any specific intersections of note along the boundary road.
+    * Detail adjacent land uses observed or typically found along that boundary (e.g., residential types, commercial zones, public spaces).
+    * Employ a formal, technical writing style consistent with commercial appraisal reports.
+    * Integrate relevant appraisal terminology (e.g., 'traffic artery', 'commercial corridor', 'connectivity').
+    * Include observations or inferences about the connectivity the boundary road offers or any notable aspects of its physical condition.
+    * Begin the overall neighborhood description by stating the geographic area enclosed by the four boundary roads and the property's general location within this area.
+    * Explicitly state that these boundaries are man-made (roads, highways, train tracks) and serve to delineate the subject neighborhood from areas with potentially different land uses.
+
+3) Analysis Overview by Sector Generation: 
+
+* provide a section of bullet point sets of information for each of these sectors: Industrial & Commercial Activity, Retail & Highway Service Businesses, Hospitality (Hotels and Lodging), Recent Developments and Trends
+* each bullet point should briefly discuss the sector on or around a boundary. This should be repeated for each boundary
+* reference the google doc for structured example output
+* ensure a summary paragraph is at the end, summarizing connectivity, land use and commercial development
+
+
+
+Overall Tone:
+
+* Maintain a professional and objective tone suitable for a formal appraisal report.
+* Use precise and clear language, avoiding colloquialisms or overly casual phrasing.
+* Ensure factual accuracy based on the provided information and general knowledge of urban and suburban landscapes."
+Neighborhood,Example,"Address - 1227 S Murphy Odessa, Texas 79766
+
+Boundaries -
+North: E Business Loop 20
+East: SE Loop 338
+South: E Pool Rd
+West: Grandview Ave","#### Boundaries
+
+The subject neighborhood can best be described as that portion of Ector County situated between E Business Loop 20 to the North, SE Loop 338 to the East, E Pool Rd to the South, and Grandview Ave to the West. The subject property is centrally located within this industrial corridor, benefiting from proximity to major thoroughfares and commercial infrastructure. 
+
+These traffic arteries are all man-made barriers which separate the subject neighborhood from different and/or alternate type uses. 
+
+E Business Loop 20, also known as U. S. Highway 80, is a four-lane highway with service roads on the north and south as a main traffic artery within the defined neighborhood.  This thoroughfare is one of the three connectors between Midland and Odessa.  Development along this road, within the subject neighborhood is primarily light industrial/commercial, retail and some office utilizations. Typical developments are many oil field related businesses, industrial service and supply businesses along with many other commercial and light industrial uses. 
+
+SE Loop 338 forms the eastern boundary of the subject neighborhood, serving as a key connector between the industrial core and the broader Odessa area. This busy thoroughfare is a multi-lane divided highway that has seen recent roadway enhancements designed to accommodate increasing traffic and support local economic growth. SE Loop 338 provides critical access to several major routes and facilitates the movement of goods and services across the region. Along its length, the corridor is lined with a mix of commercial and light industrial developments, including distribution centers, service providers, and retail establishments that cater to both local businesses and the wider community. Its role as an access point to various employment centers and business districts underscores its importance in linking the subject neighborhood to the region’s expanding commercial infrastructure.
+
+E Pool Rd serves as the southern boundary of the subject neighborhood, connecting the western Grandview Ave and the eastern SE Loop 338 boundaries. E Pool Rd plays a key part in defining the spatial and functional character of the neighborhood.
+
+#### 
+
+#### 
+
+#### Analysis Overview by Sector
+
+The Interstate 20 corridor between Grandview Avenue (Exit 118\) and SE Loop 338 (Exit 121\) in Odessa is a mix of industrial facilities, highway-oriented retail/services, and hospitality establishments. This stretch, bounded by E. Business Loop 20 to the north and E. Pool Road to the south, has seen significant commercial activity and recent development. Below is an overview by sector, including notable businesses and new projects in the area.
+
+##### **Industrial & Distribution Facilities**
+
+* Family Dollar Distribution Center (DC) – A massive 900,000 sq. ft. warehouse and distribution facility at 3101 E. Interstate 20[^1]. This regional distribution hub has been in operation since the late 1990s and is a major employer in the area.  
+    
+* Saulsbury Industries Headquarters – The corporate headquarters of Saulsbury (an engineering, procurement, and construction firm) is located at 2951 E. Interstate 20[^2]. This facility anchors the industrial presence along the corridor and includes large office and shop spaces supporting energy-sector projects.  
+    
+* Standard Sales Distribution Warehouse – Standard Sales Co. (a beverage distributor) developed a 150,000 sq. ft. distribution warehouse on a 20-acre tract in the Odessa Industrial Development Corporation’s JBS Business Park[^3]. This facility, just south of Business I-20 near JBS Parkway, expanded the area’s industrial base in the 2010s by providing a modern logistics center for beverage distribution.  
+    
+* Union Pacific Odessa Railport – A major transloading rail facility opened in 2013 at the intersection of Loop 338 and Business I-20 in east Odessa[^4]. Operated by Union Pacific Distribution Services, this “railport” handles oilfield pipe, sand, and bulk materials, reducing truck traffic and supporting the region’s oil and gas industry. Its presence has solidified this neighborhood as a key logistics hub.  
+    
+* Oilfield Service & Manufacturing Firms – Numerous energy-sector service companies occupy this corridor. For example, Tarquin (an industrial chemical supplier) operates a facility on E. Pool Road[^5], and Holloman Corp. (a pipeline construction firm) has a yard on SE Loop 338 in this area[^6]. These and other oilfield service businesses take advantage of the highway access for moving equipment and supplies.  
+    
+* FedEx Freight Center – A FedEx Freight shipping terminal is located near the Grandview exit (Exit 118\) at 200 S. Grandview Avenue[^7]. This less-than-truckload (LTL) freight facility serves as a regional logistics center for FedEx, handling commercial freight and supporting Odessa’s industrial and commercial distribution needs.
+
+##### **Retail & Highway Service Businesses**
+
+* **Pilot/Flying J Travel Center** – A major truck stop and travel plaza at the SE Loop 338 interchange (5900 E. Interstate 20\) caters to highway travelers and truckers[^8]. The Flying J offers fuel (diesel and gasoline), a convenience store, and amenities like showers. An on-site McDonald’s restaurant serves food to travelers, making it a busy 24-hour interstate service location.  
+    
+* **Alon/7-Eleven Fuel Station (Grandview Exit)** – At the Grandview Avenue interchange, an Alon gas station (part of the 7-Eleven/Alon network) is located at 1515 S. Grandview Ave[^9]. This station provides fuel, convenience items, and quick snacks right off Exit 118, capturing local and pass-through traffic.  
+    
+* **Cummins Sales & Service** – A diesel engine and heavy truck service center is situated at 1210 S. Grandview Avenue, just north of I-20[^10]. Cummins Sales & Service offers parts and maintenance for commercial trucks and oilfield equipment. Its presence underlines the corridor’s role in supporting trucking and industrial machinery needs.  
+    
+* **Other Services** – The I-20 frontage and nearby streets host various auto/truck-oriented businesses. For instance, a **Fastenal** industrial supply outlet is located at 320 E. I-20 (Suite A) serving local businesses with tools and hardware[^11].  Additionally, a **Cummins** engine dealership/service (noted above) and other truck service providers capitalize on the easy interstate access. These retail-service businesses primarily target the industrial market and travelers rather than traditional shoppers.
+
+##### **Hospitality (Hotels and Lodging)**
+
+* **MCM Grande Hotel & FunDome** – A full-service hotel and conference center at 6201 E. Business I-20. The MCM Grande is a locally prominent hotel featuring a large indoor atrium (“Fun Dome”) with a pool and recreational facilities. It often hosts events, banquets, and accommodates travelers and corporate guests from the energy sector.  
+    
+* **La Quinta Inn Odessa** – A nationally branded limited-service hotel located at 5001 E. Business I-20. This La Quinta offers mid-tier accommodations for travelers, with close proximity to both the interstate and Business 20\. It is frequently used by business travelers and tourists looking for easy highway access.  
+    
+* **Sleep Inn & Suites and Travelodge** – Two neighboring hotels on East Business 20 serve additional lodging demand. The Sleep Inn & Suites (3101 E. Business Loop 20\) and an adjacent Travelodge by Wyndham (3075 E. Business 20\) provide economy and mid-range accommodations[^12]. These hotels were added in recent years as the area’s hotel inventory expanded to support growing visitation (particularly from oil industry workers during boom periods).  
+    
+* **Hawthorn Suites by Wyndham** – An extended-stay hotel at 201 S. JBS Parkway (near the I-20/Business 20 intersection) offers suite-style rooms for longer-term guests. This hotel caters to business travelers (especially those on extended assignments in the oilfield sector), given its proximity to the industrial parks and the highway.
+
+##### **Recent Commercial Developments and Trends**
+
+* **Liberty Energy Regional Headquarters (Under Construction)** – In March 2024, Liberty Energy broke ground on a new $50 million regional headquarters facility in the Leeco Industrial Park, between U.S. Hwy 80 (Business 20\) and I-20[^13]. This state-of-the-art campus will include corporate offices, a large workshop, a 50,000 sq. ft. warehouse, and a truck wash. Supported by the Odessa Development Corporation (with grants/incentives), the project will retain about 1,000 jobs in Odessa and add up to 500 new full-time positions. This significant investment illustrates the continued growth of industrial operations along the I-20 corridor.  
+    
+* **Ongoing Industrial Expansion** – Over the past decade, the neighborhood has seen steady commercial real estate growth driven by the energy sector. The opening of the Union Pacific **Odessa Railport** in 2013 (a bulk transloading facility) boosted freight capabilities in the area[^14]. Around the same time, **Standard Sales** built its large beverage distribution center near JBS Parkway[^15]. These developments, along with numerous oilfield service yards, have solidified the area as an industrial hub. The current Liberty Energy project continues this trend, and additional land along E. Pool Rd and Loop 338 is being marketed for future commercial/industrial use[^16], indicating a positive outlook for further development.
+
+In summary, the I-20 East Odessa corridor (from Grandview to Loop 338\) is characterized by industrial and logistics facilities (distribution centers, rail/trucking services, oilfield support companies), highway-oriented retail services (fuel, truck repair, convenience food), and a cluster of hotels catering to travelers and oil industry personnel. **Notable recent developments** – especially the Liberty Energy headquarters – demonstrate ongoing investment in the area’s commercial real estate[^17]. These trends are important in a commercial/residential appraisal context, as they reflect the economic vitality of the neighborhood, the demand for commercial land use, and the potential influences on property values in the vicinity.
+
+[^1]:  [Family Dollar Distribution Center \- Panjiva](https://panjiva.com/Family-Dollar-Distribution-Center/2322119#:~:text=Family%20Dollar%20Distribution%20Center%20,Odessa%2C%20Texas%2C%20United%20States%2C%2079766)
+
+[^2]:  [Contact | Saulsbury Industries | Engineering, Procurement, Construction](https://www.saulsbury.com/contact/#:~:text=Corporate%20Headquarters)
+
+[^3]:  [Development projects underway in Odessa | Texas Real Estate Research Center](https://trerc.tamu.edu/news-talk/development-projects-underway-in-odessa/#:~:text=Business%20I,to%20begin%20in%20May)
+
+[^4]:  [UP: The Proof is in the Railport](https://www.up.com/aboutup/community/community_ties/1104_odessa-railport.htm#:~:text=to%20long)
+
+[^5]:  [Tarquin, 1911 E Pool Rd, Odessa, TX 79766, US \- MapQuest](https://www.mapquest.com/us/texas/tarquin-370155638#:~:text=Tarquin%2C%201911%20E%20Pool%20Rd%2C,of%20industrial%20chemicals%20and)
+
+[^6]:  [Holloman Corporation, 190 SE Loop 338, Odessa, TX 79766, US](https://www.mapquest.com/us/texas/holloman-corporation-270359812#:~:text=Holloman%20Corporation%2C%20190%20SE%20Loop,and%20maintenance%20company%20in)
+
+[^7]:  [FedEx Freight | Service Center Information](https://www.fedexfreight.fedex.com/locationsCC.do?ccid=ODS&city=ODESSA&zipcd=79761-5620#:~:text=Service%20center%20%C2%A0%C2%A0%20ODS%20ODESSA,5767%20Manager%3A%20STEVE%20LIND)
+
+[^8]:   [All Businesses at Exit 121 (TX-338 Loop; Odessa) along I-20 in Texas | iExit Interstate Exit Guide](https://www.iexitapp.com/Texas/I-20/Exit%20121/12175#:~:text=Alon%20Right%20%28W%29%20,75%209) 
+
+[^9]:   [All Businesses at Exit 118 (Farm to Market 3503; Grandview Ave) along I-20 in Texas | iExit Interstate Exit Guide](https://www.iexitapp.com/Texas/I-20/Exit%20118/11005#:~:text=Fuel) 
+
+[^10]:  [Cummins Sales and Service in Odessa, TX \- Trucker Path](https://www.truckerpath.com/location-details/repair-shops/tx/odessa/cummins-sales-and-service?id=11127503#:~:text=Cummins%20Sales%20and%20Service%20%C2%B7,102.33957767486572%2C)
+
+[^11]:  [Fastenal, 320 E Interstate 20, Ste A, Odessa, TX 79766, US](https://www.mapquest.com/us/texas/fastenal-369977962#:~:text=Fastenal%2C%20320%20E%20Interstate%2020%2C,11)
+
+[^12]:  [Book Your Stay \- Discover Odessa](https://discoverodessa.org/things-to-do/book-your-stay/#:~:text=Book%20Your%20Stay%20,%28432%29)
+
+[^13]:  [Liberty Energy, ODC Break Ground on $50M Regional HQ](https://www.odessatex.com/odessa/media-center/news/p/item/56374/liberty-energy-odc-break-ground-on-50m-regional-hq#:~:text=Liberty%20Energy%20broke%20ground%20on,warehouse%20and%20truck%20wash%20facility)
+
+[^14]:  [UP: The Proof is in the Railport](https://www.up.com/aboutup/community/community_ties/1104_odessa-railport.htm#:~:text=The%20railport%2C%20directly%20served%20by,pipe%20and%20bulk%20transloading%20facility)
+
+[^15]:  [Development projects underway in Odessa | Texas Real Estate Research Center](https://trerc.tamu.edu/news-talk/development-projects-underway-in-odessa/#:~:text=Business%20I,to%20begin%20in%20May)
+
+[^16]:  [TBD E Pool Rd, Odessa, TX 79760 | MLS\#: 147101](https://www.cbapex.com/for-sale/tbd-e-pool-rd-odessa-tx-79760/45-207699#:~:text=TBD%20E%20Pool%20Rd%2C%20Odessa%2C,P%20community%20of%20Odessa%2C)
+
+[^17]:  [Liberty Energy, ODC Break Ground on $50M Regional HQ](https://www.odessatex.com/odessa/media-center/news/p/item/56374/liberty-energy-odc-break-ground-on-50m-regional-hq#:~:text=Liberty%20Energy%20broke%20ground%20on,warehouse%20and%20truck%20wash%20facility)"
+Neighborhood,Example,"Address - 1409 Connell St, Midland, TX 79701
+
+Boundaries -
+North: Business 20
+East: S Lamesa Rd
+South: Interstate 20
+West: S Garfield St","#### Boundaries
+
+The subject neighborhood can be broadly defined as that portion of south-central Midland, Midland County, Texas, bounded by Business Interstate 20 (BI-20) to the North, S Lamesa Rd to the East, Interstate 20 (I-20) to the South, and S Garfield St to the West. The subject property, located at 1409 Connell St, is situated within the interior of this defined area, benefiting from its position relative to these key transportation corridors. These boundaries are primarily defined by major roadways which act as man-made barriers, delineating the subject neighborhood from adjacent areas that may exhibit differing land use characteristics, market influences, or accessibility patterns.
+
+The northern boundary of the subject neighborhood is formed by Business Interstate 20 (BI-20), known locally in segments as W Wall St or E Wall St. This major east-west thoroughfare typically functions as a four-lane divided highway, often accompanied by parallel one-way frontage roads on both its north and south sides, effectively increasing its capacity and access points. BI-20 experiences significant daily traffic volume, comprising a mix of local commuters, commercial traffic, and regional travelers accessing various points within Midland. Land use along this corridor within the neighborhood context is predominantly commercial and light industrial, featuring retail outlets, automotive services, motels, restaurants, and various business park developments. Its character as a high-traffic, commercially oriented arterial serves as a distinct functional demarcation, separating the subject neighborhood from potentially different land use concentrations or market dynamics located further north.
+
+S Lamesa Rd delineates the eastern perimeter of the subject neighborhood. This roadway serves as a significant north-south collector/arterial street, generally configured as a two- to four-lane road depending on the specific segment. It facilitates considerable local traffic movement, providing essential connectivity between the major east-west corridors of I-20 and BI-20, as well as access to the interior residential and commercial properties within the neighborhood. Adjacent land uses along S Lamesa Rd typically present a mix of commercial and service-oriented businesses fronting the road, transitioning to established single-family residential subdivisions, and potentially some multi-family complexes, further to the east. S Lamesa Rd functions as a transitional boundary, marking the eastern extent where the immediate influence of the neighborhood's mixed-use core gives way to more predominantly residential areas.
+
+The southern boundary is definitively established by Interstate 20 (I-20), a major component of the U.S. Interstate Highway System. I-20 is a multi-lane (typically six or more lanes total), limited-access freeway engineered for high-volume, high-speed regional and interstate traffic, including substantial commercial freight movement. It is paralleled by continuous frontage roads which provide access to adjacent properties and interchanges. However, currently this section of interstate 20 in the Midland area is under intense construction of both the main highway and the frontage roads on both sides as needed to keep the traffic moving.  However, there are times when it backs up and delays transit. Land utilization immediately flanking the I-20 corridor is strongly influenced by the highway itself, characterized by highway-support uses such as lodging facilities, fuel stations, quick-service restaurants, and increasingly, logistics centers and industrial parks. I-20 represents a significant physical and psychological barrier, clearly separating the subject neighborhood from distinct development patterns, often more industrial or sparsely developed land, situated to its south. Its physical presence and high traffic volumes limit direct connectivity except at designated interchanges.
+
+S Garfield St forms the western boundary of the subject neighborhood. This roadway functions as a primary north-south arterial within the city of Midland, typically configured as a four-lane road, potentially with a center turn lane in sections, designed to accommodate substantial traffic flow. S Garfield St experiences high daily traffic counts, serving as a critical connector linking southern Midland, including access points near I-20, with the central business district and areas north towards BI-20. The corridor along S Garfield St is characterized by intensive commercial development, including retail centers, professional offices, financial institutions, restaurants, and various service establishments, representing a major commercial artery for the city. Functionally, S Garfield St delineates the western edge of the subject neighborhood, separating its internal land use mix from the continuous commercial development along the arterial itself and other distinct districts further west.
+
+#### Analysis Overview by Sector
+
+This area exhibits a mix of commercial, light industrial, service, and some residential uses, heavily influenced by the major roadways that form its perimeter.
+
+##### **Industrial & Commercial Activity:**
+
+* The northern boundary along BI-20 is characterized by significant commercial and light industrial activity, including business parks, automotive services, and retail outlets. This high-traffic arterial separates the neighborhood from potentially different land uses further north.
+
+* The southern boundary along I-20 features highway-support uses and increasing logistics/industrial park development, driven by the interstate's role in regional freight movement. I-20 acts as a distinct barrier to the south.
+
+* While specific major industrial employers *within* the core neighborhood are not detailed in readily available public data, the surrounding area hosts numerous oilfield service and manufacturing firms that utilize the access provided by the boundary roads. General industrial activity includes businesses involved in machine shops, manufacturing, and various oil & gas support services like chemical sales and drilling.
+
+* Rankin Highway (SH 349), a designated truck route connecting I-20 and BI-20 through this part of Midland, provides crucial north-south access for commercial and industrial traffic, supporting logistics for businesses within and around the neighborhood.
+
+* The broader Midland economy, heavily influenced by the energy sector, supports this industrial activity.
+
+##### **Retail & Highway Service Businesses:**
+
+* S Garfield St (Western Boundary) features intensive commercial development including retail centers, restaurants, financial institutions, and service businesses. El Rancho Boots is located at 900 S. Garfield St. Digital advertising exists at the intersection of Business 20 and Garfield, indicating commercial focus.
+
+* BI-20 (Northern Boundary) hosts retail outlets and restaurants alongside its commercial/industrial uses.
+
+* S Lamesa Rd (Eastern Boundary) has commercial and service businesses fronting the road, transitioning towards residential areas further east.
+
+* The I-20 corridor (Southern Boundary) is characterized by highway-support retail such as fuel stations and quick-service restaurants, catering primarily to travelers and the trucking industry.
+
+* Rankin Highway (SH 349\) serves as another significant commercial corridor in the vicinity, hosting various service businesses and contributing to the overall retail activity accessible from the neighborhood.
+
+##### **Hospitality (Hotels and Lodging):**
+
+* Several hotels are clustered near the neighborhood boundaries, particularly along the southern edge near I-20. These include:
+
+  * Comfort Inn Midland South I-20 (910 W I-20)
+
+  * TownePlace Suites Midland South/I-20
+
+  * Holiday Inn Express & Suites Midland South I-20
+
+  * Hampton Inn Midland South (2201 Camp St)
+
+* Lodging options are also present near the northern boundary, such as the Wyndham Garden Midland (3100 W Wall St). These establishments cater to business travelers, particularly those connected to the energy sector, and general travelers utilizing I-20 and BI-20.
+
+* The connectivity provided by Rankin Highway (SH 349\) between I-20, BI-20, and central Midland likely influences lodging demand and provides convenient access for guests staying at hotels near the neighborhood boundaries.
+
+##### **Recent Developments and Trends:**
+
+* **Infrastructure Upgrades:** The neighborhood boundaries are significantly impacted by ongoing and planned infrastructure projects.
+
+  * **I-20 Corridor Improvements:** A major TxDOT project is underway to improve the I-20 corridor through Midland-Odessa. This includes adding main lanes, widening shoulders, converting frontage roads to one-way (completed mid-2024), reconstructing interchanges, and potentially converting underpasses to overpasses, including at S Lamesa Road. These changes aim to enhance safety, reduce congestion, and improve access along the southern boundary.
+
+  * **BI-20 Improvements:** Work has occurred at railroad crossings along BI-20, including repairs at the Garfield St intersection following damage and a longer-term project involving paving, signals, and drainage improvements near N. Fairgrounds Rd (just east of this neighborhood) extending into 2025\.
+
+  * **Rankin Highway (SH 349\)** is part of the city's major arterial network and may be subject to future traffic flow adjustments or improvements as part of broader regional transportation planning, potentially impacting access patterns.
+
+* **Commercial/Industrial Market:** While specific large-scale developments *within* the defined bounds weren't prominent in recent searches, the general Midland industrial market remains strong, driven by energy logistics. The focus along the boundary corridors, especially I-20, appears geared towards capitalizing on transportation access.
+
+In summary, the subject neighborhood is strategically located between two major east-west corridors (I-20 and BI-20) and bounded by significant north-south arterials (S Garfield St and S Lamesa Rd). Rankin Highway (SH 349), another key north-south arterial and designated truck route, also runs through this part of Midland, connecting I-20 to areas north towards the central business district and BI-20, further enhancing connectivity. Land use is mixed but heavily influenced by these transportation routes, featuring commercial and light industrial activity along BI-20, intensive commercial development along S Garfield St, highway support services along I-20, and transitional uses along S Lamesa Rd. Significant ongoing infrastructure projects on I-20 and BI-20 are enhancing accessibility and modernizing the transportation framework around the neighborhood."
+Neighborhood,Example,"Address - 360 SE LOOP 338, Odessa, TX 79766, Odessa, Ector County, TX 79766
+
+Boundaries -
+North: Business 20
+East: Loop 338
+South: Loop 338
+West: Loop 338","### **Neighborhood Analysis**
+
+
+#### Boundaries
+
+#### 
+
+The subject neighborhood can best be described as the southern portion of Odessa, Ector County, Texas, enclosed by Business Interstate 20 to the North, and circumscribed by SE Loop 338, which forms the eastern, southern, and western boundaries. The subject property, located at 360 SE Loop 338, is situated in the southern portion of this defined area with direct frontage on the loop.
+
+These boundaries are all man-made, traffic thoroughfares that serve to delineate the subject neighborhood from areas with distinctly different land use patterns, such as the more densely developed residential and commercial areas to the north and west, and open rangeland to the south and east.
+
+The northern boundary is formed by Business Interstate 20 (BI-20), also known as E 2nd Street. This roadway is a primary east-west traffic artery, configured as a multi-lane divided highway with significant daily traffic volume. Land use along this corridor is intensely commercial, featuring automotive services, hospitality properties, and light industrial businesses, an office strip center and a few retail establishments. BI-20 serves as a major commercial corridor for the city, and its high traffic and visibility support a wide range of enterprises. It functions as a clear demarcation, separating the mixed-use character of the subject neighborhood from the more established urban grid to the north.
+
+SE Loop 338 forms the eastern, southern, and western perimeters of the subject neighborhood. As a major circumferential highway, SE Loop 338 is a multi-lane, divided, high-speed thoroughfare designed to facilitate regional traffic flow and bypass the city center. It handles a substantial volume of commercial and heavy truck traffic, providing critical connectivity between BI-20, Interstate 20 (located within the neighborhood), and other state highways. Land use along the loop is varied; the eastern segment is dominated by heavy industrial uses, including  oilfield service yards and vacant land with some oilfield drill sites scattered around. The southern portion, where the subject property is located, is characterized by larger tracts of undeveloped land, farm land, some larger tracts with industrial utilizations, some public utility sites, representing a significant area for future development. The western segment of the loop transitions back towards more established commercial and residential areas, along much vacant land with scattered drill sites with very little developed land. "
+Neighborhood,Example,"Address: 1604 S Burleson Ave, McCamey, Upton County, TX 79752
+
+Boundaries
+North Mc Arthur St
+East Brown Ave
+South Country Club Dr
+West Messa Ave","#### Boundaries
+
+The subject neighborhood can best be described as that portion of southern McCamey, Upton County, Texas, situated between McArthur St to the North, Brown Ave to the East, Country Club Dr to the South, and Mesa Ave to the West. The subject property is located in the southeastern quadrant of this primarily residential and community-focused area.
+
+These boundaries are man-made local streets that serve to delineate the subject neighborhood from adjacent areas with potentially different land use characteristics, such as the more concentrated commercial development and rural areas. There are also businesses and other commercial development along the city's main thoroughfares and there is open rangeland to the south and west of these boundaries.
+
+The northern boundary is formed by Mc Arthur St, a two-lane local residential street. Traffic flow is minimal and primarily serves the residents of the immediate area and provides access to McCamey High School, which is a significant landmark along this boundary. The streetscape is characterized by single-family homes, with land use being almost exclusively residential. McArthur St provides direct connectivity to Burleson Ave, a primary north-south street in the city, linking this neighborhood to the central business district further north.
+
+Brown Ave, a two-lane local street, delineates the eastern perimeter of the neighborhood. The physical condition of the road is consistent with other local streets in the area, designed for low-speed residential traffic. Adjacent land use is uniformly single-family residential, with some vacant platted lots interspersed. This boundary effectively separates the established residential core of the neighborhood from similar housing developments to the east, maintaining a consistent and stable residential character throughout the area.
+
+The southern boundary is established by Country Club Dr, a two-lane local road that provides access to the McCamey Country Club and its associated 9-hole golf course. This roadway marks a distinct transition in land use from residential to recreational and open space. Traffic is generally light, increasing moderately with patrons of the golf course. The presence of the country club serves as a key amenity and stabilizing influence on the neighborhood, separating the residential lots from the undeveloped rangeland that lies further south.
+
+Mesa Ave forms the western boundary of the subject neighborhood. It is a two-lane residential street with low traffic volume, characteristic of the area's internal road network. The primary land use along Mesa Ave is single-family residential, consistent with the rest of the neighborhood. This roadway marks the western extent of the developed residential grid in this part of McCamey, beyond which lies largely undeveloped and vacant land, defining a clear edge to the suburban development.  
+
+#### Analysis Overview by Sector
+
+This area is characterized by a stable, residential land use pattern with limited internal commercial activity, deriving its economic context from the broader McCamey area, known as the ""Wind Energy Capital of Texas.""
+
+**Industrial & Commercial Activity:**
+
+* **General:** The broader McCamey area supports the oil and gas and wind energy industries, with service companies and aggregate suppliers located outside the defined neighborhood, typically along major highways like US-67.
+
+**Retail & Highway Service Businesses:**
+
+* **General:** The city's primary retail and service corridor is situated north of the subject neighborhood, closer to the intersection of the main highways. This includes banks, local shops, and restaurants. RV repair and service businesses, catering to the mobile workforce, operate in the wider region.
+
+**Hospitality (Hotels and Lodging):**
+
+* **General:** McCamey has limited lodging options, such as the La Bonita Inn & Suites, located in the central part of the city on E 3rd (Hwy 385 /Hwy 67). These establishments cater to business travelers, often associated with the energy sector, and visitors to the area.
+
+**Recent Developments and Trends:**
+
+* **Development:** The primary trend in the immediate neighborhood is stability, with the area being largely built-out with single-family homes. There is undeveloped land to the west and south, offering long-term potential for residential expansion or other uses.  
+* **Market:** McCamey is promoted for its affordable housing and low cost of living, which is attractive to families and those working in the regional energy sector. The housing market consists of a small inventory of homes for sale.  
+* **Economic Drivers:** The local economy's health is tied to the oil, gas, and renewable energy industries. The presence of companies like Arcosa Aggregates and various oilfield service providers in the broader area indicates a continued industrial base that supports the local community. There are no major infrastructure projects noted for the immediate boundary streets, which appear to be in stable condition.
+
+In summary, the subject neighborhood is a well-defined residential enclave in southern McCamey. Its boundaries are local streets that separate it from key community landmarks like the high school and the country club, the Upton County Airport as well as from undeveloped land. Connectivity to the city's main commercial corridor along Burleson Ave to the north is direct. The land use is homogenous and stable, with minimal internal commercial development, reflecting a classic small-town residential district supported by the broader industrial and commercial economy of the region."
+Neighborhood,Example,"Address: 810 Myer Lane, Kermit, Winkler County, TX 79745
+
+Boundaries
+The entire city of Kermit and the businesses outside
+the city limits"," Kermit is situated about 46 miles NW of Odessa. Kermit is part of the
+Permian Basin. Highway 385 is a main traffic artery bringing traffic from the north
+and south through West Texas. State Highway 302 connects Kermit to Odessa. Hwy
+18 is another main traffic artery in Kermit connecting the city North into New Mexico
+(Eunice and Hobbs) and south to Monahans. Hwy 18 intersects with Interstate 20 to
+the south and further south connects to Interstate 10.
+
+Kermit has some new development over the last several years due to the
+incorporation of Wind into the energy sector and continues Oil Field related
+Businesses. Several truck stops, a hotel and RV parks at the edge of town on the east have been built. The Kermit Independent School District and Winkler County
+Hospital District are located in the city which is the county seat. Kermit is on the Texas-New Mexico Railway. Kermit has a senior citizens recreation center and the
+Winkler County Library. According to the Kermit ISD website:
+
+""It began as a supply center for the scattered ranches of the area. Kermit became
+the seat of Winkler County when the county was organized in 1910. The first
+public school and the post office opened the same year. The town was named for
+Kermit Roosevelt, son of President Theodore Roosevelt. The younger Roosevelt
+visited the T Bar Ranch in northern Winkler County to hunt antelope a few months
+before the town was named. In 1916 the county suffered a drought. Many
+homesteaders and ranchers were forced to leave. In 1924 only Ern Baird's family
+remained in the town. Only one student attended school in the county for five
+months of 1924. Only three houses and the courthouse were in use by 1926. On
+July 16, 1926, however,  oil was discovered in Hendrick oilfield, near Kermit, and
+the town experienced a boom. In 1927 a population of 1,000 was reported; by
+1929 that number increased to 1,500. On March 4, 1929, the Texas-New Mexico
+Railway reached the town.
+
+The population declined drastically in the early 1930s, but both population and
+business figures rose at the end of the 1930s, when 2,700 residents and 180
+businesses were listed. On February 15, 1938, residents voted to incorporate.
+During the 1940s the oil boom caused real estate prices to double. Housing was
+scarce, and some people lived in tents. A bank was opened by 1945. The grade
+school had to be enlarged, and a hospital was built. In the 1950s the town
+continued to grow; housing additions were built. By 1960 the town had a
+population of more than 6,000 and 215 businesses. Flooding became a problem
+because of the flat terrain. By the 1960s Kermit had 10,465 people and 260
+businesses. New crown streets were constructed to solve the flooding problem,
+and more housing additions were built. The town moved the last working wooden
+derrick in the Permian Basin from Loving County to Pioneer Park in Kermit in 1966
+as a symbol of the importance of the oil industry to the economy of Kermit and
+Winkler County. In the 1970s and 1980s the population of Kermit bounced
+between 8,500 and 6,912, and the number of businesses moved between 200 and
+116. Improvements were made in city services, and more housing additions were
+built. The 1990 United States census set the population of Kermit at 6,875. By 2000
+the population had dropped to 5,714. Although the 2010 census places Kermit
+with under 6000 residents, population has been growing recently due to the
+recent oil boom. Kermit is on the Texas-New Mexico Railway and State highways
+18, 302, 703, and 115 seven miles northwest of Wink in central Winkler County. It.""
+
+https://www.kermitisd.org/o/kisd/page/about-kermit-texas
+
+The larger market area includes both Odessa and Midland and the area between the cities particularly on the connecting traffic arteries. Residents and visitors alike can spend their leisure time attending one of the many concerts or events at the Wagner Noel Performing Arts Center, watching a AA baseball game at the Rockhound's Security Bank Stadium, attending the Jackalopes hockey game at the Ector County Coliseum, cheering on high school football under the ""Friday Night Lights"" at the Grande or Ratliff Stadiums, attending a party or concert at Horseshoe Arena or La Hacienda Events Center, or visiting the Petroleum Museum, Museum of the Southwest, or George Bush childhood home. Both hub cities have new convention centers to bring in even more events and conferences. Many activities and events are scheduled in the Petroplex every weekend and every weekday. 
+
+The population in Kermit, according to City-Data.com is around 6,486 (2019 data is
+the latest report) which is up 13.5 % since 2000. The median income in Kermit is
+$56,161. The Permian Basin is home to many young professionals looking to begin a career or grow a business of their own. The median age person in Kermit is 32.7.
+The estimated per capita income in 2019 was $23,912. The median house or condo
+value in 2019 was $69,240. The median gross rent ins 2019 was $895. The
+percentage of residents living in poverty in 2019 was 16.1%. City Data.com races in
+Kermit, TX as of 2019 was 69.1% Hispanic, 26.9% white alone, 2.5% black alone,
+American Indian alone 1.2% and people of two or more races was 0.7%.
+
+The Permian Basin market area is ever changing with sometimes unpredictable
+patterns in oil production causing some fluctuation in property values. The local
+market has indicated extreme measures of growth through an oilfield boom starting around 2012. The price per barrel of oil maxed out around $155.00 in June 2014.
+However, a steady decline started around October of 2014 but futures closed higher December 10, 2014. At the beginning of 2015, the price per barrel was around $55.00. By June 19, 2015 the price was around $63.00. Then, there was a decline continuing until around January of 2016 when prices settled below $30.00 a barrel according to a Wall Street Journal article dated January 15, 2016. However, around October of 2016, prices slowly increased. During March and April of 2017, the crude oil prices closed around $50.00 up to $56.00 per barrel, similar to prices in the middle of 2015. Continuing through the end of 2017 the value continued to remain in that range. MSN news reported that oil jumped 2 percent to more than a 3-year high on January 9, 2018 to a U.S. crude futures price of $63.19 a barrel the highest level since December 10, 2014 when they hit $63.43. The average closing price for crude oil was $65.23 in 2018. In 2019 the average closing price was $56.99. Oil barrel prices fluctuated in 2019 between ~$50 & ~$60/barrel, but continued to slowly decline in early 2020, dropping below $20 in March 2020, and below $0 in April 2020. The average closing price in 2020 was $39.68. Barrel prices have since
+increased to around $45 again and even higher up to $75.21 in 2021. Since 2022, prices have gone up and skyrocketed during the Russian invasion of Ukraine to
+113.34 on March 2, 2021.
+
+The subject property is located in Kermit on Myer Lane. The immediate subject
+neighborhood boundaries are the entire city of Kermit and the businesses outside
+the city limits. Residential homes vary from very old to very new along with
+manufactured housing and RV parks that make up the one-unit housing. Other
+land use consists of well sites, parks, school fields and vacant land.
+
+For more demographic, economic, and geographic information for the area refer to
+the following websites:
+https://www.co.winkler.tx.us/page/winkler.WinklerCountyLibraryKermit
+http://www.city-data.com/city/Kermit-Texas.html
+https://www.kermitisd.org/o/kisd/page/about-kermit-texas
+https://www.tshaonline.org/handbook/entries/kermit-tx http://winklercad.org/"
+Highest and Best Use,System Prompt,,"You are a commercial property appraiser working on a comprehensive appraisal report for a buy-sell legally-binding contract between parties. You are to write the ""Highest and Best Use"" section.
+
+You will be provided information about the subject property in CSV and/or text format. You must analyze this data to generate the report.
+
+### **Purpose and Goals**
+
+* To accurately describe the 'Highest and Best Use' of a commercial property, breaking it down into ""Site As Vacant"" and ""Site As Improved.""
+* To Apply the four criteria of Highest and Best Use: 1. Physically Possible, 2. Legally Permissible, 3. Financially Feasible, and 4. Maximally Productive.
+* To leverage provided property data to generate precise, factual descriptions.
+
+### **Behaviors and Rules**
+
+**1. Initial Data Processing:**
+
+* Parse the input for: Acreage, Square Footage (Land and Building), Location (City, County, Roads), Topography, Flood Zone status, Utilities, Zoning/ETJ status, and current Property Type (e.g., Industrial, Office, Retail).
+
+**2. Section 1: Site As Vacant (Generate the following subsections)**
+
+* **Header:** `### **Site As Vacant**`
+
+* **Sub-Header:** `#### **Physically Possible**`
+  * Describe location, acreage, and land SF (e.g., ""contains approximately X acres (~Y square feet)"").
+  * Describe topography, soil suitability, and **Flood Zone status** (state clearly if it is or is not in a FEMA special flood hazard area).
+  * Detail utilities (Water/Sewer/Electric). Distinguish between public municipal services and private systems (well/septic) if noted in data.
+  * Comment on shape/size suitability for development.
+  * Describe access/frontage on primary traffic arteries.
+
+* **Sub-Header:** `#### **Legally Permissible**`
+  * State the zoning classification.
+  * **Crucial:** If outside city limits, check if it falls into an **ETJ (Extraterritorial Jurisdiction)**. If so, mention that it may be subject to platting standards but not land use restrictions.
+  * Mention surrounding zoning/land use consistency.
+  * State that no private deed restrictions were uncovered (unless data says otherwise).
+
+* **Sub-Header:** `#### **Financially Feasible**`
+  * Start with the standard definition: ""Although the subject site legally and physically allows for..."" (Use the language from the new format example).
+  * Analyze the neighborhood context based on the property type. (e.g., If the subject is Industrial, mention demand for industrial/oilfield services. If Retail, mention consumer demand).
+  * Assess visibility and exposure based on the road frontage.
+  * Conclude the most feasible use (e.g., ""industrial or office-warehouse development"" or ""commercial retail development"").
+
+* **Sub-Header:** `#### **Maximally Productive**`
+  * State that among financial feasible uses, the one producing the highest value is the Highest and Best Use.
+  * Conclude that the maximally productive use as though vacant is for **[Insert Broad Category, e.g., Commercial Development]**.
+
+* **Sub-Header:** `#### **Highest and Best Use As Though Vacant Conclusion**`
+  * A single sentence concluding the HBU (e.g., ""Based on the analysis... the conclusion is for commercial development."").
+
+**3. Section 2: Site As Improved (Generate the following subsections)**
+
+* **Header:** `### **Site As Improved - Primary Site**`
+
+* **Content Generation:**
+  * **Intro:** ""The four criteria previously mentioned must also be met for the site's proposed improvements to be representative of the highest and best use.""
+  * **Description:** State the current improvement size (Building SF) and land size. Mention that improvements are typical/not unusual for the area.
+  * **Value Logic:** State that the value As Improved exceeds the value As Vacant; therefore, an informed purchaser would leave the improvements intact.
+  * **Conclusion:** Walk through the logic:
+    * It is Physically Possible (existing structure works).
+    * It is Legally Permissible (zoning allows it).
+    * No deed restrictions limit it.
+    * **Final Call:** ""As a result, the highest and best use for the site as improved is for its existing use as [Insert Current Use, e.g., a commercial utilization/office-warehouse].""
+
+### **Output Format & Tone**
+
+* Use the exact Markdown headers provided above (### and ####).
+* Tone: Professional, authoritative, and appraisal-standard.
+* **Do not** make up data. If Flood Zone or Utility specifics are missing, use general professional language (""assumed adequate"" or ""typical for the area"")."
+Highest and Best Use,Ignore,,"Site as Vacant - Physical Description
+
+
+
+""The subject site contains approximately 0.321 acres or ~13,982.76 square feet north of Interstate 20 in the south eastern part of Midland, Texas in Midland County. The topography and the soil and subsoil conditions appear to be adequate. In addition, the site contains current access to electricity and City of Midland water and sewer. The subject property appears to be of sufficient size and shape to accommodate a wide range of possible uses. The site is primarily surrounded by light industrial or retail uses. Access to the subject’s neighborhood is considered average to good due to its location near area primary traffic arteries.""
+
+
+
+Site as Vacant - Zoning
+
+
+
+""The subject property is classified under the City of Midland's zoning ordinance as C, Commercial District. The surrounding areas are a mix of commercial and retail zoning. The immediate vicinity is predominantly characterized by commercial uses, consistent with the subject's zoning, with regional retail developments situated along the nearby major thoroughfare (Rankin Hwy) and adjacent blocks. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal, which would further restrict its development."""
+Highest and Best Use,Ignore,,"Site as Vacant - Physical Description
+
+
+
+""The subject site contains approximately 10.39 acres or ~452,671 square feet south of Interstate 20 in the south eastern part of Odessa, Texas in Ector County. This acreage is in 10 contiguous parcels in a mostly rectangular shape with level topography and apparently ample drainage. Out of the 10.39 acres, 4.67 acres is considered the primary site while the remaining 5.72 acres is considered Excess Land. The topography and the soil and subsoil conditions appear to be adequate. In addition, the site contains current access to electricity and internet. The subject property appears to be of sufficient size and shape to accommodate a wide range of possible uses. The excess land does not have water rights as they were retained by a former owner. The site is primarily surrounded by industrial uses. Access to the subject’s neighborhood is considered average to good due to its location near area primary traffic arteries.""
+
+
+
+Site as Vacant - Zoning
+
+
+
+""The subject site is located outside the city limits of Midland and Odessa and is unregulated by the zoning restrictions. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal, which would further restrict its development. """
+Highest and Best Use,Ignore,,"Site as Vacant - Physical Description
+
+""The subject site contains approximately 0.207 acres or ~9,004 square feet on the west side of South Burleson Avenue (US 385) in the central part of McCamey, Texas in Upton County. The topography and the soil and subsoil conditions appear to be adequate for development. In addition, the site has access to public electricity, water, and sewer. The subject property appears to be of sufficient size and shape to accommodate a range of potential commercial uses. The site is primarily surrounded by residential and commercial uses as well as vacant land . Access to the subject’s neighborhood is considered good due to its location and frontage along FM 305, extending from Hwy 385, a primary traffic artery. ""
+
+Site as Vacant - Zoning
+
+""The subject site is located inside the city limits of McCamey, Texas. The City of McCamey does not have a formal zoning ordinance; however, the property is classified for commercial use. The surrounding area is a mix of commercial and residential uses, consistent with a small-town thoroughfare. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal."""
+Highest and Best Use,Example,,"### **Site As Vacant**
+
+#### **Physically Possible**
+
+The subject site contains approximately 9.834 acres (\~428,369 square feet) located on SE Loop 338 in Odessa, Ector County, Texas. The topography and the soil and subsoil conditions appear to be adequate for development, and the property is not located within a FEMA special flood hazard area. The site has access to electricity; however, water and sewer are serviced by a private water well and septic system, respectively. The subject property is a corner lot of sufficient size and shape to accommodate a variety of potential commercial or industrial uses. The site is primarily surrounded by similar commercial and industrial properties. Access to the subject’s neighborhood is considered good due to its location and frontage along SE Loop 338, a primary traffic artery.
+
+#### **Legally Permissible**
+
+The subject property is located outside the city limits of Odessa in Ector County and is therefore not regulated by a specific municipal zoning ordinance. However, the site does fall within the City of Odessa's Extraterritorial Jurisdiction (ETJ), which may subject it to city ordinances related to platting and development standards rather than land use restrictions. The surrounding properties share this characteristic of being located in the county and outside formal municipal zoning districts. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal.
+
+#### **Financially Feasible**
+
+Although the subject site legally and physically allows for the development of a wide variety of uses, only those which produce income and/or a return ample to satisfy operating expenses, financial obligations, and capital amortization are considered financially feasible. As described in the Neighborhood Analysis section, the subject's defined neighborhood contains a variety of industrial developments, and key supply and demand factors support new construction, particularly for oilfield service-related companies. The property's location on SE Loop 338 affords it excellent accessibility, view, and exposure due to its highway frontage and corner lot position. Given these factors, the most feasible use would be for industrial or office-warehouse development. There are several single-tenant and owner-occupied industrial buildings nearby, and the physical features of the site are suitable for a build-to-suit or owner-occupied building. This would be the most feasible use under current market conditions.
+
+#### **Maximally Productive**
+
+Among the financially feasible uses, the use that results in the highest value (the maximally productive use) is the highest and best use. Considering the site's physical attributes, permissive zoning, and market feasibility, the maximally productive use as though vacant is for commercial development.
+
+#### **Highest and Best Use As Though Vacant Conclusion**
+
+Based on the analysis of all relevant factors, the conclusion of the highest and best use as though vacant is for commercial development.
+
+### **Site As Improved \- Primary Site**
+
+The four criteria previously mentioned must also be met for the site's proposed improvements to be representative of the highest and best use.  
+
+The subject property consists of a 17,000 SF commercial facility on 9.834 acres of land. The subject’s improvements are not unusual to find in the surrounding area. 
+
+The overall value of the building as improved exceeds the value of the property as vacant; therefore, an informed purchaser would leave the existing improvement intact.  Based on the information, the physical possibilities of the subject would be for use as a commercial property such as an office utilization such as the current office/warehouse facility. 
+
+The use of the land with the improvements, is physically possible and legally permissible based on the office zoning and surrounding developments. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal, which would further restrict its development.   The building is situated in such a manner as to provide reasonable on-site traffic flow. Currently there are no other legally permissible uses which would economically justify the demolition of existing improvements and property redevelopment. As a result, the highest and best use for the site as improved is for its existing use as a commercial utilization as explained above.   "
+Highest and Best Use,Example,,"### **Site As Vacant**
+
+#### **Physically Possible**
+
+The subject site contains approximately 2.15 acres (93,654 square feet) and is situated at a corner location. The physical characteristics of the site are suitable for development. The topography and the soil and subsoil conditions appear to be adequate, and the site has access to all public utilities, including electricity, water, and sewer. The property is not located within a FEMA-designated flood hazard area. The site's size and shape are sufficient to accommodate a range of potential commercial or office uses, which would be consistent with the surrounding mix of commercial, office, and single-family residential properties. Access to the subject’s neighborhood is considered good due to its location near primary local thoroughfares.
+
+#### **Legally Permissible**
+
+The subject property is located inside the city limits of Midland and is classified under the City of Midland's zoning ordinance as O1, Office District. The surrounding area features a mix of zoning classifications, including CB (Central Business District) to the south, PD (Planned Development) and RR (Regional Retail) to the east, and O1 and PD to the west. The area to the north is zoned SF2 (Single-Family Dwelling District), positioning the subject's O1 zoning as a transitional buffer between the central business districts and the residential neighborhood. No private deed restrictions that would further limit the potential uses of the subject property were uncovered during a normal course of investigation.
+
+#### **Financially Feasible**
+
+Although the subject site legally and physically allows for the development of a wide variety of uses, only those which produce income and/or a return ample to satisfy operating expenses, financial obligations, and capital amortization are considered financially feasible. As described in the Neighborhood Analysis section, the subject's defined neighborhood contains a variety of developments, and key supply and demand factors support new construction. The property's location on W Louisiana Ave affords it good accessibility, view, and exposure. Given these factors, the most feasible use would be for commercial or office development. There are several single tenant and owner occupied buildings nearby and the physical features of the site are suitable for a build to suit or owner occupied building. This would be the most feasible use under current market conditions.
+
+#### **Maximally Productive**
+
+Among the financially feasible uses, the use that results in the highest value (the maximally productive use) is the highest and best use. Considering the site's physical attributes, permissive zoning, and market feasibility, the maximally productive use as though vacant is for commercial development, likely for an office or a related commercial use that aligns with the O1 zoning designation.
+
+#### **Highest and Best Use As Though Vacant Conclusion**
+
+Based on the analysis of all relevant factors, the conclusion of the highest and best use as though vacant is for commercial development.
+
+### **Site As Improved \- Primary Site**
+
+The four criteria previously mentioned must also be met for the site's proposed improvements to be representative of the highest and best use.  
+
+The subject property consists of a 15,280 SF commercial facility on 2.15 acres of land. The subject’s improvements are not unusual to find in the surrounding area. 
+
+The overall value of the building as improved exceeds the value of the property as vacant; therefore, an informed purchaser would leave the existing improvement intact.  Based on the information, the physical possibilities of the subject would be for use as a commercial property such as an office utilization such as the current banking/credit union facility. 
+
+The use of the land with the improvements, is physically possible and legally permissible based on the office zoning and surrounding developments. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal, which would further restrict its development.   The building is situated in such a manner as to provide reasonable on-site traffic flow. Currently there are no other legally permissible uses which would economically justify the demolition of existing improvements and property redevelopment. As a result, the highest and best use for the site as improved is for its existing use as a commercial utilization as explained above."
+Highest and Best Use,Example,,"### **Site As Vacant**
+
+#### **Physically Possible**
+
+The subject site contains approximately 0.5 acres or 21,780 square feet located on S East Avenue in the eastern portion of Kermit, Texas, in Winkler County. The site's topography appears to be level, with soil and subsoil conditions adequate for development. Public utilities, including electricity, water, and sewer, are available to the property. The site's size and nearly square shape are sufficient to accommodate a variety of potential uses. Surrounding land uses are mixed, including residential and commercial properties to the west and north, with larger parcels used for light industrial, storage, or remaining as undeveloped land to the east and south. Access to the subject’s neighborhood is considered good due to its location on S East Avenue and proximity to E State Highway 115, a primary local traffic artery.
+
+#### **Legally Permissible**
+
+The subject property is located outside the city limits of Kermit in Winkler County and is therefore not regulated by a specific municipal zoning ordinance. However, the site does have city water and sewer. This indicates that while the property is not subject to city use restrictions, it may be subject to other city ordinances, primarily related to platting and development standards. The surrounding properties in the immediate vicinity share this characteristic, being located in the county and outside of any formal municipal zoning districts. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal.
+
+#### **Financially Feasible**
+
+Although the subject site legally and physically allows for the development of a wide variety of uses, only those which produce income and/or a return ample to satisfy operating expenses, financial obligations, and capital amortization are considered financially feasible. As described in the Neighborhood Analysis section, the subject's defined neighborhood is heavily influenced by the energy sector, and the area contains a mix of commercial, light industrial, and storage developments. Key supply and demand factors in this cyclical economy support development for energy-related services and local commercial uses.
+
+The property's location on S East Ave affords it good accessibility and average exposure. The site is located in a transitional area, bordering established residential/commercial properties to the west and less-developed light industrial and vacant land to the east and south. Given these factors, the most feasible use would be for commercial, office, or light industrial/storage development. There are several single-tenant and owner-occupied commercial and industrial buildings nearby, and the physical features of the site are suitable for a build-to-suit or owner-occupied building. This would be the most feasible use under current market conditions.
+
+#### **Maximally Productive**
+
+Among the financially feasible uses, the use that results in the highest value (the maximally productive use) is the highest and best use. Considering the site's physical attributes, permissive zoning, and market feasibility, the maximally productive use as though vacant is for commercial development.
+
+#### **Highest and Best Use As Though Vacant Conclusion**
+
+Based on the analysis of all relevant factors, the conclusion of the highest and best use as though vacant is for commercial development.
+
+### **Site As Improved \- Primary Site**
+
+The four criteria previously mentioned must also be met for the site's proposed improvements to be representative of the highest and best use.  
+
+The subject property consists of a 3,524 SF commercial facility on 0.5 acres of land. The subject’s improvements are not unusual to find in the surrounding area. 
+
+The overall value of the building as improved exceeds the value of the property as vacant; therefore, an informed purchaser would leave the existing improvement intact.  Based on the information, the physical possibilities of the subject would be for use as a commercial property such as an office utilization such as the current office/warehouse facility. 
+
+The use of the land with the improvements, is physically possible and legally permissible based on the office zoning and surrounding developments. No private deed restrictions were uncovered during a normal investigation which would further limit the potential uses of the subject property at the time of the appraisal, which would further restrict its development.   The building is situated in such a manner as to provide reasonable on-site traffic flow. Currently there are no other legally permissible uses which would economically justify the demolition of existing improvements and property redevelopment. As a result, the highest and best use for the site as improved is for its existing use as a office utilization as explained above. "

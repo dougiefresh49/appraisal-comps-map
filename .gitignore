@@ -47,3 +47,6 @@ yarn-error.log*
 
 # idea files
 .idea
+
+docs/examples/screenshots/
+docs/old-local-data-backups/

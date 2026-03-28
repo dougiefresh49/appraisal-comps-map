@@ -1,0 +1,1069 @@
+{
+  "name": "[POST] Get Subject Photos list",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.input.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        720,
+        -832
+      ],
+      "id": "29021968-30cd-4ac5-bc5a-7cc4d7bcb919",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        944,
+        -832
+      ],
+      "id": "a035820c-06ef-492a-8e72-2579093fb04a",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $('If photos folder exists').item.json.folders[0].id }}",
+            "mode": "id"
+          },
+          "whatToSearch": "files",
+          "fileTypes": [
+            "*"
+          ]
+        },
+        "options": {
+          "fields": [
+            "name",
+            "kind",
+            "id",
+            "webViewLink",
+            "thumbnailLink",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -192,
+        -1008
+      ],
+      "id": "d14ed710-f25b-4be6-aa82-1e67fb4a5569",
+      "name": "get subject photos list",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1392,
+        -944
+      ],
+      "id": "d78a30be-e27b-4bf5-af0d-71676d222c20",
+      "name": "Merge5"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "photos",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        -1040
+      ],
+      "id": "377fd7fd-c435-4ce1-b0fc-71b5d141298a",
+      "name": "Aggregate6"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "folders",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        -752
+      ],
+      "id": "0774bf07-8f1b-46df-bc4e-beadb1327abc",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "131eb0cf-f587-4401-8f76-695051908a3f",
+              "leftValue": "={{ $json.folders }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "array",
+                "operation": "lengthEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -624,
+        -752
+      ],
+      "id": "c8a301a8-b130-472a-9af1-cfd19a92c3ed",
+      "name": "If photos folder exists"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "status",
+              "value": "=No Photos Folder",
+              "type": "string"
+            },
+            {
+              "id": "6902d23a-69ca-4dff-8027-4c8551471057",
+              "name": "photos",
+              "value": "=[]",
+              "type": "array"
+            },
+            {
+              "id": "542de790-3be9-4521-9300-f76cf5b62596",
+              "name": "inputFileId",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "8a0437f9-2eaf-44a3-8001-e7348c0a20d0",
+              "name": "input",
+              "value": "[]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -192,
+        -384
+      ],
+      "id": "b36f85dd-12f8-47fb-8ce8-54d022e21d00",
+      "name": "Edit Fields9"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "49rRQ0xBDYlFHeBS",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/49rRQ0xBDYlFHeBS",
+          "cachedResultName": "Get Subject Photos folderId"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "subjectFolderId": "={{ $json.subject}}"
+          },
+          "matchingColumns": [
+            "subjectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "subjectFolderId",
+              "displayName": "subjectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1072,
+        -752
+      ],
+      "name": "Call Get Subject Photos folderId",
+      "id": "7bf6b0f4-ba87-4f86-b7c5-1d9ab1a33f9a"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "subject-photos",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1744,
+        -752
+      ],
+      "id": "e8cce3b2-e8a8-4842-8c27-8b106e02934b",
+      "name": "Webhook",
+      "webhookId": "ff6de55d-c266-4ca6-9602-fbb003d3cd25",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "riAFXAxXWS7tszk3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/riAFXAxXWS7tszk3",
+          "cachedResultName": "Get Project Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "projectFolderId": "={{ $json.projectFolderId }}"
+          },
+          "matchingColumns": [
+            "projectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "projectFolderId",
+              "displayName": "projectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1296,
+        -752
+      ],
+      "name": "Call Get Project Subfolder Ids",
+      "id": "b39bf5fd-bf86-40e5-860b-d07b6e587c78"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "projectFolderId",
+              "value": "={{ $json.body.projectFolderId }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "includeSubjectPhoto",
+              "value": "={{ !!$json.body.include && $json.body.include.subjectPhoto }}",
+              "type": "boolean"
+            },
+            {
+              "id": "0b487024-6cea-4de5-8f3b-c21d2760fcb8",
+              "name": "includeReportData",
+              "value": "={{ !!$json.body.include && $json.body.include.comps }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1520,
+        -752
+      ],
+      "id": "33654105-7e5d-4030-9c08-426483ca5653",
+      "name": "wh body1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "input.json",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -176,
+        -736
+      ],
+      "id": "26b91908-3c8a-4a7c-9309-04fb4181301d",
+      "name": "Filter for input.json"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "image/jpeg",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "4f1288d5-02a8-450f-a706-6da6870dd3cb",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "image/png",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "d8a7717c-34ce-42ab-9e5f-55fce2d771a0",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "image.jpg",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        -1040
+      ],
+      "id": "a54c15b9-022c-4546-885c-0dec06cde297",
+      "name": "Filter to Images",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b2ef4635-46f6-46bb-9d68-4407dd0c0296",
+              "leftValue": "={{ $json.photos }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthNotEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        -944
+      ],
+      "id": "e5905a42-51b9-4039-8fa7-96c48e9baa8d",
+      "name": "photos exists",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "inputFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        48,
+        -736
+      ],
+      "id": "644a92ab-ce78-4aee-8c7d-dc8c1b91b8db",
+      "name": "Aggregate7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "status",
+              "value": "=No inputs.json file",
+              "type": "string"
+            },
+            {
+              "id": "6902d23a-69ca-4dff-8027-4c8551471057",
+              "name": "photos",
+              "value": "=[]",
+              "type": "array"
+            },
+            {
+              "id": "542de790-3be9-4521-9300-f76cf5b62596",
+              "name": "inputFileId",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0681f639-d92a-46aa-b6a3-d9f8f010fdd7",
+              "name": "input",
+              "value": "[]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        -576
+      ],
+      "id": "504d96d1-f1df-44b1-bb48-9a28b4fe35f1",
+      "name": "Edit Fields12"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2288,
+        -656
+      ],
+      "id": "61ce60db-dd0b-4584-b07f-b7767bb68db1",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cd5f6cc3-9509-4d0f-b5c5-83b796eccaf5",
+              "name": "input",
+              "value": "={{ $json.inputFile[0] }}",
+              "type": "object"
+            },
+            {
+              "id": "476d215d-a02b-4351-8523-98c3b767262b",
+              "name": "inputFileId",
+              "value": "={{ $json.inputFile[0].id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        496,
+        -832
+      ],
+      "id": "c4e30b23-c068-46eb-9a96-da51eba6b8c9",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0455a22c-fa10-478f-98af-25c3aa40ab75",
+              "leftValue": "={{ $json.inputFile }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        -736
+      ],
+      "id": "437119e8-1ffe-46b3-8e46-70e2280072cd",
+      "name": "If input file exists"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "status",
+              "value": "=No image files",
+              "type": "string"
+            },
+            {
+              "id": "6902d23a-69ca-4dff-8027-4c8551471057",
+              "name": "photos",
+              "value": "=[]",
+              "type": "array"
+            },
+            {
+              "id": "542de790-3be9-4521-9300-f76cf5b62596",
+              "name": "inputFileId",
+              "value": "={{ $json.inputFileId }}",
+              "type": "string"
+            },
+            {
+              "id": "28c8e8ad-7aa3-4099-b8a7-5c88437e1eb3",
+              "name": "input",
+              "value": "={{ $json.input }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        -848
+      ],
+      "id": "71828732-259d-4565-9d89-4dd4b6ce70f8",
+      "name": "prep no photos resp"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "input",
+              "value": "={{ $json.data }}",
+              "type": "array"
+            },
+            {
+              "id": "378d47a4-646c-40f8-a31c-005fbd404f0b",
+              "name": "inputFileId",
+              "value": "={{ $('Edit Fields').item.json.inputFileId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1168,
+        -832
+      ],
+      "id": "a9b01bfe-e450-46b8-b687-07897c267acc",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "status",
+              "value": "=success",
+              "type": "string"
+            },
+            {
+              "id": "6902d23a-69ca-4dff-8027-4c8551471057",
+              "name": "photos",
+              "value": "={{ $json.photos }}",
+              "type": "array"
+            },
+            {
+              "id": "542de790-3be9-4521-9300-f76cf5b62596",
+              "name": "inputFileId",
+              "value": "={{ $json.inputFileId }}",
+              "type": "string"
+            },
+            {
+              "id": "28c8e8ad-7aa3-4099-b8a7-5c88437e1eb3",
+              "name": "input",
+              "value": "={{ $json.input }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        -1040
+      ],
+      "id": "392ac922-5a61-4137-8b5e-9e37a540e187",
+      "name": "map photos to ids"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "share",
+        "folderNoRootId": {
+          "__rl": true,
+          "value": "={{ $json.folders[0].id }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -464,
+        -976
+      ],
+      "id": "df8fc6da-fad8-4a5d-9a83-0bf8743f2047",
+      "name": "Share folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get subject photos list": {
+      "main": [
+        [
+          {
+            "node": "Filter for input.json",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter to Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate6": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge5": {
+      "main": [
+        [
+          {
+            "node": "photos exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "If photos folder exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If photos folder exists": {
+      "main": [
+        [
+          {
+            "node": "Share folder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Subject Photos folderId": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "wh body1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wh body1": {
+      "main": [
+        [
+          {
+            "node": "Call Get Project Subfolder Ids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Project Subfolder Ids": {
+      "main": [
+        [
+          {
+            "node": "Call Get Subject Photos folderId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter for input.json": {
+      "main": [
+        [
+          {
+            "node": "Aggregate7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter to Images": {
+      "main": [
+        [
+          {
+            "node": "Aggregate6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "photos exists": {
+      "main": [
+        [
+          {
+            "node": "map photos to ids",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "prep no photos resp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate7": {
+      "main": [
+        [
+          {
+            "node": "If input file exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If input file exists": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "map photos to ids": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prep no photos resp": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields12": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields9": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Share folder": {
+      "main": [
+        [
+          {
+            "node": "get subject photos list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "projectFolderId": "1sCYiOv0d09VLQpxI_xa11EIxiabVzUHh"
+          },
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/cover-data",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

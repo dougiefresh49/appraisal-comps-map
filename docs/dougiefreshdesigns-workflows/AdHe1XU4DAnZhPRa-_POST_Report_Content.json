@@ -1,0 +1,2810 @@
+{
+  "name": "[POST] Report Content",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "report-content",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1680,
+        -800
+      ],
+      "id": "330322ff-f19b-4b16-81a1-f5b86563c70f",
+      "name": "Webhook",
+      "webhookId": "ff6de55d-c266-4ca6-9602-fbb003d3cd25",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "projectFolderId",
+              "value": "={{ $json.body.projectFolderId }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "action",
+              "value": "={{ $json.body.action }}",
+              "type": "string"
+            },
+            {
+              "id": "0b487024-6cea-4de5-8f3b-c21d2760fcb8",
+              "name": "section",
+              "value": "={{ $json.body.section }}",
+              "type": "string"
+            },
+            {
+              "id": "9deafd8e-9c83-497e-9ef5-5ecef451047b",
+              "name": "content",
+              "value": "={{ $json.body.content }}",
+              "type": "string"
+            },
+            {
+              "id": "77fe9f92-1ca5-47ec-a2b0-c39724197312",
+              "name": "previousContent",
+              "value": "={{ $json.body.previousContent }}",
+              "type": "string"
+            },
+            {
+              "id": "ac0a918f-c17b-4829-86da-df850007de2a",
+              "name": "regenerationContext",
+              "value": "={{ $json.body.regenerationContext }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1408,
+        -800
+      ],
+      "id": "237fd5e5-e8fd-409c-ae19-369673b316e8",
+      "name": "wh body"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('wh body').item.json.section }}",
+                    "rightValue": "zoning",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6fe03c6c-5674-4b25-a595-f7b38a3df244"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "zoning"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9c125cc3-a16e-406b-bab4-950266e184f5",
+                    "leftValue": "={{ $('wh body').item.json.section }}",
+                    "rightValue": "ownership",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ownership"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9047236c-8741-4712-a485-64bd95947be5",
+                    "leftValue": "={{ $('wh body').item.json.section }}",
+                    "rightValue": "neighborhood",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "neighborhood"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c38583ec-f5b6-4880-ad3f-6fe9ad4badd3",
+                    "leftValue": "={{ $('wh body').item.json.section }}",
+                    "rightValue": "subject-site-summary",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "subject-site-summary"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bf27d1af-ab9e-4075-bdbd-3b12ecd6d82a",
+                    "leftValue": "={{ $('wh body').item.json.section }}",
+                    "rightValue": "highest-best-use",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "highest-best-use"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        2672,
+        -272
+      ],
+      "id": "d93f4823-9897-4333-a172-b7cecc8dd07f",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "riAFXAxXWS7tszk3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/riAFXAxXWS7tszk3",
+          "cachedResultName": "Get Project Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "projectFolderId": "={{ $json.projectFolderId }}"
+          },
+          "matchingColumns": [
+            "projectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "projectFolderId",
+              "displayName": "projectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -1200,
+        -800
+      ],
+      "id": "2e4f372b-800b-4b51-8f45-82ef939dfff9",
+      "name": "Call 'Get Project Subfolder Ids'"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.reports }}",
+            "mode": "id"
+          },
+          "whatToSearch": "folders"
+        },
+        "options": {
+          "fields": [
+            "name",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -848,
+        -800
+      ],
+      "id": "11c11aca-521e-42b6-bd4a-8c71795e3b90",
+      "name": "Get reports subfolders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7e79f895-0dbe-4132-b028-6d2ff95c6b0a",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "maps",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3328ede4-e0c5-465c-abf1-d39cdedd3270",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "content",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -672,
+        -800
+      ],
+      "id": "16ae62d5-79e7-4d17-b166-3516c2e9085d",
+      "name": "Report Subfolders"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Tep8CtzA1FaIcRBs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Tep8CtzA1FaIcRBs",
+          "cachedResultName": "Get report-data fileId"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reports": "={{ $('Call \\'Get Project Subfolder Ids\\'').item.json.reports }}"
+          },
+          "matchingColumns": [
+            "reports"
+          ],
+          "schema": [
+            {
+              "id": "reports",
+              "displayName": "reports",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        -256
+      ],
+      "id": "0a3b97b5-3fba-4737-ba53-2d8b418a174b",
+      "name": "Call 'Get report-data fileId'"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "folders",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -800
+      ],
+      "id": "e151c8a9-0a96-4c12-8211-adb81971f707",
+      "name": "Aggregate3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d2354d75-f35b-4a0c-9ffa-6549dbffb8e7",
+              "name": "reportSubFolderIds",
+              "value": "={{ $json.folders.reduce((acc, i) => ({...acc, [i.name]: i.id }), {}) }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        -800
+      ],
+      "id": "a7a4054d-bf5c-49a9-9f96-7dd4d5ccfdef",
+      "name": "Map Report Subfolder IDs"
+    },
+    {
+      "parameters": {
+        "content": "## Reports Subfolders\n",
+        "height": 256,
+        "width": 704
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        -864
+      ],
+      "id": "d1a3e80f-8b45-4e60-841f-96085acdd601",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0j16zrAvHqBBFPm8",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/0j16zrAvHqBBFPm8",
+          "cachedResultName": "report-data -- extract subject improvement-analysis"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        -544
+      ],
+      "id": "4800395e-8ee5-4254-a7f3-3ae09375a25a",
+      "name": "Call 'report-data -- extract subject improvement-analysis'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "i6effpesMXFKBYYb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/i6effpesMXFKBYYb",
+          "cachedResultName": "report-data -- extract subject"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        -336
+      ],
+      "id": "a07576c5-987a-4205-84f6-e5f8a513311e",
+      "name": "Call 'report-data -- extract subject'"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1328,
+        -432
+      ],
+      "id": "75ecfad7-3eca-46dd-8a97-7801649bb066",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "content": "## Subject Data\n",
+        "height": 480,
+        "width": 688,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        -624
+      ],
+      "id": "c4b599ce-8e6f-4cd8-ae7d-fd97bc6b01d5",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QNCLMd4a3ikdxjey",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/QNCLMd4a3ikdxjey",
+          "cachedResultName": "report-data -- extract client"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        -64
+      ],
+      "id": "1d5cac12-0774-4d1d-8eda-d6c506d603db",
+      "name": "Call 'report-data -- extract client'"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "client",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        -64
+      ],
+      "id": "69dc89a7-695d-4179-b407-1254e9e882f9",
+      "name": "Aggregate Client Data"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "86be7b74-75aa-42dd-a06e-14ce26ded8f4",
+              "name": "subject",
+              "value": "={{ $json }}",
+              "type": "object"
+            },
+            {
+              "id": "156955c6-178a-45cd-aaec-a97e69c4dbf2",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        -432
+      ],
+      "id": "513a7bc9-877d-40aa-a61d-6d21db49adc8",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1808,
+        -304
+      ],
+      "id": "6505c0ca-f18d-4cef-b93a-c414c84621c9",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MCkTDGS4swlVlbrO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/MCkTDGS4swlVlbrO",
+          "cachedResultName": "Gemini Gems with Knowledge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "extraPromptDetails": "=Addess: {{ $('Merge4').item.json.subject.address }}\nZoning: {{ $('Merge4').item.json.subject.rawData.Zoning }}\n\n{{ $('Edit Fields').item.json.revisionRequest }}",
+            "fileType": "={{ $('Merge5').item.json.image.mimeType }}",
+            "fileUrl": "={{ $('Merge5').item.json.image.webViewLink.replace('usp=drivesdk', 'usp=sharing') }}",
+            "fileId": "={{ $('Merge5').item.json.image.id }}",
+            "reportSectionName": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "zoningMapId",
+            "neighborhoodBounds_map",
+            "subject_AddressLocal",
+            "neighborhoodMapId"
+          ],
+          "schema": [
+            {
+              "id": "reportSectionName",
+              "displayName": "reportSectionName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "extraPromptDetails",
+              "displayName": "extraPromptDetails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileId",
+              "displayName": "fileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileUrl",
+              "displayName": "fileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileType",
+              "displayName": "fileType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3472,
+        -624
+      ],
+      "name": "Gemini Gem - Zoning1",
+      "id": "e2fa4717-0638-4ccb-b00e-573d255cb6fe"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QTaS51LTu6CruL4c",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/QTaS51LTu6CruL4c",
+          "cachedResultName": "Get Report Map by Section"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_maps": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.maps }}",
+            "section": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_maps",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_maps",
+              "displayName": "reportSubFolderIds_maps",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2080,
+        -208
+      ],
+      "name": "Call Get Report Map by Section",
+      "id": "ba51b8a9-dcca-4e05-8631-0aea5c228762"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.content }}",
+        "name": "={{ $('wh body').item.json.section }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4384,
+        -208
+      ],
+      "id": "a16b4b6d-9284-41b0-88ce-7a65b3398647",
+      "name": "Google Drive1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('wh body').item.json.action }}",
+                    "rightValue": "get",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "da8b60c8-d098-467b-b0d0-c37609db2595"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "49d71591-9316-46c6-9cc0-70f3b267077b",
+                    "leftValue": "={{ $('wh body').item.json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "11d28819-0b68-4720-becc-afef245734f7",
+                    "leftValue": "={{ $('wh body').item.json.action }}",
+                    "rightValue": "generate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "generate"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b6e7471d-f725-43cd-8a38-c81fc97da372",
+                    "leftValue": "={{ $('wh body').item.json.action }}",
+                    "rightValue": "regenerate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "regenerate"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -112,
+        -816
+      ],
+      "id": "50c2a7b4-bd6d-4d97-9b3a-4ef12b04d386",
+      "name": "Switch on Action"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        640,
+        -1440
+      ],
+      "id": "394ef961-7187-4aed-a9ba-b74593ae1134",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4928,
+        -208
+      ],
+      "id": "8957ee60-0987-4221-8bdf-14b0d097c87c",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "v2SOmavI8aT9OgZY",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/v2SOmavI8aT9OgZY",
+          "cachedResultName": "Get Content File Id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+            "section": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        -1120
+      ],
+      "name": "Call Get Content File Id1",
+      "id": "05d93a36-c830-4e2a-8a9d-02798914ce5b"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('IF content file exists').item.json.contentFileId }}",
+          "mode": "id"
+        },
+        "changeFileContent": true,
+        "inputDataFieldName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1712,
+        -1248
+      ],
+      "id": "88f3fb46-a110-445a-8e96-5cb5ab7e8723",
+      "name": "Update file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2160,
+        -1152
+      ],
+      "id": "e24e8cf0-2f6f-4ba3-a8b1-0bd97d1d11e8",
+      "name": "Respond to Webhook3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a7ec29f-8a08-413e-9d16-cf90b262cfcb",
+              "name": "content",
+              "value": "={{ $('wh body').item.json.content }}",
+              "type": "string"
+            },
+            {
+              "id": "bcffa2e9-a3d6-4b16-8132-a57d7227c418",
+              "name": "exists",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1920,
+        -1152
+      ],
+      "id": "1ff036e1-0eee-4a77-84ba-c0a156345691",
+      "name": "Prep Content Response1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"content\": null,\n  \"exists\": false,\n  \"status\": \"not_found\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        -864
+      ],
+      "id": "81b1539f-6f13-45b4-9e49-0f909408ba1e",
+      "name": "Prep Not Found Response"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        736,
+        -864
+      ],
+      "id": "e2d84fc5-0cde-444a-bf6c-eb25004f188b",
+      "name": "Respond to Webhook4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0a2a3307-bc4d-4cf7-9bc5-e06450d404a3",
+              "leftValue": "={{ $('wh body').item.json.content }}",
+              "rightValue": true,
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        320,
+        -1056
+      ],
+      "id": "f76cfae6-31d7-482d-96a7-050cac325dcd",
+      "name": "If content provided"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0a2a3307-bc4d-4cf7-9bc5-e06450d404a3",
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        -1120
+      ],
+      "id": "1d0d41e2-9521-437a-bac3-b7b83888a7e6",
+      "name": "IF content file exists"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "content",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1472,
+        -1248
+      ],
+      "id": "d276790d-25d7-446b-9489-f01e26c284e7",
+      "name": "Convert to input content File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a7ec29f-8a08-413e-9d16-cf90b262cfcb",
+              "name": "content",
+              "value": "={{ $('wh body').item.json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1264,
+        -1248
+      ],
+      "id": "0671c948-8a0c-4a0c-ba88-0bf7da502da6",
+      "name": "Get Content From Body"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $('wh body').item.json.content }}",
+        "name": "={{ $('wh body').item.json.section }}2.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1424,
+        -1040
+      ],
+      "id": "f6a7809c-d5a8-4c20-a4ce-b4ca13075927",
+      "name": "Create file from text",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "BtfwXfyWSdKq9vY1",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MCkTDGS4swlVlbrO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/MCkTDGS4swlVlbrO",
+          "cachedResultName": "Gemini Gems with Knowledge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "extraPromptDetails": "=Addess: {{ $('Merge4').item.json.subject.address }}\nLegal Description: {{ $('Merge4').item.json.subject.legalDescription }}\nDeed Record of purchase: {{ $('Merge4').item.json.subject.rawData.instrumentNumber }}\nOwnership Info: {{ $('Call get ownership context from deed').item.json.ownershipInfo }}\n\n{{ $('Edit Fields').item.json.revisionRequest }}",
+            "reportSectionName": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "zoningMapId",
+            "neighborhoodBounds_map",
+            "subject_AddressLocal",
+            "neighborhoodMapId"
+          ],
+          "schema": [
+            {
+              "id": "reportSectionName",
+              "displayName": "reportSectionName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "extraPromptDetails",
+              "displayName": "extraPromptDetails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileId",
+              "displayName": "fileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileUrl",
+              "displayName": "fileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileType",
+              "displayName": "fileType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3472,
+        -448
+      ],
+      "name": "Gemini Gem - Ownership1",
+      "id": "6f3f9d59-1eb8-4e9a-a40d-46a96faa11c9"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MCkTDGS4swlVlbrO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/MCkTDGS4swlVlbrO",
+          "cachedResultName": "Gemini Gems with Knowledge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "extraPromptDetails": "=Addess: {{ $('Merge4').item.json.subject.address }}\nOwnership Info: {{ $('Call get ownership context from deed').item.json.ownershipInfo }}\n\nFEMA Flood Map info:\n{{ $json.femaData }}\n\nSubject full JSON data\n\n```json\n{{ JSON.stringify( $('Merge4').item.json.subject.rawData, null, 2 ) }}\n```\n\nSubject Improvements \n\n{{ $('Merge4').item.json.subject.improvementsString.split('\\n').map(i => (!i.includes(':') ? `**${i}**` : `* ${i}`)).join('\\n\\n') }}\n\n\n{{ $('Edit Fields').item.json.revisionRequest }}",
+            "reportSectionName": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "zoningMapId",
+            "neighborhoodBounds_map",
+            "subject_AddressLocal",
+            "neighborhoodMapId"
+          ],
+          "schema": [
+            {
+              "id": "reportSectionName",
+              "displayName": "reportSectionName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "extraPromptDetails",
+              "displayName": "extraPromptDetails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileId",
+              "displayName": "fileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileUrl",
+              "displayName": "fileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileType",
+              "displayName": "fileType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3488,
+        -32
+      ],
+      "name": "Gemini Gem - Subject Site Summary1",
+      "id": "11f62277-f17e-4a48-91ea-d2e2e634dfc1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "7y41Qcu22MlXW6lS",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/7y41Qcu22MlXW6lS",
+          "cachedResultName": "report-data -- extract FEMA"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Call \\'Get report-data fileId\\'').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3232,
+        -32
+      ],
+      "name": "Call report-data -- extract FEMA",
+      "id": "4aae8510-e76e-41b5-9887-963217af6a25"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "1MOJii5krlPjpq0l",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/1MOJii5krlPjpq0l",
+          "cachedResultName": "get ownership context from deed"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "subject_rawData_instrumentNumber": "={{ $('Merge4').item.json.subject.rawData.instrumentNumber }}",
+            "subject_legalDescription": "={{ $('Merge4').item.json.subject.legalDescription }}",
+            "subject_address": "={{ $('Merge4').item.json.subject.address }}",
+            "subjectFolderId": "={{ $('Call \\'Get Project Subfolder Ids\\'').item.json.subject }}",
+            "reportSection": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "subject_rawData_instrumentNumber",
+            "subject_legalDescription",
+            "subject_address"
+          ],
+          "schema": [
+            {
+              "id": "subject_rawData_instrumentNumber",
+              "displayName": "subject_rawData_instrumentNumber",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subject_legalDescription",
+              "displayName": "subject_legalDescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subject_address",
+              "displayName": "subject_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reportSection",
+              "displayName": "reportSection",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "subjectFolderId",
+              "displayName": "subjectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2096,
+        -432
+      ],
+      "name": "Call get ownership context from deed",
+      "id": "e30eeac6-9b0e-41c2-9025-d39132a53227"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MCkTDGS4swlVlbrO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/MCkTDGS4swlVlbrO",
+          "cachedResultName": "Gemini Gems with Knowledge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "extraPromptDetails": "=Addess: {{ $('Merge4').item.json.subject.rawData.AddressLocal }}\nNeighborhood Boundaries: \n{{ $json.neighborhoodBounds }}\n\n{{ $('Edit Fields').item.json.revisionRequest }}",
+            "reportSectionName": "={{ $('wh body').item.json.section }}",
+            "fileId": "={{ $('Merge5').item.json.image.id }}",
+            "fileType": "={{ $('Merge5').item.json.image.mimeType }}",
+            "fileUrl": "={{ $('Merge5').item.json.image.webViewLink.replace('usp=drivesdk', 'usp=sharing') }}"
+          },
+          "matchingColumns": [
+            "zoningMapId",
+            "neighborhoodBounds_map",
+            "subject_AddressLocal",
+            "neighborhoodMapId"
+          ],
+          "schema": [
+            {
+              "id": "reportSectionName",
+              "displayName": "reportSectionName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "extraPromptDetails",
+              "displayName": "extraPromptDetails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileId",
+              "displayName": "fileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileUrl",
+              "displayName": "fileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileType",
+              "displayName": "fileType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3488,
+        -240
+      ],
+      "name": "Gemini Gem - Neighborhood1",
+      "id": "4117e295-fd11-4730-9096-d5c4dd7d878f"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "XlcQ9aSKB2TAB8W3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/XlcQ9aSKB2TAB8W3",
+          "cachedResultName": "report-data -- extract Nbh"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Call \\'Get report-data fileId\\'').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3232,
+        -240
+      ],
+      "name": "Call report-data -- extract Nbh",
+      "id": "fc0d1d11-abde-402f-9dfc-541c75c288fa"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2416,
+        -336
+      ],
+      "id": "6360cbb5-2c72-4985-a502-ccfdc4e2475d",
+      "name": "Merge5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a7ec29f-8a08-413e-9d16-cf90b262cfcb",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "bcffa2e9-a3d6-4b16-8132-a57d7227c418",
+              "name": "exists",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4736,
+        -208
+      ],
+      "id": "30d72f5c-1e8e-408c-af53-1adf9987d1e2",
+      "name": "Prep Content Response2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "MCkTDGS4swlVlbrO",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/MCkTDGS4swlVlbrO",
+          "cachedResultName": "Gemini Gems with Knowledge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "extraPromptDetails": "=Addess: {{ $('Merge4').item.json.subject.rawData.AddressLocal }}\nOwnership Info: {{ $('Call get ownership context from deed').item.json.ownershipInfo }}\n\n### Subject full JSON data\n\n```json\n{{ JSON.stringify($('Merge4').item.json.subject.rawData , null, 2) }}\n```\n\n### Subject Improvements \n\n{{ $('Merge4').item.json.subject.improvementsString.split('\\n').map(i => (!i.includes(':') ? `**${i}**` : `* ${i}`)).join('\\n\\n') }}\n\n### Other Details from the report\n\n#### Zoning\n\n{{ $json.zoning }}\n\n#### Ownership\n{{ $json.ownership }}\n\n#### Subject Site Summary\n{{ $json['subject-site-summary'] }}\n\n\n{{ $('Edit Fields').item.json.revisionRequest }}",
+            "reportSectionName": "highest-best-use"
+          },
+          "matchingColumns": [
+            "zoningMapId",
+            "neighborhoodBounds_map",
+            "subject_AddressLocal",
+            "neighborhoodMapId"
+          ],
+          "schema": [
+            {
+              "id": "reportSectionName",
+              "displayName": "reportSectionName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "extraPromptDetails",
+              "displayName": "extraPromptDetails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileId",
+              "displayName": "fileId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileUrl",
+              "displayName": "fileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fileType",
+              "displayName": "fileType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4048,
+        352
+      ],
+      "name": "Gemini Gem - Highest and Best Use1",
+      "id": "18da76e7-106c-4ff1-a067-e4760e763455"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "a3mdNewsme4BnGRg",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $json.reportSubFolderIds.content }}",
+            "section": "={{ $('wh body').item.json.section }}"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        -1440
+      ],
+      "name": "Call get content file text",
+      "id": "e73a5bd4-089a-44db-9ff8-784ef3789dc2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "a3mdNewsme4BnGRg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/a3mdNewsme4BnGRg",
+          "cachedResultName": "get content file text"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+            "section": "=zoning"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3232,
+        224
+      ],
+      "name": "Call get content file - zoning",
+      "id": "f1931438-0d8a-4b14-a514-a4bc1a02ed67"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "a3mdNewsme4BnGRg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/a3mdNewsme4BnGRg",
+          "cachedResultName": "get content file text"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+            "section": "=ownership"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3232,
+        432
+      ],
+      "name": "Call get content file - ownership",
+      "id": "d87c78d7-0fe5-4895-8aa2-b37f8a189773"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "a3mdNewsme4BnGRg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/a3mdNewsme4BnGRg",
+          "cachedResultName": "get content file text"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reportSubFolderIds_content": "={{ $('Map Report Subfolder IDs').item.json.reportSubFolderIds.content }}",
+            "section": "=subject-site-summary"
+          },
+          "matchingColumns": [
+            "reportSubFolderIds_content",
+            "section"
+          ],
+          "schema": [
+            {
+              "id": "reportSubFolderIds_content",
+              "displayName": "reportSubFolderIds_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "section",
+              "displayName": "section",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3232,
+        640
+      ],
+      "name": "Call get content file - subject-site-summary",
+      "id": "4c652c65-8d5c-47b1-a7dd-cc84a242cb79"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3824,
+        352
+      ],
+      "id": "6e69ed0d-2dfc-487c-bcf2-ff3c6d282979",
+      "name": "Merge6"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4ca0e6b2-a836-410a-8ffa-d3d75f33854b",
+              "name": "zoning",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3424,
+        224
+      ],
+      "id": "b61da4e2-859e-4ec4-ae91-c5ecc1324af0",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4ca0e6b2-a836-410a-8ffa-d3d75f33854b",
+              "name": "ownership",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3440,
+        432
+      ],
+      "id": "4cd4cbbb-846e-41d2-b42a-72bf21f85131",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4ca0e6b2-a836-410a-8ffa-d3d75f33854b",
+              "name": "subject-site-summary",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3440,
+        640
+      ],
+      "id": "c69741ba-4dad-4ff1-b6ba-ab60fe68d192",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1c0d21b5-a75b-4d92-84b9-961c2b4d7214",
+              "name": "revisionRequest",
+              "value": "=## Regeneration Context \n\nPrevious content that was generated is noted below and the the modificaion request to the original generation is also noted below. Please update the previous content according to the revision request and the provided instructions \n\n**NOTE:** If no Previous Version data or Modification Request details are below, you can ignore the Regeneration Context.\n\n### **Previous Version:**\n{{ $('wh body').item.json.previousContent }}\n\n### **Modification Request:**\n{{ $('wh body').item.json.regenerationContext }}\n",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        336,
+        -592
+      ],
+      "id": "663263bd-571c-4e58-b135-2d392d09eb9b",
+      "name": "Edit Fields"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "wh body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wh body": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get Project Subfolder Ids'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get Project Subfolder Ids'": {
+      "main": [
+        [
+          {
+            "node": "Get reports subfolders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get reports subfolders": {
+      "main": [
+        [
+          {
+            "node": "Report Subfolders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Subfolders": {
+      "main": [
+        [
+          {
+            "node": "Aggregate3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate3": {
+      "main": [
+        [
+          {
+            "node": "Map Report Subfolder IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get report-data fileId'": {
+      "main": [
+        [
+          {
+            "node": "Call 'report-data -- extract subject improvement-analysis'",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call 'report-data -- extract subject'",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call 'report-data -- extract client'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'report-data -- extract subject improvement-analysis'": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'report-data -- extract subject'": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Call 'report-data -- extract client'": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Client Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Report Subfolder IDs": {
+      "main": [
+        [
+          {
+            "node": "Switch on Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Client Data": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "Call get ownership context from deed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Get Report Map by Section",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Gemini Gem - Zoning1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Gem - Ownership1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call report-data -- extract Nbh",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call report-data -- extract FEMA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call get content file - zoning",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call get content file - ownership",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call get content file - subject-site-summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Report Map by Section": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Gemini Gem - Zoning1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch on Action": {
+      "main": [
+        [
+          {
+            "node": "Call get content file text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If content provided",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive1": {
+      "main": [
+        [
+          {
+            "node": "Prep Content Response2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get Content File Id1": {
+      "main": [
+        [
+          {
+            "node": "IF content file exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update file": {
+      "main": [
+        [
+          {
+            "node": "Prep Content Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Content Response1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Not Found Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If content provided": {
+      "main": [
+        [
+          {
+            "node": "Call Get Content File Id1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Not Found Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF content file exists": {
+      "main": [
+        [
+          {
+            "node": "Get Content From Body",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create file from text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to input content File": {
+      "main": [
+        [
+          {
+            "node": "Update file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Content From Body": {
+      "main": [
+        [
+          {
+            "node": "Convert to input content File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create file from text": {
+      "main": [
+        [
+          {
+            "node": "Prep Content Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Gem - Ownership1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call report-data -- extract FEMA": {
+      "main": [
+        [
+          {
+            "node": "Gemini Gem - Subject Site Summary1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call get ownership context from deed": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Gem - Subject Site Summary1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call report-data -- extract Nbh": {
+      "main": [
+        [
+          {
+            "node": "Gemini Gem - Neighborhood1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge5": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Gem - Neighborhood1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Content Response2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call get content file text": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call get content file - zoning": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge6": {
+      "main": [
+        [
+          {
+            "node": "Gemini Gem - Highest and Best Use1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call get content file - ownership": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Call get content file - subject-site-summary": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Gem - Highest and Best Use1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get report-data fileId'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "projectFolderId": "1yOWw4JO0bpzYsBfU9IVRV54V4RwGrlWQ",
+            "action": "regenerate",
+            "section": "zoning",
+            "content": "updated pretend text",
+            "previousContent": "The subject property is located outside the corporate city limits of Odessa, Texas, and falls within the municipality's Extraterritorial Jurisdiction (ETJ). Consequently, the site is not assigned a specific zoning classification under the City of Odessa’s zoning ordinance. As an unzoned property within the ETJ, it is not subject to municipal restrictions regarding permitted uses, setbacks, or height limitations, though development must strictly adhere to Ector County subdivision regulations and applicable health and safety codes. The surrounding area exhibits a zoning pattern consistent with the subject, as the properties immediately adjacent to the west, east, north, and south are also situated within the ETJ and lack municipal zoning designations. The vicinity is predominantly characterized by a mix of light industrial and commercial service uses typical of the unzoned areas on the city's periphery.",
+            "regenerationContext": "When discussing the surrounding areas, starting at the sentence 'The surrounding area exhibits a zoning pattern consistent',  please also add information about the fact that the property is 1 block (~1,000 feet) from the city limits and at the edge of the city limits is properties in the Heavy Commercial District-2 (HC code on the zoning map)"
+          },
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/report-content",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

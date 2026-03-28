@@ -1,0 +1,153 @@
+{
+  "name": "report-data -- extract Nbh",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1442425557,
+          "mode": "list",
+          "cachedResultName": "report-inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1L0ymDuvJ2VyMMDeZ18eLHVa3-BqfSzkTGJRLKC-gheg/edit#gid=1442425557"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "H1:I5"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1136,
+        -272
+      ],
+      "id": "16e14b18-7a62-4858-b1e2-188b38ae0d47",
+      "name": "Get Report Data - Neighborhood1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "neighborhoodBounds",
+        "include": "allFieldsExcept",
+        "fieldsToExclude": "row_number",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        -272
+      ],
+      "id": "e3786c36-0f8d-40e9-934a-39af1a375535",
+      "name": "Aggregate5"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "id",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "f954c43c-a7f4-4f9c-b920-26e11fa69051",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        928,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ed8c8973-2a9d-4378-bce0-183fbdf1e47e",
+              "name": "neighborhoodBounds",
+              "value": "={{ $json.neighborhoodBounds.map(i => `* ${i.Side}: ${i['Street Name']}`).join(`\\n`) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1552,
+        -272
+      ],
+      "id": "632e9f6b-b40c-470f-9979-1bbebdf0c42c",
+      "name": "Edit Fields"
+    }
+  ],
+  "connections": {
+    "Get Report Data - Neighborhood1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get Report Data - Neighborhood1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate5": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "id": "1L0ymDuvJ2VyMMDeZ18eLHVa3-BqfSzkTGJRLKC-gheg"
+        }
+      }
+    ]
+  },
+  "triggerCount": 0,
+  "meta": null
+}

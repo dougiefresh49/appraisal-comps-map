@@ -1,0 +1,452 @@
+{
+  "name": "[POST] Comp - check exists in sheet",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comps-exists",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1680,
+        -928
+      ],
+      "id": "35863244-1c72-4ebc-b67f-94477414c324",
+      "name": "Webhook",
+      "webhookId": "44f1eb46-85cf-4d82-8ba7-2763a527ed70",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06422e9e-d0c1-43de-98f4-f07c03bec9b6",
+              "name": "projectFolderId",
+              "value": "={{ $json.body.projectFolderId }}",
+              "type": "string"
+            },
+            {
+              "id": "1b9cc33b-6601-421e-abfa-ec938e73eeda",
+              "name": "type",
+              "value": "={{ $json.body.type }}",
+              "type": "string"
+            },
+            {
+              "id": "12fb3205-66db-4873-a524-095025d86fc0",
+              "name": "sheetName",
+              "value": "={{ `${$json.body.type.replace(/s$/, \"\")} comps` }}",
+              "type": "string"
+            },
+            {
+              "id": "d6c554a4-835a-4103-a8a3-db9ee8c0379d",
+              "name": "query",
+              "value": "={{ $json.body.query }}",
+              "type": "string"
+            },
+            {
+              "id": "1513dd68-08ac-40d4-8463-bdb68d695656",
+              "name": "instrumentNumber",
+              "value": "={{ $if(!!$json.body.instrumentNumber, $json.body.instrumentNumber, 'ignore') }}",
+              "type": "string"
+            },
+            {
+              "id": "d17a6fcf-f07c-4644-ae24-44e66dadd399",
+              "name": "apn",
+              "value": "={{ $if(!!$json.body.apn, $json.body.apn, 'ignore') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1456,
+        -928
+      ],
+      "id": "c564d73f-cba9-42d5-8223-2fdc551ed1ee",
+      "name": "wh body"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "riAFXAxXWS7tszk3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/riAFXAxXWS7tszk3",
+          "cachedResultName": "Get Project Subfolder Ids"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "projectFolderId": "={{ $json.projectFolderId }}"
+          },
+          "matchingColumns": [
+            "projectFolderId"
+          ],
+          "schema": [
+            {
+              "id": "projectFolderId",
+              "displayName": "projectFolderId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -1200,
+        -928
+      ],
+      "id": "9edbe267-ab84-4ce2-8d8b-619910e885d8",
+      "name": "Call 'Get Project Subfolder Ids'"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        144,
+        -912
+      ],
+      "id": "2c72325e-07de-4df7-943b-93b0e70f51dd",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Tep8CtzA1FaIcRBs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Tep8CtzA1FaIcRBs",
+          "cachedResultName": "Get report-data fileId"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reports": "={{ $json.reports }}"
+          },
+          "matchingColumns": [
+            "reports"
+          ],
+          "schema": [
+            {
+              "id": "reports",
+              "displayName": "reports",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -976,
+        -928
+      ],
+      "name": "Call Get report-data fileId",
+      "id": "6524dc6a-45df-4291-92b6-e6ca1ffc8b32"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('wh body').item.json.sheetName }}",
+          "mode": "name"
+        },
+        "combineFilters": "OR",
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -752,
+        -928
+      ],
+      "id": "db9257be-441c-4adc-b6d7-366e2f662aa3",
+      "name": "Get Report Data - Sale Comps",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FsuwH3yFaxOcf123",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "badb6ef9-6f5c-423e-a96b-1ef5f586e2c6",
+              "leftValue": "={{ $json.Address }}",
+              "rightValue": "={{ $('wh body').item.json.query }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "1d4f0dd9-331e-47ab-ae8a-54eeaaede8f0",
+              "leftValue": "={{ $json.APN }}",
+              "rightValue": "={{ $('wh body').item.json.apn }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "75a0d84a-99d5-46de-a82f-3324fea6fb78",
+              "leftValue": "={{ $json.Recording }}",
+              "rightValue": "={{ $('wh body').item.json.instrumentNumber }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -544,
+        -928
+      ],
+      "id": "3d5618e1-6ce0-4689-9dc6-e596520fbbeb",
+      "name": "Filter2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "matches",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        -928
+      ],
+      "id": "99d781c2-edf1-45e3-b819-9e2a7ccbf666",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "72818316-a8d9-4dac-a5dd-802ea7bbe692",
+              "name": "exists",
+              "value": "={{ $json.matches.length > 0 }}",
+              "type": "boolean"
+            },
+            {
+              "id": "ad1c3dd2-5ccc-45e4-8ce0-22b2d003731d",
+              "name": "matches",
+              "value": "={{ $json.matches }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -128,
+        -928
+      ],
+      "id": "e8b807ca-81e1-4f1b-8d56-7670e558524b",
+      "name": "Edit Fields1"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "wh body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wh body": {
+      "main": [
+        [
+          {
+            "node": "Call 'Get Project Subfolder Ids'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Get Project Subfolder Ids'": {
+      "main": [
+        [
+          {
+            "node": "Call Get report-data fileId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Get report-data fileId": {
+      "main": [
+        [
+          {
+            "node": "Get Report Data - Sale Comps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Report Data - Sale Comps": {
+      "main": [
+        [
+          {
+            "node": "Filter2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter2": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dougiefreshdesigns.app.n8n.cloud",
+            "user-agent": "node",
+            "content-length": "4270",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "*",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "159.118.76.37",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "979e4464b7abc52b-EWR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "159.118.76.37, 104.23.187.21",
+            "x-forwarded-host": "dougiefreshdesigns.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-76-b4b8c88f-tkrcr",
+            "x-is-trusted": "yes",
+            "x-real-ip": "159.118.76.37"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "projectFolderId": "1sCYiOv0d09VLQpxI_xa11EIxiabVzUHh",
+            "type": "sales",
+            "query": "2941 Didram",
+            "instrumentNumber": "",
+            "apn": "29986.01438.00000"
+          },
+          "webhookUrl": "https://dougiefreshdesigns.app.n8n.cloud/webhook/comps-folder-list",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
