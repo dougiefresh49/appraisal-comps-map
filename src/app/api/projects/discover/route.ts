@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient, getGoogleToken } from "~/utils/supabase/server";
 import {
   discoverFolderStructure,
-  findSpreadsheetId,
+  findSpreadsheetCandidates,
 } from "~/lib/project-discovery";
 
 export async function POST(request: NextRequest) {
@@ -32,10 +32,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [folderStructure, spreadsheetId] = await Promise.all([
-      discoverFolderStructure(token, body.projectFolderId),
-      findSpreadsheetId(token, body.projectFolderId),
-    ]);
+    const folderStructure = await discoverFolderStructure(token, body.projectFolderId);
+
+    const spreadsheetCandidates = await findSpreadsheetCandidates(
+      token,
+      folderStructure.reportsFolderId,
+      body.projectFolderId,
+    );
+
+    const spreadsheetId =
+      spreadsheetCandidates.length === 1
+        ? spreadsheetCandidates[0]!.id
+        : null;
 
     const supabase = await createClient();
     const { error: updateError } = await supabase
@@ -58,6 +66,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       folderStructure,
       spreadsheetId,
+      spreadsheetCandidates,
     });
   } catch (err) {
     console.error("Project discovery error:", err);
