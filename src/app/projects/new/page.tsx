@@ -89,17 +89,31 @@ export default function NewProjectPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(
-        env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/project-data",
-        {
+      // Try local API route first, fallback to N8N webhook
+      let response;
+      try {
+        response = await fetch("/api/project-data", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectFolderId: projectFolderId.trim(),
             include: { subjectPhoto: false },
           }),
-        },
-      );
+        });
+      } catch (localErr) {
+        // Fallback to N8N webhook
+        response = await fetch(
+          env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/project-data",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectFolderId: projectFolderId.trim(),
+              include: { subjectPhoto: false },
+            }),
+          },
+        );
+      }
 
       if (!response.ok) {
         throw new Error(`Failed to fetch project data: ${response.statusText}`);
