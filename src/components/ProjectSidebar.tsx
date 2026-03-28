@@ -13,7 +13,7 @@ interface ProjectSidebarProps {
 
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const pathname = usePathname();
-  const { project, isLoading: isProjectLoading, projectName } = useProject(projectId);
+  const { project, projectName } = useProject(projectId);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Helper to check if a path is active

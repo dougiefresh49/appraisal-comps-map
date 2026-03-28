@@ -1,3 +1,8 @@
+import type {
+  PostgrestError,
+  PostgrestResponse,
+  PostgrestSingleResponse,
+} from "@supabase/supabase-js";
 import { createClient } from "~/utils/supabase/client";
 import type {
   ProjectData,
@@ -128,14 +133,14 @@ export interface ProjectListItem {
 
 export async function fetchProjectsList(): Promise<ProjectListItem[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const listResult = (await supabase
     .from("projects")
     .select("id, name, subject, property_type, client_company, updated_at")
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })) as PostgrestResponse<ProjectRow>;
 
-  if (error) throw error;
+  if (listResult.error) throw listResult.error;
 
-  return ((data ?? []) as ProjectRow[]).map((row) => ({
+  return (listResult.data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
     subject: row.subject,
@@ -150,28 +155,32 @@ export async function fetchProject(
 ): Promise<{ project: ProjectData; name: string } | null> {
   const supabase = createClient();
 
-  const [projectRes, compsRes, mapsRes] = await Promise.all([
+  const [projectRes, compsRes, mapsRes] = (await Promise.all([
     supabase.from("projects").select("*").eq("id", projectId).single(),
     supabase.from("comparables").select("*").eq("project_id", projectId),
     supabase.from("maps").select("*").eq("project_id", projectId),
-  ]);
+  ])) as [
+    PostgrestSingleResponse<ProjectRow>,
+    PostgrestResponse<ComparableRow>,
+    PostgrestResponse<MapRow>,
+  ];
 
   if (projectRes.error || !projectRes.data) return null;
 
-  const mapRows = (mapsRes.data ?? []) as MapRow[];
+  const mapRows = mapsRes.data ?? [];
   const mapIds = mapRows.map((m) => m.id);
 
   let markerRows: MapMarkerRow[] = [];
   if (mapIds.length > 0) {
-    const markersRes = await supabase
+    const markersRes = (await supabase
       .from("map_markers")
       .select("*")
-      .in("map_id", mapIds);
-    markerRows = (markersRes.data ?? []) as MapMarkerRow[];
+      .in("map_id", mapIds)) as PostgrestResponse<MapMarkerRow>;
+    markerRows = markersRes.data ?? [];
   }
 
-  const projectRow = projectRes.data as ProjectRow;
-  const compRows = (compsRes.data ?? []) as ComparableRow[];
+  const projectRow = projectRes.data;
+  const compRows = compsRes.data ?? [];
 
   const markersByMapId = new Map<string, MapMarker[]>();
   for (const row of markerRows) {
@@ -207,7 +216,7 @@ export async function insertProject(
 ): Promise<string> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
+  const insertResult = (await supabase
     .from("projects")
     .insert({
       name,
@@ -219,10 +228,13 @@ export async function insertProject(
       subject: project.subject,
     })
     .select("id")
-    .single();
+    .single()) as unknown as PostgrestSingleResponse<{ id: string }>;
 
-  if (error) throw error;
-  const projectId = data.id as string;
+  if (insertResult.error) throw insertResult.error;
+  if (!insertResult.data) {
+    throw new Error("Insert project returned no row");
+  }
+  const projectId = insertResult.data.id;
 
   if (project.comparables.length > 0) {
     await batchInsertComparables(projectId, project.comparables);
@@ -511,14 +523,17 @@ export async function acquirePageLock(
 ): Promise<boolean> {
   const supabase = createClient();
 
-  const { data: rawExisting } = await supabase
+  const existingResult = await supabase
     .from("page_locks")
     .select("locked_by, locked_at")
     .eq("project_id", projectId)
     .eq("page_key", pageKey)
     .single();
 
-  const existing = rawExisting as { locked_by: string; locked_at: string } | null;
+  const existing = existingResult.data as {
+    locked_by: string;
+    locked_at: string;
+  } | null;
 
   if (existing && existing.locked_by !== userId) {
     const lockedAt = new Date(existing.locked_at);
@@ -646,30 +661,30 @@ export async function fetchProjectPhotos(
   projectId: string,
 ): Promise<PhotoAnalysis[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const photosResult = (await supabase
     .from("photo_analyses")
     .select("*")
     .eq("project_id", projectId)
     .eq("is_included", true)
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })) as PostgrestResponse<PhotoAnalysisRow>;
 
-  if (error) throw error;
-  return ((data ?? []) as PhotoAnalysisRow[]).map(photoFromRow);
+  if (photosResult.error) throw photosResult.error;
+  return (photosResult.data ?? []).map(photoFromRow);
 }
 
 export async function fetchArchivedPhotos(
   projectId: string,
 ): Promise<PhotoAnalysis[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const photosResult = (await supabase
     .from("photo_analyses")
     .select("*")
     .eq("project_id", projectId)
     .eq("is_included", false)
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })) as PostgrestResponse<PhotoAnalysisRow>;
 
-  if (error) throw error;
-  return ((data ?? []) as PhotoAnalysisRow[]).map(photoFromRow);
+  if (photosResult.error) throw photosResult.error;
+  return (photosResult.data ?? []).map(photoFromRow);
 }
 
 export async function updatePhotoLabel(photoId: string, label: string) {
@@ -761,21 +776,22 @@ export async function fetchIncludedPhotosForExport(
   projectId: string,
 ): Promise<{ image: string; label: string }[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const exportResult = (await supabase
     .from("photo_analyses")
     .select("file_name, label")
     .eq("project_id", projectId)
     .eq("is_included", true)
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })) as PostgrestResponse<{
+    file_name: string;
+    label: string;
+  }>;
 
-  if (error) throw error;
+  if (exportResult.error) throw exportResult.error;
 
-  return ((data ?? []) as { file_name: string; label: string }[]).map(
-    (row) => ({
-      image: row.file_name,
-      label: row.label,
-    }),
-  );
+  return (exportResult.data ?? []).map((row) => ({
+    image: row.file_name,
+    label: row.label,
+  }));
 }
 
 // ============================================================
@@ -834,30 +850,32 @@ export async function fetchReportSection(
   sectionKey: string,
 ): Promise<ReportSection | null> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const sectionResult = await supabase
     .from("report_sections")
     .select("*")
     .eq("project_id", projectId)
     .eq("section_key", sectionKey)
     .single();
 
-  if (error && error.code !== "PGRST116") throw error;
-  if (!data) return null;
-  return reportSectionFromRow(data as ReportSectionRow);
+  if (sectionResult.error && sectionResult.error.code !== "PGRST116") {
+    throw sectionResult.error;
+  }
+  if (!sectionResult.data) return null;
+  return reportSectionFromRow(sectionResult.data as ReportSectionRow);
 }
 
 export async function fetchAllReportSections(
   projectId: string,
 ): Promise<ReportSection[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const allResult = (await supabase
     .from("report_sections")
     .select("*")
     .eq("project_id", projectId)
-    .order("section_key");
+    .order("section_key")) as PostgrestResponse<ReportSectionRow>;
 
-  if (error) throw error;
-  return ((data ?? []) as ReportSectionRow[]).map(reportSectionFromRow);
+  if (allResult.error) throw allResult.error;
+  return (allResult.data ?? []).map(reportSectionFromRow);
 }
 
 export async function upsertReportSection(
@@ -868,14 +886,14 @@ export async function upsertReportSection(
 ): Promise<ReportSection> {
   const supabase = createClient();
 
-  const { data: existing } = await supabase
+  const existingResult = await supabase
     .from("report_sections")
     .select("id, content, version, generation_context")
     .eq("project_id", projectId)
     .eq("section_key", sectionKey)
     .single();
 
-  const existingRow = existing as {
+  const existingRow = existingResult.data as {
     id: string;
     content: string;
     version: number;
@@ -890,7 +908,7 @@ export async function upsertReportSection(
       generation_context: existingRow.generation_context ?? {},
     });
 
-    const { data, error } = await supabase
+    const updateResult = await supabase
       .from("report_sections")
       .update({
         content,
@@ -901,11 +919,14 @@ export async function upsertReportSection(
       .select("*")
       .single();
 
-    if (error) throw error;
-    return reportSectionFromRow(data as ReportSectionRow);
+    if (updateResult.error) throw updateResult.error;
+    if (!updateResult.data) {
+      throw new Error("Update report section returned no row");
+    }
+    return reportSectionFromRow(updateResult.data as ReportSectionRow);
   }
 
-  const { data, error } = await supabase
+  const insertSectionResult = await supabase
     .from("report_sections")
     .insert({
       project_id: projectId,
@@ -917,8 +938,11 @@ export async function upsertReportSection(
     .select("*")
     .single();
 
-  if (error) throw error;
-  return reportSectionFromRow(data as ReportSectionRow);
+  if (insertSectionResult.error) throw insertSectionResult.error;
+  if (!insertSectionResult.data) {
+    throw new Error("Insert report section returned no row");
+  }
+  return reportSectionFromRow(insertSectionResult.data as ReportSectionRow);
 }
 
 export type RealtimeReportSectionPayload = {
@@ -1020,14 +1044,14 @@ export async function fetchProjectDocuments(
   projectId: string,
 ): Promise<ProjectDocument[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const docsResult = (await supabase
     .from("project_documents")
     .select("*")
     .eq("project_id", projectId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })) as PostgrestResponse<ProjectDocumentRow>;
 
-  if (error) throw error;
-  return ((data ?? []) as ProjectDocumentRow[]).map(projectDocumentFromRow);
+  if (docsResult.error) throw docsResult.error;
+  return (docsResult.data ?? []).map(projectDocumentFromRow);
 }
 
 export async function fetchDocumentsByType(
@@ -1035,15 +1059,15 @@ export async function fetchDocumentsByType(
   documentType: string,
 ): Promise<ProjectDocument[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const docsResult = (await supabase
     .from("project_documents")
     .select("*")
     .eq("project_id", projectId)
     .eq("document_type", documentType)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })) as PostgrestResponse<ProjectDocumentRow>;
 
-  if (error) throw error;
-  return ((data ?? []) as ProjectDocumentRow[]).map(projectDocumentFromRow);
+  if (docsResult.error) throw docsResult.error;
+  return (docsResult.data ?? []).map(projectDocumentFromRow);
 }
 
 export async function insertProjectDocument(
@@ -1057,7 +1081,7 @@ export async function insertProjectDocument(
   },
 ): Promise<ProjectDocument> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const insertDocResult = await supabase
     .from("project_documents")
     .insert({
       project_id: projectId,
@@ -1070,8 +1094,11 @@ export async function insertProjectDocument(
     .select("*")
     .single();
 
-  if (error) throw error;
-  return projectDocumentFromRow(data as ProjectDocumentRow);
+  if (insertDocResult.error) throw insertDocResult.error;
+  if (!insertDocResult.data) {
+    throw new Error("Insert document returned no row");
+  }
+  return projectDocumentFromRow(insertDocResult.data as ProjectDocumentRow);
 }
 
 export async function updateDocumentProcessingResult(
@@ -1169,17 +1196,19 @@ export async function fetchKnowledgeBase(
     query = query.eq("content_type", contentType);
   }
 
-  const { data, error } = await query.order("created_at");
-
-  if (error) throw error;
-  return ((data ?? []) as {
+  const kbResult = (await query.order(
+    "created_at",
+  )) as PostgrestResponse<{
     id: string;
     gem_name: string;
     content_type: string;
     input: string | null;
     output: string;
     created_at: string;
-  }[]).map((row) => ({
+  }>;
+
+  if (kbResult.error) throw kbResult.error;
+  return (kbResult.data ?? []).map((row) => ({
     id: row.id,
     gemName: row.gem_name,
     contentType: row.content_type,
@@ -1196,13 +1225,13 @@ export async function insertKnowledgeBaseEntry(entry: {
   output: string;
 }): Promise<void> {
   const supabase = createClient();
-  const { error } = await supabase.from("knowledge_base").insert({
+  const insertKbResult = (await supabase.from("knowledge_base").insert({
     gem_name: entry.gemName,
     content_type: entry.contentType,
     input: entry.input ?? null,
     output: entry.output,
-  });
-  if (error) throw error;
+  })) as { error: PostgrestError | null };
+  if (insertKbResult.error) throw insertKbResult.error;
 }
 
 // ============================================================
@@ -1228,16 +1257,12 @@ export async function searchSimilarReportSections(
   limit = 5,
 ): Promise<SimilarReportSection[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("search_similar_report_sections", {
+  const rpcResult = (await supabase.rpc("search_similar_report_sections", {
     query_embedding: JSON.stringify(embedding),
     match_section_key: sectionKey ?? null,
     match_limit: limit,
     similarity_threshold: 0.3,
-  });
-
-  if (error) throw error;
-
-  return ((data ?? []) as {
+  })) as PostgrestResponse<{
     id: string;
     project_id: string;
     section_key: string;
@@ -1248,7 +1273,11 @@ export async function searchSimilarReportSections(
     county: string | null;
     subject_address: string | null;
     similarity: number;
-  }[]).map((row) => ({
+  }>;
+
+  if (rpcResult.error) throw rpcResult.error;
+
+  return (rpcResult.data ?? []).map((row) => ({
     id: row.id,
     projectId: row.project_id,
     sectionKey: row.section_key,
@@ -1278,16 +1307,12 @@ export async function searchSimilarDocuments(
   limit = 5,
 ): Promise<SimilarDocument[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("search_similar_documents", {
+  const rpcResult = (await supabase.rpc("search_similar_documents", {
     query_embedding: JSON.stringify(embedding),
     match_document_type: documentType ?? null,
     match_limit: limit,
     similarity_threshold: 0.3,
-  });
-
-  if (error) throw error;
-
-  return ((data ?? []) as {
+  })) as PostgrestResponse<{
     id: string;
     project_id: string;
     document_type: string;
@@ -1295,7 +1320,11 @@ export async function searchSimilarDocuments(
     extracted_text: string | null;
     structured_data: Record<string, unknown>;
     similarity: number;
-  }[]).map((row) => ({
+  }>;
+
+  if (rpcResult.error) throw rpcResult.error;
+
+  return (rpcResult.data ?? []).map((row) => ({
     id: row.id,
     projectId: row.project_id,
     documentType: row.document_type,
@@ -1322,24 +1351,24 @@ export async function searchSimilarKnowledge(
   limit = 5,
 ): Promise<SimilarKnowledge[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("search_similar_knowledge", {
+  const rpcResult = (await supabase.rpc("search_similar_knowledge", {
     query_embedding: JSON.stringify(embedding),
     match_gem_name: gemName ?? null,
     match_content_type: contentType ?? null,
     match_limit: limit,
     similarity_threshold: 0.3,
-  });
-
-  if (error) throw error;
-
-  return ((data ?? []) as {
+  })) as PostgrestResponse<{
     id: string;
     gem_name: string;
     content_type: string;
     input: string | null;
     output: string;
     similarity: number;
-  }[]).map((row) => ({
+  }>;
+
+  if (rpcResult.error) throw rpcResult.error;
+
+  return (rpcResult.data ?? []).map((row) => ({
     id: row.id,
     gemName: row.gem_name,
     contentType: row.content_type,

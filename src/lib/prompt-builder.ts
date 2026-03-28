@@ -1,3 +1,4 @@
+import type { PostgrestResponse } from "@supabase/supabase-js";
 import { createClient } from "~/utils/supabase/server";
 import { generateEmbedding } from "~/lib/embeddings";
 
@@ -52,11 +53,10 @@ export async function buildReportPrompt(
   return assemblePrompt(context);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = any;
+type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
 
 async function gatherContext(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   sectionKey: SectionKey,
   projectId: string,
 ): Promise<PromptContext> {
@@ -88,7 +88,7 @@ async function gatherContext(
 }
 
 async function fetchKnowledgeForSection(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   sectionKey: SectionKey,
 ): Promise<{
   systemPrompt: string;
@@ -105,21 +105,20 @@ async function fetchKnowledgeForSection(
 
   const gemName = gemNameMap[sectionKey];
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const { data, error } = await supabase
+  const result = (await supabase
     .from("knowledge_base")
     .select("content_type, input, output")
-    .eq("gem_name", gemName);
-
-  if (error || !data) {
-    return { systemPrompt: "", examples: [], knowledge: [] };
-  }
-
-  const rows = data as {
+    .eq("gem_name", gemName)) as PostgrestResponse<{
     content_type: string;
     input: string | null;
     output: string;
-  }[];
+  }>;
+
+  if (result.error || !result.data) {
+    return { systemPrompt: "", examples: [], knowledge: [] };
+  }
+
+  const rows = result.data;
 
   const systemPrompt =
     rows
@@ -144,21 +143,20 @@ async function fetchKnowledgeForSection(
 }
 
 async function fetchProjectData(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   projectId: string,
 ): Promise<Record<string, unknown>> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const { data } = await supabase
+  const result = await supabase
     .from("projects")
     .select("*")
     .eq("id", projectId)
     .single();
 
-  return (data as Record<string, unknown>) ?? {};
+  return (result.data ?? {}) as Record<string, unknown>;
 }
 
 async function fetchRelevantDocuments(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   projectId: string,
   sectionKey: SectionKey,
 ): Promise<{ type: string; text: string; structured: Record<string, unknown> }[]> {
@@ -166,23 +164,20 @@ async function fetchRelevantDocuments(
 
   if (!docTypes || docTypes.length === 0) return [];
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const { data } = await supabase
+  const result = (await supabase
     .from("project_documents")
     .select("document_type, extracted_text, structured_data")
     .eq("project_id", projectId)
     .in("document_type", docTypes)
-    .not("extracted_text", "is", null);
+    .not("extracted_text", "is", null)) as PostgrestResponse<{
+    document_type: string;
+    extracted_text: string | null;
+    structured_data: Record<string, unknown>;
+  }>;
 
-  if (!data) return [];
+  if (!result.data) return [];
 
-  return (
-    data as {
-      document_type: string;
-      extracted_text: string | null;
-      structured_data: Record<string, unknown>;
-    }[]
-  ).map((d) => ({
+  return result.data.map((d) => ({
     type: d.document_type,
     text: d.extracted_text ?? "",
     structured: d.structured_data ?? {},
@@ -190,24 +185,23 @@ async function fetchRelevantDocuments(
 }
 
 async function fetchPhotoContext(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   projectId: string,
 ): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const { data } = await supabase
+  const result = (await supabase
     .from("photo_analyses")
     .select("label, description, improvements_observed")
     .eq("project_id", projectId)
     .eq("is_included", true)
-    .order("sort_order");
-
-  if (!data || data.length === 0) return "";
-
-  const photos = data as {
+    .order("sort_order")) as PostgrestResponse<{
     label: string;
     description: string | null;
     improvements_observed: Record<string, string>;
-  }[];
+  }>;
+
+  if (!result.data || result.data.length === 0) return "";
+
+  const photos = result.data;
 
   const improvementsMap = new Map<string, string>();
   for (const photo of photos) {
@@ -231,7 +225,7 @@ async function fetchPhotoContext(
 }
 
 async function fetchRelatedSections(
-  supabase: SupabaseClient,
+  supabase: ServerSupabase,
   projectId: string,
   sectionKey: SectionKey,
 ): Promise<Record<string, string>> {
@@ -239,17 +233,19 @@ async function fetchRelatedSections(
 
   const prerequisiteSections = ["zoning", "ownership", "subject-site-summary"];
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const { data } = await supabase
+  const result = (await supabase
     .from("report_sections")
     .select("section_key, content")
     .eq("project_id", projectId)
-    .in("section_key", prerequisiteSections);
+    .in("section_key", prerequisiteSections)) as PostgrestResponse<{
+    section_key: string;
+    content: string;
+  }>;
 
-  if (!data) return {};
+  if (!result.data) return {};
 
   const sections: Record<string, string> = {};
-  for (const row of data as { section_key: string; content: string }[]) {
+  for (const row of result.data) {
     sections[row.section_key] = row.content;
   }
   return sections;
@@ -267,16 +263,19 @@ async function fetchSimilarPastSections(
 
     const serverSupabase = await createClient();
 
-    const { data } = await serverSupabase.rpc("search_similar_report_sections", {
+    const rpcResult = (await serverSupabase.rpc("search_similar_report_sections", {
       query_embedding: JSON.stringify(embedding),
       match_section_key: sectionKey,
       match_limit: 3,
       similarity_threshold: 0.5,
-    });
+    })) as PostgrestResponse<{
+      content: string;
+      subject_address: string | null;
+    }>;
 
-    if (!data) return [];
+    if (!rpcResult.data) return [];
 
-    return (data as { content: string; subject_address: string | null }[])
+    return rpcResult.data
       .filter((r) => r.content.trim().length > 100)
       .map(
         (r) =>
