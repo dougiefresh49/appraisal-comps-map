@@ -11,58 +11,126 @@ interface ProjectSidebarProps {
   projectId: string;
 }
 
+interface NavItem {
+  label: string;
+  href: string;
+}
+
+interface NavSection {
+  key: string;
+  label: string;
+  items: NavItem[];
+}
+
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const pathname = usePathname();
   const { project, projectName } = useProject(projectId);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Helper to check if a path is active
+  const p = `/project/${projectId}`;
+
   const isActive = (path: string) => {
-    // Exact match or sub-path match for reports
-    if (path === `/project/${projectId}`) {
-      return pathname === path;
-    }
-    return pathname?.startsWith(path);
+    if (path === p) return pathname === path;
+    return pathname?.startsWith(path) ?? false;
   };
 
-  const [expandedSections, setExpandedSections] = useState<
-    Record<string, boolean>
-  >({
-    subject: true,
-    landSales: true,
-    sales: true,
-    rentals: true,
-    parser: true,
-  });
+  const isActiveExact = (path: string, excludes?: string[]) => {
+    if (!pathname?.startsWith(path)) return false;
+    if (excludes) {
+      return !excludes.some((e) => pathname.startsWith(e));
+    }
+    return true;
+  };
 
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+  const subjectPhotoHref = project?.projectFolderId
+    ? `${p}/subject/photos?folderId=${project.subjectPhotosFolderId ?? ""}&projectFolderId=${project.projectFolderId}`
+    : `${p}/subject/photos`;
+
+  const navSections: NavSection[] = [
+    {
+      key: "subject",
+      label: "Subject",
+      items: [
+        { label: "Overview", href: `${p}/subject/overview` },
+        { label: "Improvements", href: `${p}/subject/improvements` },
+        { label: "Location Map", href: `${p}/subject/location-map` },
+        { label: "Photos", href: subjectPhotoHref },
+      ],
+    },
+    {
+      key: "neighborhood",
+      label: "Neighborhood",
+      items: [
+        { label: "Map & Analysis", href: `${p}/neighborhood` },
+      ],
+    },
+    {
+      key: "landSales",
+      label: "Land Sales",
+      items: [
+        { label: "Comps", href: `${p}/land-sales/comparables` },
+        { label: "Map", href: `${p}/land-sales/comparables-map` },
+      ],
+    },
+    {
+      key: "sales",
+      label: "Sales",
+      items: [
+        { label: "Comps", href: `${p}/sales/comparables` },
+        { label: "Map", href: `${p}/sales/comparables-map` },
+        { label: "Comp UI", href: `${p}/sales/ui` },
+      ],
+    },
+    {
+      key: "rentals",
+      label: "Rentals",
+      items: [
+        { label: "Comps", href: `${p}/rentals/comparables` },
+        { label: "Map", href: `${p}/rentals/comparables-map` },
+      ],
+    },
+    {
+      key: "analysis",
+      label: "Analysis",
+      items: [
+        { label: "Zoning", href: `${p}/analysis/zoning` },
+        { label: "Ownership", href: `${p}/analysis/ownership` },
+        { label: "Subject Site Summary", href: `${p}/analysis/subject-site-summary` },
+        { label: "Highest and Best Use", href: `${p}/analysis/highest-best-use` },
+      ],
+    },
+  ];
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(navSections.map((s) => [s.key, true])),
+  );
+
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
-    <aside 
+    <aside
       className={`relative z-[60] flex h-screen flex-col border-r border-gray-200 bg-white shadow-sm transition-all duration-300 dark:border-gray-800 dark:bg-gray-900 ${
         isCollapsed ? "w-12" : "w-64"
       }`}
     >
+      {/* Header */}
       <div className="flex items-center justify-between p-4 pb-2">
         {!isCollapsed && (
           <div className="overflow-hidden">
-             <h2
-                className="truncate text-lg font-bold text-gray-900 dark:text-gray-100"
-                title={projectName || projectId}
-              >
-                {projectName || projectId}
-              </h2>
-              <Link
-                href="/projects"
-                className="text-xs text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                ← All Projects
-              </Link>
+            <h2
+              className="truncate text-lg font-bold text-gray-900 dark:text-gray-100"
+              title={projectName ?? projectId}
+            >
+              {projectName ?? projectId}
+            </h2>
+            <Link
+              href="/projects"
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              ← All Projects
+            </Link>
           </div>
         )}
         <button
@@ -78,12 +146,16 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
         </button>
       </div>
 
-      <div className={`flex-1 overflow-y-auto p-4 pt-0 ${isCollapsed ? "hidden" : ""}`}>
+      {/* Nav */}
+      <div
+        className={`flex-1 overflow-y-auto p-4 pt-0 ${isCollapsed ? "hidden" : ""}`}
+      >
         <nav className="mt-4 space-y-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+          {/* Dashboard */}
           <Link
-            href={`/project/${projectId}`}
+            href={p}
             className={`block rounded-md px-3 py-2 transition ${
-              pathname === `/project/${projectId}`
+              pathname === p
                 ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800"
             }`}
@@ -91,10 +163,11 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             Dashboard
           </Link>
 
+          {/* Cover Page */}
           <Link
-            href={`/project/${projectId}/cover`}
+            href={`${p}/cover`}
             className={`block rounded-md px-3 py-2 transition ${
-              isActive(`/project/${projectId}/cover`)
+              isActive(`${p}/cover`)
                 ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800"
             }`}
@@ -102,229 +175,53 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             Cover Page
           </Link>
 
-          <Link
-            href={`/project/${projectId}/neighborhood-map`}
-            className={`block rounded-md px-3 py-2 transition ${
-              isActive(`/project/${projectId}/neighborhood-map`)
-                ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
-          >
-            Neighborhood Map
-          </Link>
+          {/* Collapsible sections */}
+          {navSections.map((section) => (
+            <div key={section.key} className="pt-2">
+              <button
+                onClick={() => toggleSection(section.key)}
+                className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold uppercase text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <span>{section.label}</span>
+                <span>{expandedSections[section.key] ? "▼" : "▶"}</span>
+              </button>
 
-          <Link
-            href={`/project/${projectId}/reports`}
-            className={`block rounded-md px-3 py-2 transition ${
-              isActive(`/project/${projectId}/reports`)
-                ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
-          >
-            Reports
-          </Link>
+              {expandedSections[section.key] && (
+                <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+                  {section.items.map((item) => {
+                    const hrefBase = item.href.split("?")[0]!;
+                    const active = isActiveExact(hrefBase);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`block rounded-md px-3 py-2 transition ${
+                          active
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
 
-          {/* Subject Section */}
+          {/* Documents */}
           <div className="pt-2">
-            <button
-              onClick={() => toggleSection("subject")}
-              className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            <Link
+              href={`${p}/documents`}
+              className={`block rounded-md px-3 py-2 transition ${
+                isActive(`${p}/documents`)
+                  ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "hover:bg-gray-100 dark:hover:bg-gray-800"
+              }`}
             >
-              <span>Subject</span>
-              <span>{expandedSections.subject ? "▼" : "▶"}</span>
-            </button>
-            {expandedSections.subject && (
-              <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                <Link
-                  href={`/project/${projectId}/subject/location-map`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/subject/location-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Location Map
-                </Link>
-                <Link
-                  href={
-                    project?.projectFolderId
-                      ? `/project/${projectId}/subject/photos?folderId=${project?.subjectPhotosFolderId}&projectFolderId=${project?.projectFolderId}`
-                      : `/project/${projectId}/subject/photos`
-                  }
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/subject/photos`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Photos
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Land Sales Section */}
-          <div className="pt-2">
-            <button
-              onClick={() => toggleSection("landSales")}
-              className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span>Land Sales</span>
-              <span>{expandedSections.landSales ? "▼" : "▶"}</span>
-            </button>
-            {expandedSections.landSales && (
-              <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                <Link
-                  href={`/project/${projectId}/land-sales/comparables`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/land-sales/comparables`) &&
-                    !isActive(`/project/${projectId}/land-sales/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Comps
-                </Link>
-                <Link
-                  href={`/project/${projectId}/land-sales/comparables-map`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/land-sales/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Map
-                </Link>
-                {/* Future: Comps list or details could go here */}
-              </div>
-            )}
-          </div>
-
-          {/* Sales Section */}
-          <div className="pt-2">
-            <button
-              onClick={() => toggleSection("sales")}
-              className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span>Sales</span>
-              <span>{expandedSections.sales ? "▼" : "▶"}</span>
-            </button>
-            {expandedSections.sales && (
-              <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                <Link
-                  href={`/project/${projectId}/sales/comparables`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/sales/comparables`) &&
-                    !isActive(`/project/${projectId}/sales/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Comps
-                </Link>
-                <Link
-                  href={`/project/${projectId}/sales/comparables-map`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/sales/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Map
-                </Link>
-                <Link
-                  href={`/project/${projectId}/sales/ui`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/sales/ui`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  UI
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Rentals Section */}
-          <div className="pt-2">
-            <button
-              onClick={() => toggleSection("rentals")}
-              className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span>Rentals</span>
-              <span>{expandedSections.rentals ? "▼" : "▶"}</span>
-            </button>
-            {expandedSections.rentals && (
-              <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                <Link
-                  href={`/project/${projectId}/rentals/comparables`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/rentals/comparables`) &&
-                    !isActive(`/project/${projectId}/rentals/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Comps
-                </Link>
-                <Link
-                  href={`/project/${projectId}/rentals/comparables-map`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/rentals/comparables-map`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Map
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Parser Section */}
-          <div className="pt-2">
-            <button
-              onClick={() => toggleSection("parser")}
-              className="flex w-full items-center justify-between px-3 py-1 text-xs font-semibold text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span>Parser</span>
-              <span>{expandedSections.parser ? "▼" : "▶"}</span>
-            </button>
-            {expandedSections.parser && (
-              <div className="ml-2 space-y-1 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-                <Link
-                  href={`/project/${projectId}/parser/land`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/parser/land`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Land
-                </Link>
-                <Link
-                  href={`/project/${projectId}/parser/sales`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/parser/sales`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Sales
-                </Link>
-                <Link
-                  href={`/project/${projectId}/parser/rentals`}
-                  className={`block rounded-md px-3 py-2 transition ${
-                    isActive(`/project/${projectId}/parser/rentals`)
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Rentals
-                </Link>
-              </div>
-            )}
+              Documents
+            </Link>
           </div>
         </nav>
       </div>

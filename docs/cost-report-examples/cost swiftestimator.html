@@ -1,0 +1,2395 @@
+<html>
+  <head>
+    <style type="text/css">
+      /* ============================================================
+	INITIALIZE
+============================================================ */
+      /*! normalize.css v3.0.3 | MIT License | github.com/necolas/normalize.css */
+      /**
+ * 1. Set default font family to sans-serif.
+ * 2. Prevent iOS and IE text size adjust after device orientation change,
+ *    without disabling user zoom.
+ */
+
+      /* #region Fonts*/
+
+      /* Regular */
+      @font-face {
+        font-family: 'Lato';
+        src: url('../fonts/Lato/Lato-Regular.ttf') format('truetype');
+        font-weight: normal;
+        font-weight: 400;
+        font-style: normal;
+      }
+
+      /* Bold */
+      @font-face {
+        font-family: 'Lato';
+        src: url('../fonts/Lato/Lato-Bold.ttf') format('truetype');
+        font-weight: bold;
+        font-weight: 700;
+        font-style: normal;
+      }
+
+      /* Italic */
+      @font-face {
+        font-family: 'Lato';
+        src: url('../fonts/Lato/Lato-Italic.ttf') format('truetype');
+        font-weight: normal;
+        font-weight: 400;
+        font-style: italic;
+      }
+
+      /* Bold Italic */
+      @font-face {
+        font-family: 'Lato';
+        src: url('../fonts/Lato/Lato-BoldItalic.ttf') format('truetype');
+        font-weight: bold;
+        font-weight: 700;
+        font-style: italic;
+      }
+
+      /* #endregion Fonts */
+
+      /* #region Global Element Styling */
+
+      HTML {
+        -ms-text-size-adjust: 100%;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      /* For clarity, specify all fonts in points, not pixels or ems. */
+      BODY {
+        background: #eeeeee;
+        padding-top: 16px;
+        color: #222;
+        cursor: auto;
+        font-family: Lato, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 12pt; /* Set default size for all text - avoids variations based on User Settings. */
+        font-style: normal;
+        font-weight: normal;
+        letter-spacing: 0.02em; /* = 0.32px */
+        margin: 0 auto; /* Remove default margin. */
+        max-width: 1090px;
+        padding: 0 15px;
+        position: relative;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      *,
+      *:before,
+      *:after {
+        -webkit-box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        box-sizing: border-box;
+      }
+
+      /* Links */
+      A {
+        text-decoration: none;
+        color: #006699;
+        /* Remove the gray background color from active links in IE 10. */
+        background-color: transparent;
+        font-size: inherit;
+        white-space: nowrap;
+      }
+
+      A:hover {
+        cursor: pointer;
+        color: #17a2e3;
+      }
+
+      A:active,
+      A:hover {
+        /* For improved readability */
+        outline: 0;
+      }
+
+      /* Headings */
+      H1,
+      H2,
+      H3,
+      H4,
+      H5,
+      H6 {
+        font-weight: 400;
+        line-height: 1em;
+      }
+
+      /**
+ * Address variable `h1` font-size and margin within `section` and `article`
+ * contexts in Firefox 4+, Safari, and Chrome.
+ */
+      H1 {
+        font-family: 'Lato';
+        font-weight: bold !important;
+        color: #2d2d2d;
+        margin: 0.67em 0;
+      }
+
+      H2 {
+        font-family: 'Lato';
+        font-weight: bold;
+        font-size: 16pt;
+        color: #2d2d2d;
+        margin: 0.67em 0;
+      }
+
+      /* Text */
+
+      B {
+        color: black;
+        font-size: 10pt;
+      }
+
+      /* Address style set to `bolder` in Firefox 4+, Safari, and Chrome. */
+      B,
+      STRONG {
+        font-weight: bold;
+      }
+
+      NOBR {
+        color: #2d2d2d;
+        font-size: 10pt;
+      }
+
+      LABEL {
+        font-family: Lato;
+        font-size: 12pt;
+        color: #2d2d2d;
+      }
+
+      P {
+        font-family: 'Lato';
+        color: #626a6d;
+        font-size: 12pt;
+      }
+
+      PRE {
+        overflow: auto; /* Contain overflow in all browsers. */
+      }
+
+      /* Address odd `em`-unit font size rendering in all browsers.  */
+      CODE,
+      KBD,
+      PRE,
+      SAMP {
+        font-family: monospace, monospace;
+        font-size: 1em;
+      }
+
+      /* Data Entry */
+      BUTTON,
+      .button {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-color: #e57110;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        color: #ffffff;
+        cursor: pointer;
+        display: inline-block;
+        height: 45px;
+        width: 100%;
+        line-height: 45px;
+        font-size: 10pt;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin: 0;
+        /* Address `overflow` set to `hidden` in IE 8/9/10/11. */
+        overflow: visible;
+        padding: 0 20px 0 20px;
+        position: relative;
+        text-align: center;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition: background-color 300ms ease-out;
+      }
+
+      INPUT {
+        border: 1px solid #dddddd;
+        /* Address Firefox 4+ setting `line-height` on `input` using `!important` in the UA stylesheet. */
+        line-height: normal;
+        outline: 0;
+        padding: 0;
+        -webkit-transition: background-color 0.3s;
+        transition: background-color 0.3s;
+      }
+
+      /* Note, on pages tied to IE7 format, entries that use [type="text"], etc. will not be visible in Internet Explorer. */
+      INPUT[type='text'],
+      INPUT[type='password'] {
+        color: #626a6d;
+        font-size: 12pt;
+        padding: 0 15px;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        height: 36px;
+      }
+
+      INPUT[type='text']:focus {
+        color: #2d2d2d;
+      }
+
+      /**
+ * It's recommended that you don't attempt to style these elements.
+ * Firefox's implementation doesn't respect box-sizing, padding, or width.
+ *
+ * 1. Address box sizing set to `content-box` in IE 8/9/10.
+ * 2. Remove excess padding in IE 8/9/10.
+ */
+      INPUT[type='checkbox'],
+      INPUT[type='radio'] {
+        box-sizing: border-box; /* 1 */
+        padding: 0; /* 2 */
+      }
+
+      /**
+ * 1. Address `appearance` set to `searchfield` in Safari and Chrome.
+ * 2. Address `box-sizing` set to `border-box` in Safari and Chrome.
+ */
+      INPUT[type='search'] {
+        -webkit-appearance: textfield; /* 1 */
+        box-sizing: content-box; /* 2 */
+      }
+      /**
+ * Remove inner padding and search cancel button in Safari and Chrome on OS X.
+ * Safari (but not Chrome) clips the cancel button when the search input has
+ * padding (and `textfield` appearance).
+ */
+      INPUT[type='search']::-webkit-search-cancel-button,
+      INPUT[type='search']::-webkit-search-decoration {
+        -webkit-appearance: none;
+      }
+
+      /**
+ * Fix the cursor style for Chrome's increment/decrement buttons. For certain
+ * `font-size` values of the `input`, it causes the cursor style of the
+ * decrement button to change from `default` to `text`.
+ */
+      INPUT[type='number']::-webkit-inner-spin-button,
+      INPUT[type='number']::-webkit-outer-spin-button {
+        height: auto;
+      }
+
+      SELECT {
+        width: 100%;
+        border: 1px solid #dddddd;
+        color: #626a6d;
+        font-size: 12pt;
+        padding: 0 2px;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        height: 24px;
+        text-transform: none;
+        z-index: 0;
+      }
+
+      TEXTAREA {
+        height: auto;
+        min-height: 50px;
+        overflow: auto; /* Remove default vertical scrollbar in IE 8/9/10/11. */
+      }
+
+      /**
+ * Known limitation: by default, Chrome and Safari on OS X allow very limited
+ * styling of `select`, unless a `border` property is set.
+ *
+ *
+ * 1. Correct color not being inherited.
+ *    Known issue: affects color of disabled elements.
+ * 2. Correct font properties not being inherited.
+ * 3. Address margins set differently in Firefox 4+, Safari, and Chrome.
+ */
+      BUTTON,
+      INPUT,
+      OPTGROUP,
+      SELECT,
+      TEXTAREA {
+        color: inherit; /* 1 */
+        font: inherit; /* 2 */
+        margin: 0; /* 3 */
+      }
+
+      /**
+ * Address inconsistent `text-transform` inheritance for `button` and `select`.
+ * All other form control elements do not inherit `text-transform` values.
+ * Correct `button` style inheritance in Firefox, IE 8/9/10/11, and Opera.
+ * Correct `select` style inheritance in Firefox.
+ */
+
+      /**
+ * 1. Avoid the WebKit bug in Android 4.0.* where (2) destroys native `audio`
+ *    and `video` controls.
+ * 2. Correct inability to style clickable `input` types in iOS.
+ * 3. Improve usability and consistency of cursor style between image-type
+ *    `input` and others.
+ */
+      INPUT[type='button'],
+      INPUT[type='reset'],
+      INPUT[type='submit'] {
+        -webkit-appearance: button; /* 2 */
+        cursor: pointer; /* 3 */
+        border: none;
+      }
+
+      /* Re-set default cursor for disabled elements. */
+      BUTTON[disabled],
+      INPUT[disabled] {
+        cursor: default;
+        background-color: #eeeeee;
+      }
+
+      /* Remove inner padding and border in Firefox 4+. */
+      BUTTON::-moz-focus-inner,
+      INPUT::-moz-focus-inner {
+        border: 0;
+        padding: 0;
+      }
+
+      /* These next three are not used by SE7. 
+FIELDSET {
+	border: 1px solid #c0c0c0;
+	margin: 0 2px;
+	padding: 0.35em 0.625em 0.75em;
+}
+
+LEGEND {
+	border: 0;    /* Correct `color` not being inherited in IE 8/9/10/11. *
+	padding: 0;    /* Remove padding so people aren't caught out if they zero out fieldsets. *
+}
+
+
+ * Don't inherit the `font-weight` (applied by a rule above).
+ * NOTE: the default cannot safely be changed in Chrome and Safari on OS X.
+ *
+OPTGROUP {
+	font-weight: bold;
+}
+*/
+
+      /* Other elements */
+
+      /* Address differences between Firefox and other browsers. */
+      HR {
+        box-sizing: content-box;
+        height: 0;
+      }
+
+      IMG {
+        max-width: 100%;
+        height: auto;
+        display: inline-block;
+        vertical-align: middle;
+        /* Remove border when inside `a` element in IE 8/9/10. */
+        border: 0;
+      }
+
+      /* Remove most spacing between table cells. */
+      TABLE {
+        border-collapse: collapse;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      TD,
+      TH {
+        padding: 0;
+        font-size: 10pt;
+        color: #2d2d2d;
+      }
+
+      UL {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      /* #endregion Global Element Styling */
+
+      /* #region HTML5 display definitions */
+      /*   ==========================================================================
+ * Correct `block` display not defined for any HTML5 element in IE 8/9.
+ * Correct `block` display not defined for `details` or `summary` in IE 10/11
+ * and Firefox.
+ * Correct `block` display not defined for `main` in IE 11.
+ */
+      article,
+      aside,
+      details,
+      figcaption,
+      figure,
+      footer,
+      header,
+      hgroup,
+      main,
+      menu,
+      nav,
+      section,
+      summary {
+        display: block;
+      }
+
+      /**
+ * 1. Correct `inline-block` display not defined in IE 8/9.
+ * 2. Normalize vertical alignment of `progress` in Chrome, Firefox, and Opera.
+ */
+      audio,
+      canvas,
+      progress,
+      video {
+        display: inline-block;
+        /* 1 */
+        vertical-align: baseline;
+        /* 2 */
+      }
+
+      /*
+ * Prevent modern browsers from displaying `audio` without controls.
+ * Remove excess height in iOS 5 devices.
+ */
+      audio:not([controls]) {
+        display: none;
+        height: 0;
+      }
+
+      /**
+ * Address `[hidden]` styling not present in IE 8/9/10.
+ * Hide the `template` element in IE 8/9/10/11, Safari, and Firefox < 22.
+ */
+      [hidden],
+      template {
+        display: none;
+      }
+
+      /* Text-level semantics
+   ========================================================================== */
+      /**
+ * Address styling not present in IE 8/9/10/11, Safari, and Chrome.
+ */
+      abbr[title] {
+        border-bottom: 1px dotted;
+      }
+
+      /**
+ * Address styling not present in Safari and Chrome.
+ */
+      dfn {
+        font-style: italic;
+      }
+
+      /**
+ * Address styling not present in IE 8/9.
+ */
+      mark {
+        background: #ff0;
+        color: #000;
+      }
+
+      /**
+ * Address inconsistent and variable font size in all browsers.
+ */
+      small {
+        font-size: 80%;
+      }
+
+      /**
+ * Prevent `sub` and `sup` affecting `line-height` in all browsers.
+ */
+      sub,
+      sup {
+        font-size: 75%;
+        line-height: 0;
+        position: relative;
+        vertical-align: baseline;
+      }
+
+      sup {
+        top: -0.5em;
+      }
+
+      sub {
+        bottom: -0.25em;
+      }
+
+      /**
+ * Correct overflow not hidden in IE 9/10/11.
+ */
+      svg:not(:root) {
+        overflow: hidden;
+      }
+
+      /* Grouping content
+   ========================================================================== */
+      /**
+ * Address margin not present in IE 8/9 and Safari.
+ */
+      figure {
+        margin: 1em 40px;
+      }
+
+      /* #endregion HTML5 display definitions */
+
+      /* #region CoreLogic Colors */
+      /* CL Style Guide: Light blue #62B5E5 , Warm gray #8C8279, Warm Gray #6E6259, Light Gray #F1F0EB */
+      /* CL Design Lab: Blue #006699, Orange #F47D1C, Dark Grey #2D2D2D, Medium Grey #626A6D, Light Grey #EEEEEE, Lightest Grey #F3F5F5, Alert Red #DB421F , Alert Green #6A9B16 */
+
+      .cl-color-blue {
+        color: #006699;
+      }
+
+      .cl-color-orange {
+        color: #f47d1c;
+      }
+
+      .cl-color-darkgrey {
+        color: #2d2d2d;
+      }
+
+      .cl-color-mediumgrey {
+        color: #626a6d;
+      }
+
+      .cl-color-lightgrey {
+        color: #eeeeee;
+      }
+
+      .cl-color-lightestgrey {
+        color: #f3f5f5;
+      }
+
+      .cl-color-green {
+        color: #6a9b16;
+      }
+
+      .cl-color-red {
+        color: #db421f;
+      }
+
+      /* #endregion CoreLogic Colors */
+
+      /* #region Global Classes - apply to multiple element types */
+      /* Note, many of these are not really global and should be moved.  Others are not in use. */
+
+      .linkButtons A {
+        display: inline;
+        margin-left: 20px;
+        margin-right: 20px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+
+      .linkButtons A:hover {
+        color: white; /* Do not show blue text. */
+      }
+
+      .med_Width {
+        height: 30px;
+        line-height: 30px;
+        width: 130px;
+        margin: 0px 20px;
+      }
+
+      .wide_Width {
+        width: 325px;
+      }
+
+      .clearfix {
+        *zoom: 1;
+      }
+
+      .clearfix:before,
+      .clearfix:after {
+        content: ' ';
+        display: table;
+      }
+
+      .clearfix:after {
+        clear: both;
+      }
+
+      /* Layout  */
+      .mainWindow {
+        width: 900px !important; /* used to be 723 */
+      }
+
+      .mainFooter {
+        width: 900px; /* Should be larger than mainWindow. */
+        margin: 16px;
+        text-align: center;
+        font-size: 12pt;
+      }
+
+      /* These "cl-" classes currently support the login page only. */
+      .cl-inner-block {
+        background: #fff;
+        max-width: 1050px;
+        padding: 30px 60px 10px 60px;
+        margin-bottom: 40px;
+        overflow: auto;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        -webkit-box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+        -moz-box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+        box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+      }
+
+      .cl-app-logo {
+        margin: 0 0 25px 0;
+        font-size: 22pt;
+        line-height: 36px;
+      }
+
+      .cl-row {
+        margin: 0 auto;
+        max-width: 100%;
+        width: 100%;
+      }
+
+      .cl-row:before,
+      .cl-row:after {
+        content: ' ';
+        display: table;
+      }
+
+      .cl-row:after {
+        clear: both;
+      }
+
+      .cl-row .cl-row {
+        margin: 0 -0.9375em;
+        max-width: none;
+        width: auto;
+      }
+
+      .cl-column,
+      .cl-columns {
+        position: relative;
+        padding-left: 10px;
+        padding-right: 10px;
+        width: 100%;
+        float: left;
+      }
+
+      .cl-column + .cl-column:last-child,
+      .cl-columns + .cl-columns:last-child {
+        float: right;
+      }
+
+      .cl-column + .cl-column.end,
+      .cl-columns + .cl-columns.end {
+        float: left;
+      }
+
+      .cl-offset-1 {
+        padding-left: 8.33333% !important;
+      }
+
+      .cl-left-block {
+        max-width: 400px;
+      }
+
+      .cl-right-block {
+        /* Placeholder */
+      }
+
+      .cl-error {
+        color: red;
+        white-space: pre-line;
+      }
+
+      .cl-image {
+        position: absolute;
+        top: 40px;
+        right: -15px;
+        background: transparent !important;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        overflow: hidden;
+        -webkit-box-shadow: 0px 6px 21px 5px rgba(0, 0, 0, 0.15);
+        -moz-box-shadow: 0px 6px 21px 5px rgba(0, 0, 0, 0.15);
+        box-shadow: 0px 6px 21px 5px rgba(0, 0, 0, 0.15);
+      }
+
+      .cl-image IMG {
+        background: transparent !important;
+      }
+
+      /* Classes for grids */
+      .clsGrid {
+        border-right: thin inset;
+        border-top: thin inset;
+        overflow: scroll;
+        border-left: thin inset;
+        width: 100%;
+        border-bottom: thin inset;
+      }
+
+      .clsGridRow {
+        border: #626a6d 1px solid;
+      }
+
+      .clsGridRowHeader {
+        background-color: #62b5e5;
+      }
+
+      .clsGridRowHeader TD,
+      .clsGridRowHeader TH,
+      .clsGridRowHeader A {
+        color: black !important;
+        font-weight: bold !important;
+      }
+
+      .clsGridRowEven {
+        background-color: #f3f5f5;
+      }
+
+      .clsGridRowOdd {
+        background-color: #dddddd;
+      }
+
+      .clsGridRowFooter {
+        background-color: #62b5e5;
+      }
+
+      .clsGridRowHover TD {
+        cursor: hand;
+        background-color: #bfdcff; /* TO DO: Change legacy color. */
+      }
+
+      .clsGridRowHighlight TD {
+        cursor: hand;
+        color: white;
+        background-color: #1b57a6; /* TO DO: Change legacy color. */
+      }
+
+      .clsGridRowHeader TD,
+      .clsGridRowHeader TH,
+      .clsGridRowEven TD,
+      .clsGridRowOdd TD,
+      .clsGridRowHover TD,
+      .clsGridRowHighlight TD {
+        padding: 2px;
+        text-align: left;
+      }
+
+      /* For the Forgotten Password page. */
+      .cl-validator {
+        color: #db421f !important;
+      }
+
+      .innerWindow {
+        background-color: white;
+      }
+
+      .popupBorder {
+        border: 2px solid #006699;
+      }
+
+      /* #endregion Global Classes */
+
+      /* #region Element-specific Style Classes */
+      DIV.sampleHeader {
+        font-size: 12pt;
+        font-weight: bold;
+        height: 30px;
+        vertical-align: bottom;
+        text-align: left;
+        background-color: white;
+        position: relative;
+        top: 6px;
+        left: 20px;
+      }
+
+      FIELDSET.tutorial {
+        background-color: white;
+        height: 90%;
+        width: 90%;
+        border: 2px solid #006699;
+        /* margin-top: 5%; removed because it wasn't working in IE. */
+        margin-left: 5%;
+        position: relative;
+      }
+
+      FIELDSET.tutorial LEGEND {
+        background-color: white;
+        font-weight: bold;
+        font-size: 12pt;
+        position: absolute;
+        top: -1em;
+        left: 1em;
+      }
+
+      SPAN.spacer {
+        margin-left: 8px;
+        margin-right: 8px;
+      }
+
+      SPAN.required {
+        font-weight: bold;
+        color: red; /* Matches cl-error */
+        font-size: 13pt;
+        line-height: 13px;
+      }
+
+      SPAN.noM {
+        margin-right: 0px !important;
+      }
+
+      TD.docList {
+        font-size: 12pt;
+      }
+
+      TD.docList P {
+        margin-top: 100px;
+      }
+
+      TD.docList A {
+        color: #006699; /* formerly blue, #0000FF; */
+        font-size: 12pt;
+        font-weight: bold;
+        margin-left: 60px;
+        text-decoration: underline;
+      }
+
+      TD.docList SPAN {
+        font-size: 13pt;
+        font-weight: bold;
+        margin-left: 30px;
+      }
+
+      /* #endregion Element-specific Style Classes */
+
+      /* #region Frame styling */
+      #cl-header {
+        padding: 45px 0 45px;
+        text-align: center;
+      }
+
+      HEADER #cl-logo {
+        margin: 0 auto;
+        display: block;
+        width: 234px;
+        height: 67px;
+      }
+
+      #cl-header-loggedin {
+        margin: 0 5px;
+      }
+
+      #cl-header-loggedin:after {
+        clear: both;
+      }
+
+      #cl-header-loggedin div {
+        display: inline-block;
+        overflow: hidden;
+        padding-top: 25px;
+        padding-bottom: 30px;
+        padding-right: 0px;
+      }
+
+      #cl-header-left {
+        float: left;
+        padding-left: 25px;
+      }
+
+      #cl-header-right {
+        float: right;
+        padding-left: 0px;
+      }
+
+      #cl_header_logo {
+        height: 67px;
+        margin-top: 5px;
+      }
+
+      #cl-header-se-logo {
+        width: 380px;
+        height: 72px;
+      }
+
+      #cl-menu-loggedin {
+        background-color: #006699;
+        color: white;
+        text-transform: uppercase;
+        font-size: 12pt;
+        height: 30px;
+        line-height: 30px;
+        margin: 0px;
+      }
+
+      #cl-menu-loggedin a {
+        color: white;
+      }
+
+      #cl-menu-loggedin:after {
+        clear: both;
+      }
+
+      #cl-menu-loggedin li {
+        float: right;
+        display: inline-block;
+        padding: 1px 20px;
+        margin: 0px;
+      }
+
+      #cl-menu-loggedout {
+        background-color: #006699;
+        color: white;
+        text-transform: uppercase;
+        font-size: 13pt;
+        height: 30px;
+        line-height: 30px;
+      }
+
+      #cl-menu-loggedout a {
+        color: white;
+      }
+
+      #cl-menu-loggedout:after {
+        clear: both;
+      }
+
+      #cl-menu-loggedout li {
+        display: inline-block;
+        padding: 1px 10px;
+        margin: 0;
+      }
+
+      #cl-menu-loggedout li:nth-child(1),
+      #cl-menu-loggedout li:nth-child(2),
+      #cl-menu-loggedout li:nth-child(3) {
+        float: left;
+      }
+
+      #cl-menu-loggedout li:nth-child(4),
+      #cl-menu-loggedout li:nth-child(5) {
+        float: right;
+      }
+
+      #cl-menu-signup {
+        background-color: #006699;
+        color: white;
+        text-transform: none;
+        font-size: 13pt;
+        height: 30px;
+        line-height: 30px;
+      }
+
+      #cl-menu-signup a {
+        color: white;
+      }
+
+      #cl-menu-signup:after {
+        clear: both;
+      }
+
+      #cl-menu-signup li {
+        display: inline-block;
+        padding: 1px 10px;
+        margin: 0;
+      }
+
+      #cl-menu-signup li:nth-child(1) {
+        float: right;
+      }
+      SECTION#ContentContainer {
+        border: 3px solid #006699;
+        border-top: none;
+        margin: 0px;
+      }
+
+      FOOTER {
+        text-align: center;
+      }
+
+      FOOTER #copyright {
+        line-height: 1em;
+        padding: 0;
+      }
+
+      FOOTER UL {
+        margin: 0;
+        padding: 0;
+      }
+
+      FOOTER UL LI {
+        color: #17a2e3;
+        margin: 0 2px;
+        letter-spacing: 0.2px;
+        display: inline;
+      }
+
+      /* #endregion Frame Styling */
+
+      /* #region Content-specific styling */
+      /* #region Login Page */
+      #cl-marketing {
+        width: 554px;
+        height: 397px;
+        background-image: url('../images/SE7_Login_Picture.png');
+      }
+
+      #marketing-text {
+        width: 320px;
+        padding-top: 60px;
+        padding-left: 20px;
+        vertical-align: middle;
+        color: white;
+        font-size: 22pt;
+        font-weight: bold;
+      }
+
+      #marketing-small-text {
+        font-size: 16pt;
+        font-weight: normal;
+        padding-left: 0px;
+      }
+
+      #se-join-msg {
+        font-size: 13.5pt;
+        text-align: center;
+        margin: 0;
+      }
+
+      #login-form LABEL {
+        display: block;
+        margin-bottom: 9px;
+      }
+
+      #login-form LABEL SPAN {
+        float: right;
+      }
+
+      #login-form .form-field {
+        margin-bottom: 10px;
+        clear: both;
+      }
+
+      #login-form .form-field .button {
+        margin: 15px 0 30px 0;
+      }
+
+      #login-form .form-field--last {
+        margin-bottom: 0;
+      }
+
+      #login-form .form-field--last .button {
+        margin: 15px 0;
+      }
+
+      #login-form INPUT[type='text'],
+      #login-form INPUT[type='password'] {
+        width: 100%;
+        padding: 8px 16px;
+        font-weight: 300;
+      }
+
+      #login-form INPUT::-webkit-input-placeholder {
+        color: #626a6d;
+      }
+
+      #login-form INPUT:-moz-placeholder {
+        /* Firefox 18- */
+        color: #626a6d;
+      }
+
+      #login-form INPUT::-moz-placeholder {
+        /* Firefox 19+ */
+        color: #626a6d;
+      }
+
+      #login-form INPUT:-ms-input-placeholder {
+        color: #626a6d;
+      }
+
+      #login-form INPUT[type='text']:focus {
+        box-shadow: 0px 0px 6px 0px rgba(0, 0, 0, 0.1);
+      }
+
+      #login-form INPUT[type='submit'] {
+        -webkit-box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+        -moz-box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+        box-shadow: 0px 0px 11px 2px rgba(0, 0, 0, 0.07);
+      }
+
+      /* #endregion Login Page */
+
+      /* #region Landing Page */
+      #content-newestimate > DIV {
+        border: 2px solid #626a6d;
+        margin: 8px;
+      }
+
+      #content-newestimate > DIV > DIV {
+        padding-left: 10px;
+        padding-bottom: 20px;
+      }
+
+      #content-newestimate > DIV > DIV:nth-child(1),
+      #content-newestimate > DIV > DIV:nth-child(2) {
+        border-bottom: 2px solid #626a6d;
+      }
+
+      #content-newestimate > DIV H2 {
+        padding-left: 10px;
+      }
+
+      #content-newestimate > P {
+        padding-left: 10px;
+        font-size: 12pt;
+      }
+
+      #content-newestimate > DIV A {
+        padding-left: 20px;
+        font-size: 12pt;
+      }
+
+      #content-landing-table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      #content-landing-table TD {
+        font-size: 12pt;
+        padding: 5px 20px;
+      }
+
+      /* #endregion Landing Page */
+
+      /* #region Forgotten Password Page */
+
+      #content-forgotten-password {
+        padding: 0 15px 15px 15px;
+      }
+
+      #content-forgotten-password LABEL {
+        float: left;
+        width: 220px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+
+      #content-forgotten-password INPUT[type='text'] {
+        width: 300px;
+        float: left;
+      }
+
+      #content-forgotten-password INPUT[type='submit'] {
+        display: inline-block;
+        -moz-min-width: 100px;
+        -ms-min-width: 100px;
+        -o-min-width: 100px;
+        -webkit-min-width: 100px;
+        min-width: 100px;
+        width: auto;
+        margin-left: 220px;
+      }
+
+      #content-forgotten-password FORM:after {
+        clear: both;
+      }
+
+      #content-forgotten-password H2,
+      #content-forgotten-password H3 {
+        margin-left: 15px;
+      }
+
+      #content-forgotten-password FORM .cl-row {
+        margin: 15px;
+      }
+
+      #content-forgotten-password DIV[id$='pnlForm'] {
+        padding-top: 0;
+        padding-bottom: 10px;
+      }
+
+      #content-forgotten-password DIV[id$='pnlSuccess'] p,
+      #content-forgotten-password DIV[id$='pnlFailure'] p {
+        padding-left: 15px;
+        padding-right: 15px;
+      }
+
+      #content-forgotten-password DIV[id$='pnlForm'] p:first-child {
+        padding-bottom: 15px;
+      }
+
+      #content-forgotten-password FORM .cl-validator {
+        padding-top: 8px;
+        padding-left: 15px;
+        float: left;
+      }
+
+      /* #endregion Forgotten Password Page */
+
+      /* #endregion Content-specific styling */
+
+      /* #region Signup Pages */
+
+      TABLE.signup TD {
+        padding: 12px;
+      }
+
+      TABLE.signup TD P,
+      TABLE.formInfo TD P {
+        font-size: 10pt;
+        color: black;
+      }
+
+      .admin_title {
+        font-weight: bold;
+        font-size: 13pt;
+        color: black;
+      }
+
+      .signup_title {
+        font-weight: bold;
+        font-size: 12pt;
+        color: black;
+      }
+
+      TABLE.formInfo TD {
+        padding: 2px;
+        color: black;
+      }
+
+      TABLE.formInfo INPUT[type='text'],
+      TABLE.formInfo INPUT[type='password'] {
+        height: 20px;
+        padding: 1px 5px;
+        width: 100%;
+        font-size: 10pt;
+      }
+
+      /* #endregion Signup Pages*/
+
+      /* #region Administration pages */
+
+      #left-menu-admin a {
+        font-size: 10pt;
+      }
+
+      #left-menu-admin {
+        margin-top: 15px;
+      }
+
+      #left-menu-admin a.disabled {
+        cursor: default;
+        pointer-events: none;
+        color: gray;
+      }
+
+      #left-menu-admin td {
+        height: 22px;
+        padding-left: 20px;
+        text-align: left;
+      }
+
+      .form-label {
+        text-align: right;
+        padding-right: 15px;
+      }
+
+      .admin-page .form-label a,
+      .admin-page table.form-row-spacing select {
+        font-size: 10pt;
+      }
+
+      .admin-page .form-row-spacing {
+        border-spacing: 0 5px;
+        border-collapse: separate;
+        table-layout: fixed;
+      }
+
+      .admin-page table.form-row-spacing input,
+      .admin-page table.form-row-spacing select {
+        width: 100%;
+        height: 20px;
+        color: #626a6d;
+        padding-left: 5px;
+        font-size: 10pt;
+      }
+
+      .admin-page table.form-row-spacing .validator {
+        margin-left: 10px;
+      }
+
+      .admin-page table.form-row-spacing .validator-container {
+        text-align: left;
+        padding-left: 10px;
+      }
+
+      .admin-page input.button.med_Width {
+        width: 150px;
+      }
+
+      .admin-page .info-message {
+        height: 30px;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      .admin-page-title {
+        width: 100%;
+        text-align: left;
+        font-size: 16pt;
+        color: #2d2d2d;
+        font-weight: bold;
+        padding: 15px 20px 0 20px;
+      }
+
+      .admin-page .button-container {
+        padding-top: 10px;
+        padding-bottom: 20px;
+        text-align: center;
+      }
+
+      .title_message {
+        display: inline-block;
+        margin-top: 10pt;
+      }
+
+      /* #endregion Administration pages */
+
+      /* #region Custom Components pages */
+
+      .cc-page {
+        font-family: Lato;
+      }
+
+      .cc-page .button {
+        padding: 0;
+        /*margin: 0; */
+        height: 30px;
+        vertical-align: middle;
+        line-height: normal;
+      }
+
+      .cc-page .button-secondary {
+        background-color: lightgrey;
+        border-radius: 4px;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        color: #2d2d2d;
+      }
+
+      .cc-page .clsContentTable {
+        padding: 0 20px 0 20px;
+        text-align: left;
+        margin: 0 auto;
+      }
+
+      .cc-page h2 {
+        margin: 0;
+        padding: 0.67em 0;
+      }
+
+      .cc-page input.input,
+      .cc-page select.input {
+        height: 20px;
+        color: #626a6d;
+        padding-left: 5px;
+        font-size: 10pt;
+      }
+
+      .cc-page .margin-l,
+      .cc-page input.margin-l,
+      .cc-page select.margin-l {
+        margin-left: 5px;
+      }
+
+      .cc-page .margin-r,
+      .cc-page input.margin-r,
+      .cc-page select.margin-r {
+        margin-right: 5px;
+      }
+
+      .cc-page .margin-b,
+      .cc-page input.margin-b,
+      .cc-page select.margin-b {
+        margin-bottom: 5px;
+      }
+
+      .cc-page .margin-lr,
+      .cc-page input.margins-lr,
+      .cc-page select.margins-lr {
+        margin-left: 5px;
+        margin-right: 5px;
+      }
+
+      input.width-large,
+      select.width-large {
+        width: 285px;
+      }
+
+      .cc-page input.width-md,
+      .cc-page select.width-md {
+        width: 130px;
+      }
+
+      .cc-page #txtCode {
+        width: 200px;
+      }
+
+      .cc-page select.large {
+        width: 150px;
+      }
+
+      .cc-page input.width-sm,
+      .cc-page select.width-sm {
+        width: 53px;
+      }
+
+      .cc-page .valign-middle {
+        vertical-align: middle;
+      }
+
+      #cc-default-content td {
+        text-align: left;
+      }
+
+      .cc-page .align-r {
+        text-align: right;
+      }
+
+      .cc-page .align-l {
+        text-align: left;
+      }
+
+      #cl-header-loggedin.cc-page,
+      #cl-menu-loggedin.cc-page {
+        max-width: 900px !important; /* used to be 723 */
+      }
+
+      #cboSort1,
+      #cboSort2,
+      #cboSort3 {
+        width: 125px;
+      }
+
+      .cc-page #tblComponents {
+        width: 100%;
+      }
+
+      .cc-page .form-row-spacing {
+        border-spacing: 0 5px;
+        border-collapse: separate;
+        table-layout: fixed;
+      }
+
+      .force-wrap {
+        word-wrap: break-word;
+      }
+
+      #cc-page-error p {
+        font-size: 10pt;
+      }
+
+      #cc-page-edit input.width-md,
+      #cc-page-edit select.width-md {
+        width: 200px;
+      }
+
+      #cc-page-edit input.width-sm,
+      #cc-page-edit select.width-sm {
+        width: 50px;
+      }
+
+      #cc-page-edit .clsContentTable {
+        margin: 0 20px;
+      }
+
+      .btn-like-a-element {
+        text-decoration: none;
+        color: #006699;
+        /* Remove the gray background color from active links in IE 10. */
+        background-color: transparent;
+        font-size: inherit;
+        white-space: nowrap;
+      }
+      /* #endregion Custom Components pages */
+
+      /* #region Dynamic Media Styling */
+
+      @media (min-width: 500px) and (max-width: 1151px) {
+        .left-block {
+          width: 100%;
+        }
+
+        .hide-mobile {
+          display: none;
+        }
+      }
+
+      @media (min-width: 1152px) {
+        .cl-column,
+        .left-block {
+          width: 41.66667%;
+        }
+
+        .right-block {
+          width: 58.33333%;
+        }
+      }
+
+      @media (max-width: 499px) {
+        .inner-block {
+          padding: 30px 30px 10px 30px;
+        }
+      }
+
+      @media (min-width: 500px) and (max-width: 1151px) {
+        .inner-block {
+          max-width: 500px;
+          margin: 0 auto 40px auto;
+          padding: 30px 60px 10px 60px !important;
+        }
+      }
+
+      @media (max-width: 499px) {
+        .hide-mobile {
+          display: none;
+        }
+
+        #cl-header {
+          padding-top: 45px;
+        }
+      }
+
+      @media (min-width: 640px) and (max-width: 900px) {
+        #content-forgotten-password form .cl-validator {
+          padding-left: 220px;
+        }
+      }
+
+      @media (max-width: 639px) {
+        #content-forgotten-password form .cl-validator {
+          padding-left: 0;
+        }
+
+        #content-forgotten-password input[type='submit'] {
+          margin-left: 0;
+        }
+
+        #content-forgotten-password input[type='text'] {
+          width: 95%;
+        }
+      }
+
+      /* #endregion Dynamic Media Styling */
+      /*  SwiftEstimator_Common.css
+    Stylesheet for SE7 - includes all of the styles common to Residential, Commercial and Segregated Estimator sub-apps.
+    It is intended to cascade upon site.css, and to be cascaded on by the sub-app-specific style sheets.
+*/
+
+      /* HTML Elements - global styling 
+   Provides the ability to easily unite the look-and-feel of SE7.
+   Please do not style HTML elements in the sub-app-specific style sheets.
+*/
+
+      BODY {
+        max-width: 930px; /* Match mainFooter (900) + padding (30). */
+      }
+
+      BUTTON:focus {
+        outline: none;
+      }
+
+      H1 {
+        font-weight: normal;
+        font-size: 13pt; /* For clarity, specify all fonts in points, not pixels. */
+        background: #bfdcff;
+        color: navy;
+      }
+
+      TD A {
+        font-weight: normal;
+        font-size: 10pt;
+        cursor: hand;
+        color: black;
+        text-decoration: none;
+      }
+
+      TD A:hover {
+        font-weight: normal;
+        background-image: none;
+        cursor: hand;
+        color: #006699;
+        background-repeat: repeat;
+        text-decoration: underline;
+      }
+
+      /* HTML Elements - element-specific class definitions
+   Please do not override these classes. Use them as-is, or don't use them.
+*/
+      BUTTON.isDisabled,
+      INPUT.isDisabled {
+        color: white;
+        background-color: #dddddd; /*  #DDDDDD; #EEEEEE;  #8C8279; */
+      }
+
+      INPUT.small {
+        width: 64px !important;
+      }
+
+      INPUT.medium {
+        width: 120px !important;
+      }
+
+      INPUT.large {
+        width: 200px !important;
+      }
+
+      BUTTON.large {
+        width: 220px !important;
+        font-size: 9pt !important;
+        white-space: nowrap;
+      }
+
+      SELECT.small {
+        width: 130px !important;
+        margin-right: 10px;
+      }
+
+      SELECT.medium {
+        width: 150px !important;
+        margin-right: 10px;
+      }
+
+      SELECT.large {
+        width: 200px !important;
+      }
+
+      SELECT OPTION:hover {
+        background-color: #cccccc !important; /* Forces all the browsers to match */
+      }
+
+      TABLE.dataEntry {
+        table-layout: auto;
+      }
+
+      /* Navigation Styles - begin */
+
+      TABLE.SideNav {
+        width: 140px;
+        background-color: transparent;
+      }
+
+      TABLE.SideNav TD {
+        font-weight: bold;
+        color: black;
+        padding: 0px 0px 5px 2px; /* 5 above and 2 on the left. */
+      }
+
+      TABLE.SideNav TD.indent {
+        padding: 0px 0px 5px 18px; /* 5 above and 18 on the left. */
+      }
+
+      TABLE.SideNav A.indent,
+      TABLE.SideNav SPAN.indent {
+        margin-left: 15px;
+      }
+
+      TABLE.SideNav A {
+        font-weight: bold;
+        color: black;
+      }
+
+      TABLE.SideNav A:hover {
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      TABLE.SideNav TD.selected,
+      TABLE.SideNav SPAN.selected {
+        color: #cc0033 !important;
+      }
+
+      TABLE.SideNav TD.navDisabled {
+        color: #626a6d !important; /* Or #2D2D2D */
+      }
+
+      A.navDisabled {
+        pointer-events: none;
+        cursor: default;
+      }
+
+      /* Navigation Styles - end */
+
+      TR.hidden {
+        line-height: 1px;
+        height: 1px !important;
+      }
+
+      TR.reportHeader {
+        background-color: #62b5e5;
+      }
+
+      TR.reportHeader TD {
+        padding: 2px 20px 2px 2px;
+        text-align: right;
+        color: black;
+        font-weight: bold;
+      }
+
+      TR.reportCell TD {
+        padding: 0px 20px 0px 2px;
+      }
+
+      TR.compReportCell TD {
+        padding: 0px 20px 0px 2px;
+        border-bottom: 1px solid #eeeeee;
+      }
+
+      TD.itemList {
+        border-left: 1px solid lightgrey;
+        padding: 0px 3px;
+        text-align: left;
+      }
+
+      DIV.debug {
+        background-color: Silver;
+        border: 1px solid black;
+      }
+
+      DIV.error {
+        border: 2px solid maroon;
+        display: inline;
+        z-index: 2;
+      }
+
+      PRE.Form {
+        font-weight: normal;
+        font-size: 8.5pt;
+        color: black;
+      }
+
+      H2.report {
+        color: black;
+        margin: 0px;
+        text-align: left;
+        font-weight: bold !important;
+      }
+
+      H2.title {
+        font-size: 15pt;
+        margin: 10px 0px;
+      }
+
+      H2.section_title {
+        font-size: 13pt;
+      }
+
+      H2.section_subtitle {
+        font-size: 10pt;
+      }
+
+      /* Global Style Classes
+   Classes belong here if they define a style that can be applied to multiple element types.
+   If there are conflicts between sub-apps, do not define the style here.  Move it out instead.
+   Please do not override these classes. Use them as-is, or don't use them.
+*/
+
+      .bluelink {
+        color: #1b57a5 !important;
+        font-size: 9pt !important;
+      }
+
+      .box {
+        margin-bottom: 5px;
+        border: 1px solid #000000;
+        width: 100%;
+        padding: 6px;
+        text-align: left;
+      }
+
+      .button {
+        border-bottom-style: none;
+        border-left-style: none;
+        border-right-style: none;
+        border-top-style: none;
+        color: #ffffff;
+        font-size: 11pt;
+        font-weight: bold;
+        padding-left: 5px;
+        padding-right: 5px;
+        margin: 0px 20px;
+      }
+
+      .buttonblue {
+        background-color: #006699;
+        border-bottom-style: none;
+        border-left-style: none;
+        border-right-style: none;
+        border-top-style: none;
+        color: #ffffff;
+        font-weight: bold;
+        padding-left: 5px;
+        padding-right: 5px;
+        margin: 10px 20px 10px 20px;
+        white-space: nowrap;
+      }
+
+      .clsContentTable {
+        width: 900px; /* Make sure this matches "mainWindow".  Used to be 723. */
+        background-color: white;
+        border-bottom: 3px solid;
+        border-left: 3px solid;
+        border-right: 3px solid;
+        border-color: #006699;
+      }
+
+      .checkBox {
+        height: 13px !important;
+        width: 13px !important;
+        border: 0 !important;
+        padding: 0 !important;
+        margin: 2px 10px 0px 0px;
+      }
+
+      .disabled {
+        background-color: #f3f5f5;
+      }
+
+      .label {
+        font-weight: normal;
+        font-size: 9pt;
+        color: black;
+        text-decoration: none;
+      }
+
+      TABLE.hasVertLabels A,
+      TABLE.hasVertLabels SPAN A {
+        float: right;
+        margin-right: 15px;
+      }
+
+      TABLE.hasVertLabels SPAN {
+        margin-right: 15px;
+      }
+
+      TR.menuBar {
+        background-color: #006699;
+        line-height: 32px;
+      }
+
+      TR.menuBar TD {
+        padding: 1px 20px; /* Match  #cl-menu-loggedin li */
+      }
+
+      TR.menuBar TD A {
+        font-size: 12pt;
+        color: white;
+        white-space: nowrap;
+      }
+
+      TR.menuBar TD A:hover {
+        color: white;
+        text-decoration: none;
+      }
+
+      .nobreak {
+        display: inline;
+        white-space: nowrap;
+      }
+
+      .noBorder {
+        border: none !important;
+      }
+
+      .pageHeader {
+        display: inline;
+        color: #cc0033;
+        font-weight: bold;
+        font-size: 12pt;
+        white-space: nowrap;
+      }
+
+      .radioButton {
+        height: 13px !important;
+        border: 0px !important;
+      }
+
+      .requiredHeader {
+        font-size: 10pt;
+        font-weight: normal;
+        text-align: center;
+        padding-right: 100px;
+        white-space: nowrap;
+      }
+
+      .small {
+        font-weight: normal;
+        font-size: 8pt;
+      }
+
+      .title_program {
+        font-weight: bold;
+        font-size: 16pt;
+        color: #2d2d2d;
+        white-space: nowrap;
+      }
+
+      .title_record {
+        font-weight: bold;
+        font-size: 11pt;
+        color: black;
+      }
+
+      .title_subsection {
+        font-weight: normal;
+        font-size: 10pt;
+        color: #cc0033;
+        text-align: left;
+        margin: 10px 0;
+      }
+
+      .title_section_select {
+        font-size: 10pt;
+        font-style: italic;
+        font-weight: bold;
+        color: black;
+      }
+
+      .txtInline {
+        font-size: 9pt;
+        display: inline;
+        background-color: #ffffff;
+        margin: 0px;
+        padding: 0;
+        padding-right: 0px !important;
+      }
+
+      .txtInlineGrey {
+        font-size: 9pt;
+        display: inline;
+        background-color: #d3d3d3;
+        margin: 0px;
+        padding: 0;
+      }
+
+      .txtInlineDisabled {
+        font-size: 9pt;
+        display: inline;
+        border-style: none;
+        background-color: transparent;
+        margin: 0;
+        padding: 0;
+      }
+
+      /*  Fonts - use these before applying element-specific styles. */
+      .text-sm {
+        font-size: 10pt;
+      }
+
+      .text-med {
+        font-size: 12pt; /* This should match BODY. */
+      }
+
+      .text-lg {
+        font-size: 15pt;
+      }
+
+      .head-sm {
+        /* Intended for headings but can be used elsewhere. */
+        font-size: 17pt;
+      }
+
+      .head-med {
+        font-size: 22pt;
+      }
+
+      .head-lg {
+        font-size: 27pt;
+      }
+
+      /* Element sizes - buttons, inputs, etc. */
+      .sz_tiny {
+        height: 24px !important;
+        line-height: 24px !important;
+        width: 30px !important;
+        margin: 3px 8px;
+        text-align: center;
+        vertical-align: central;
+      }
+
+      .sz_small {
+        width: 54px !important;
+      }
+
+      .sz_small_med {
+        width: 75px !important;
+      }
+
+      .sz_medium {
+        width: 95px !important;
+        margin-right: 10px;
+      }
+
+      .sz_med_plus {
+        width: 110px !important;
+      }
+
+      .sz_med_large {
+        width: 140px !important;
+        margin-right: 10px;
+      }
+
+      .sz_large {
+        width: 250px !important;
+      }
+
+      .sz_xlg {
+        width: 275px !important;
+      }
+
+      .std_height {
+        font-size: 10pt;
+        height: 30px;
+        line-height: 30px;
+      }
+
+      /* Alignments */
+      .al_left {
+        text-align: left !important;
+      }
+
+      .al_center {
+        text-align: center !important;
+      }
+
+      .al_right {
+        text-align: right !important;
+      }
+
+      .header {
+        font-size: 14pt;
+        text-decoration: none;
+      }
+      .error {
+        font-weight: normal;
+        font-size: 8.5pt;
+        color: red;
+        display: block;
+        border: 1px solid red;
+      }
+
+      /* These were seemingly removed from SE7.  The class is referenced but it does nothing.
+.required_field {
+    font-weight: normal;
+    color: black;
+    background-color: #62B5E5;
+}
+.required_field_focus {
+    font-weight: normal;
+    color: black;
+    background-color: white;
+}
+*/
+
+      .clsHidden {
+        visibility: hidden;
+      }
+      .clsHelpLink {
+        cursor: help;
+        color: #1b57a6;
+        text-decoration: underline;
+      }
+      .clsNormalLink {
+        cursor: hand;
+        color: #1b57a6;
+      }
+      .db {
+        text-indent: 0px;
+        margin-left: 1em;
+        margin-top: 0px;
+        margin-bottom: 0px;
+        padding-left: 0.3em;
+        border-left: 1px solid #cccccc;
+      }
+      .fieldName {
+        font-weight: bold;
+        display: inline;
+      }
+      .info {
+        color: #1b57a5;
+        font-size: 9pt;
+        display: inline;
+      }
+      .ckInlineDisabled {
+        font-size: 9pt;
+        display: none;
+        border-style: none;
+        background-color: transparent;
+        margin: 0;
+        padding: 0;
+      }
+      .txtInlineError {
+        font-size: 9pt;
+        display: inline;
+        background-color: #ffcccc;
+        margin: 0;
+        padding: 0;
+      }
+      .eyebrow {
+        margin-bottom: 5px;
+        font-weight: normal;
+        font-size: 13pt;
+        background: #62b5e5;
+        color: #1b57a6;
+      }
+
+      /* #region Calculation Cart Page */
+
+      /* The Calculation Cart is shared, so if it needed specific styling, it would go here. */
+
+      /* #endregion Calculation Cart Page */
+
+      /* Common item-specific styles
+   Most of the item-specific styling should reside in the sub-app-specific style sheets.
+   But styling for divContent is here because that element is used by all sub-apps.
+*/
+      #divNav {
+        padding-left: 3px;
+        padding-top: 5px;
+        width: 120px;
+      }
+
+      #divContent {
+        margin: 0px;
+        height: auto; /* Used to be 525px */
+        overflow-y: visible;
+        overflow-x: hidden;
+      }
+
+      #divContent BUTTON,
+      #divContent .button {
+        width: auto;
+        height: 30px;
+        line-height: 30px;
+        font-size: 10pt;
+        color: white;
+      }
+
+      #divContent P {
+        font-size: 10pt;
+        color: black;
+      }
+
+      #divContent SELECT {
+        border: 1px solid #dddddd;
+        color: #626a6d;
+        font-size: 10pt;
+        padding: 0 2px;
+        border-radius: 3px;
+        height: 24px;
+        width: 95%; /* Or 100% ? */
+      }
+
+      #divContent SELECT.Multiple {
+        color: #2d2d2d;
+        height: auto;
+        margin-bottom: 8px;
+      }
+
+      #divContent TABLE {
+        width: 100%;
+      }
+
+      #divContent TR {
+        margin-top: 4px;
+        margin-bottom: 2px;
+        height: 30px;
+      }
+
+      #divContent > div.box TR {
+        padding-right: 10px;
+      }
+
+      #divContent TH {
+        padding-right: 10px;
+        padding-left: 10px;
+        font-weight: normal;
+        font-size: 10pt;
+        color: #2d2d2d;
+        width: 35%;
+      }
+
+      #divContent TH A,
+      #divContent TD A {
+        font-weight: normal;
+        font-size: 10pt;
+        color: #2d2d2d;
+      }
+
+      #divContent TD.formField {
+        width: 65%;
+      }
+
+      #divContent TD INPUT {
+        height: 24px;
+        width: 95%;
+        font-size: 10pt;
+        padding-left: 5px;
+        /* Repeated from site.css because Internet Explorer didn't see them. */
+        border: 1px solid #dddddd;
+        color: #626a6d;
+        font-family: Lato;
+        border-radius: 3px;
+        -moz-border-radius: 3px;
+        -webkit-border-radius: 3px;
+      }
+
+      #divContent TD INPUT:focus {
+        color: black;
+      }
+
+      #divContent BUTTON:focus,
+      #divContent .button:focus {
+        color: white !important; /* Overrides the focus above. */
+        outline: 0;
+      }
+
+      #buttonMenu TABLE {
+        table-layout: auto;
+      }
+
+      #divResults TR {
+        height: auto;
+      }
+
+      #divResults TR.spacer {
+        height: 4px;
+      }
+
+      #divResults TD.subheader {
+        font-weight: normal;
+        font-size: 10pt; /* Used to be 8.5pt. */
+        text-indent: 15px;
+        color: black;
+      }
+
+      #divResults BUTTON {
+        width: auto;
+        height: 30px;
+        line-height: 30px;
+      }
+
+      .height-zero {
+        height: 0 !important;
+      }
+      /* Stylesheet for the Commercial Estimator sub-app of SE7 */
+
+      /* Additional Style Classes */
+      .title_grid {
+        font-weight: normal;
+        font-size: 11pt;
+        color: black;
+      }
+
+      .title_grid A {
+        font-weight: normal;
+        font-size: 11pt !important;
+        color: black !important;
+      }
+
+      .title_grid A:hover {
+        font-weight: normal;
+        font-size: 11pt !important;
+        /*color: #CC0033; */
+      }
+
+      .text {
+        font-weight: normal;
+        font-size: 8.5pt;
+        color: black;
+      }
+
+      .error {
+        font-weight: normal;
+        font-size: 8.5pt;
+        color: #cc0033;
+      }
+
+      .title_page {
+        font-weight: bold;
+        font-size: 9pt;
+        color: #cc0033;
+      }
+
+      .hiddenText {
+        color: white;
+        font-size: xx-small;
+      }
+
+      .label-left {
+        padding-right: 10px;
+        vertical-align: middle;
+        text-align: right;
+      }
+
+      #ce-body-adjustments #divContent TD INPUT {
+        width: 65%;
+      }
+
+      #ce-body-estReports #reportHeader label {
+        font-size: 10pt;
+      }
+
+      #ce-body-estReports #reportHeader INPUT.button {
+        line-height: normal;
+        margin: 0;
+      }
+
+      #ce-body-estReports #divContent TH {
+        padding-right: 1px;
+      }
+
+      TH.large {
+        width: 35% !important;
+      }
+
+      TH.small {
+        width: 13% !important;
+      }
+
+      TH.very_large {
+        width: 60% !important;
+      }
+
+      #ce-body-estReports #divContent TR {
+        height: auto;
+        margin-bottom: 0;
+      }
+    </style>
+    <link rel="shortcut icon" href="../../../IMAGES/icons/favicon.ico" />
+  </head>
+  <body>
+    <script type="text/javascript">
+      (function () {
+        var escaped_one_to_xml_special_map = {
+          '&amp;': '&',
+          '&quot;': '"',
+          '&lt;': '<',
+          '&gt;': '>',
+          '%0A': '\n',
+        };
+        var html =
+          '&lt;h2 class=&quot;report title&quot;&gt;CoreLogic - SwiftEstimator&lt;br&gt;%0A	Commercial Estimator - Summary Report&lt;/h2&gt;&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; class=&quot;text&quot; width=&quot;100%&quot;&gt;%0A&lt;caption&gt;&lt;h2 class=&quot;report section_title&quot;&gt;General Information&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;td width=&quot;25%&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Estimate ID:&lt;/b&gt;&lt;/td&gt;%0A&lt;td width=&quot;25%&quot; valign=&quot;top&quot;&gt;6310 Tashaya Dr&lt;/td&gt;%0A&lt;td width=&quot;25%&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Date Created:&lt;/b&gt;&lt;/td&gt;%0A&lt;td width=&quot;25%&quot; valign=&quot;top&quot;&gt;12-18-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Property Owner:&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;Sacha Transportation Inc&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Date Updated:&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;12-18-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Property Address:&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;6310 Tashaya Dr  &lt;br&gt;Odessa, TX  79766&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Date Calculated:&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;12-18-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;4&quot;&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr valign=&quot;top&quot;&gt;%0A&lt;td&gt;&lt;b&gt;Local Multiplier:&lt;/b&gt;&lt;/td&gt;%0A&lt;td style=&quot;white-space: pre-line; &quot; title=&quot;&quot;&gt;0.87&lt;/td&gt;%0A&lt;td&gt;&lt;b&gt;Cost Data As Of:&lt;/b&gt;&lt;/td&gt;%0A&lt;td&gt;%0A              using report date%0A            &lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr valign=&quot;top&quot;&gt;%0A&lt;td&gt;&lt;b&gt;Architects Fee:&lt;/b&gt;&lt;/td&gt;%0A&lt;td&gt;&lt;/td&gt;%0A&lt;td&gt;&lt;b&gt;Report Date:&lt;/b&gt;&lt;/td&gt;%0A&lt;td&gt;12-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;&lt;hr&gt;&lt;table class=&quot;text&quot; border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption&gt;&lt;h2 class=&quot;report section_title&quot;&gt;Section 1&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr class=&quot;spacer&quot;&gt;%0A&lt;td width=&quot;25%&quot;&gt;&lt;/td&gt;%0A&lt;td width=&quot;20%&quot;&gt;&lt;/td&gt;%0A&lt;td width=&quot;5%&quot;&gt;&lt;/td&gt;%0A&lt;td width=&quot;35%&quot;&gt;&lt;/td&gt;%0A&lt;td width=&quot;15%&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot;&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot;&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Area&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;3200&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Overall Depreciation %&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Stories in Section&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;1&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Physical Depreciation %&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Stories in Building&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;1&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Functional Depreciation %&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Shape&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A                    rectangular%0A                  &lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;External Depreciation %&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Perimeter&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A                  (auto-calc)%0A                &lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Effective Age&lt;/b&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;9&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot;&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;&lt;div align=&quot;center&quot;&gt;%0A&lt;hr&gt;%0A&lt;table border=&quot;0&quot; class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption&gt;&lt;h2 class=&quot;report section_title&quot;&gt;Occupancy Details&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th class=&quot;large&quot; valign=&quot;top&quot; align=&quot;left&quot; style=&quot;padding-left:1px&quot;&gt;&lt;b&gt;Occupancy&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; abbr=&quot;Percent&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;%&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Class&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Height&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Quality&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;993 Interior Space, Office&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;2&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;S&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;10&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;2.0&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;454 Shell, Industrial&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;98&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;S&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;22&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;2.0&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;b&gt;Occupancy Total Percentage&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;100&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;%0A&lt;hr&gt;%0A&lt;/div&gt;&lt;div align=&quot;center&quot;&gt;%0A&lt;table border=&quot;0&quot; class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption valign=&quot;top&quot;&gt;&lt;h2 class=&quot;report section_subtitle&quot;&gt;%0A                System : HVAC (Heating)&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th class=&quot;very_large&quot; align=&quot;left&quot;&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Percent or Units&quot;&gt;&lt;b&gt;%/Units&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Quality&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Depreciation Percent&quot;&gt;&lt;b&gt;Depr&amp;nbsp;%&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Other&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;left&quot;&gt;625 HVAC (Heating) : Refrigerated Cooling, Pack&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;100&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;%0A                      Occ.%0A                    &lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;9&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;2&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;b&gt;%0A                    Total Percent for HVAC (Heating):%0A                  &lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;b&gt;100&lt;/b&gt;&lt;/td&gt;%0A&lt;td&gt;&lt;/td&gt;%0A&lt;td&gt;&lt;/td&gt;%0A&lt;td&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot; align=&quot;left&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;%0A&lt;table border=&quot;0&quot; class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption valign=&quot;top&quot;&gt;&lt;h2 class=&quot;report section_subtitle&quot;&gt;%0A                System : Land and Site&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th class=&quot;very_large&quot; align=&quot;left&quot;&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Percent or Units&quot;&gt;&lt;b&gt;%/Units&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Quality&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Depreciation Percent&quot;&gt;&lt;b&gt;Depr&amp;nbsp;%&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Other&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;left&quot;&gt;7003 Land and Site : Paving, Concrete, Reinforced&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;1043&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;%0A                      Occ.%0A                    &lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;left&quot;&gt;7142 Land and Site : Barbed Wire (Add)&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;745&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;%0A                      Occ.%0A                    &lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot; align=&quot;left&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;%0A&lt;table border=&quot;0&quot; class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption valign=&quot;top&quot;&gt;&lt;h2 class=&quot;report section_subtitle&quot;&gt;%0A                System : Mezzanines&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th class=&quot;very_large&quot; align=&quot;left&quot;&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Percent or Units&quot;&gt;&lt;b&gt;%/Units&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Quality&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; abbr=&quot;Depreciation Percent&quot;&gt;&lt;b&gt;Depr&amp;nbsp;%&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot;&gt;&lt;b&gt;Other&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;left&quot;&gt;762 Mezzanines : Mezzanines-Open&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;70&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;%0A                      Occ.%0A                    &lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td colspan=&quot;5&quot; align=&quot;left&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;%0A&lt;/div&gt;&lt;hr&gt;&lt;br&gt;&lt;div align=&quot;center&quot;&gt;&lt;table class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;2&quot; width=&quot;100%&quot;&gt;%0A&lt;caption valign=&quot;top&quot;&gt;&lt;h2 class=&quot;report section_title&quot;&gt;Addition Details&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th align=&quot;left&quot; valign=&quot;top&quot; style=&quot;padding:1px&quot;&gt;&lt;b&gt;Addition&lt;/b&gt;&lt;/th&gt;%0A&lt;th align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Units&lt;/b&gt;&lt;/th&gt;%0A&lt;th align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Cost&lt;/b&gt;&lt;/th&gt;%0A&lt;th align=&quot;right&quot; valign=&quot;top&quot; abbr=&quot;Depreciation Percent&quot;&gt;&lt;b&gt;Depr&amp;nbsp;%&lt;/b&gt;&lt;/th&gt;%0A&lt;th align=&quot;right&quot; valign=&quot;top&quot; abbr=&quot;Local Multiplier&quot;&gt;&lt;b&gt;LM&lt;/b&gt;&lt;/th&gt;%0A&lt;th align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Base Date&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A            Misc%0A           Water Wells&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;2&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;$7,000&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;18&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;N&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;12-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A            Misc%0A           Septic systems &lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;3&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;$5,000&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;18&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;N&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;12-2016&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A            Misc%0A           Caliche yard and pad&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;1&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;$25,000&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;N&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;12-2016&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td valign=&quot;top&quot;&gt;%0A            Misc%0A           Metal Fencing&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;1197&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;$10&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;N&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;top&quot;&gt;12-2025&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr class=&quot;spacer&quot;&gt;&lt;td&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;&lt;hr&gt;&lt;br&gt;&lt;br&gt;&lt;table class=&quot;text&quot; cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; border=&quot;0&quot; width=&quot;100%&quot;&gt;%0A&lt;caption&gt;&lt;h2 class=&quot;report section_title&quot;&gt;Calculation Information (All Sections)&lt;/h2&gt;&lt;/caption&gt;%0A&lt;tbody&gt;&lt;tr&gt;%0A&lt;th class=&quot;large&quot;&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Units&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Unit Cost&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Total &lt;nobr&gt;Cost New&lt;/nobr&gt;&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Less Depreciation&lt;/b&gt;&lt;/th&gt;%0A&lt;th class=&quot;small&quot; align=&quot;right&quot; valign=&quot;top&quot;&gt;&lt;b&gt;&lt;nobr&gt;Total Cost&lt;/nobr&gt; Depreciated&lt;/b&gt;&lt;/th&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;&lt;td align=&quot;Left&quot; colspan=&quot;4&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Basic Structure&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Base Cost&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;3,200&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$44.83&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$143,456&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$18,477&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$124,979&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Exterior Walls&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;3,136&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$10.78&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$33,806&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$4,354&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$29,452&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Heating &amp;amp; Cooling&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;3,200&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$9.47&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$30,304&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,727&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$27,577&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Mezzanine&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;70&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$39.77&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,784&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$359&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,425&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;Left&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Basic Structure Cost&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;3,200&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$65.73&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$210,350&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$25,917&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$184,433&lt;/b&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;&lt;td colspan=&quot;4&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;&lt;td align=&quot;Left&quot; colspan=&quot;4&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Less Depreciation&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Physical &amp;amp; Functional&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;12.3%%0A        &lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$25,917&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$184,433&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;Left&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Depreciated Cost&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;3,200&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$57.64&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$25,917&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$184,433&lt;/b&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;&lt;td colspan=&quot;4&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;&lt;td align=&quot;Left&quot; colspan=&quot;4&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Miscellaneous&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Paving, Concrete, Reinforced&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;1,043&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$7.65&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$7,979&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$7,979&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Barbed Wire (Add)&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;745&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$3.94&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,935&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,935&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Water Wells&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;2&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$7,000.00&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$14,000&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$2,520&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$11,480&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Septic systems &lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;3&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$7,804.72&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$23,414&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$4,215&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$19,199&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Caliche yard and pad&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;1&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$39,023.61&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$39,024&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$39,024&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;Left&quot; valign=&quot;top&quot;&gt;Metal Fencing&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;1,197&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$10.00&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$11,970&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;/td&gt;%0A&lt;td class=&quot;subheader&quot; align=&quot;right&quot; valign=&quot;bottom&quot;&gt;$11,970&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;%0A&lt;td align=&quot;Left&quot; valign=&quot;top&quot;&gt;&lt;b&gt;Total Cost&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;3,200&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$96.77&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$309,672&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$32,652&lt;/b&gt;&lt;/td&gt;%0A&lt;td align=&quot;right&quot; valign=&quot;bottom&quot;&gt;&lt;b&gt;$277,020&lt;/b&gt;&lt;/td&gt;%0A&lt;/tr&gt;%0A&lt;tr&gt;&lt;td colspan=&quot;4&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;&lt;br&gt;&lt;span class=&quot;text-sm&quot;&gt;Cost data by CoreLogic, Inc.&lt;/span&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;span class=&quot;small&quot;&gt;***Except for items and costs listed under &#65533;Addition Details,&#65533; this SwiftEstimator report has been produced utilizing current cost data and is in compliance with the Marshall &amp;amp; Swift Licensed User Certificate.  This report authenticates the user as a current Marshall &amp;amp; Swift user.***&lt;/span&gt;&lt;table align=&quot;center&quot; width=&quot;100%&quot; border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot;&gt;%0A&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;&lt;td align=&quot;center&quot;&gt;&lt;img src=&quot;https://www.swiftestimator.com/IMAGES/app-logos/corelogic-logo-sso.png&quot; width=&quot;234&quot; height=&quot;67&quot;&gt;&lt;/td&gt;&lt;/tr&gt;%0A&lt;tr&gt;&lt;td&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;%0A&lt;/tbody&gt;&lt;/table&gt;';
+        document.body.innerHTML = html.replace(
+          /(&quot;|&lt;|&gt;|&amp;|%0A)/g,
+          function (str, item) {
+            return escaped_one_to_xml_special_map[item];
+          }
+        );
+      })();
+    </script>
+  </body>
+</html>
