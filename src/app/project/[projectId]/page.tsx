@@ -11,6 +11,7 @@ import {
   type Comparable,
 } from "~/utils/projectStore";
 import { useProject } from "~/hooks/useProject";
+import { useSubjectData } from "~/hooks/useSubjectData";
 
 import { JsonViewer } from "~/components/JsonViewer";
 
@@ -20,13 +21,25 @@ interface ProjectPageProps {
   }>;
 }
 
-type EditableSubjectFields = "address" | "addressForDisplay" | "legalDescription" | "acres";
-
 export default function ProjectDashboard({ params }: ProjectPageProps) {
   const { projectId } = use(params);
-  const { project: selectedProject, updateProject, isLoading, projectExists } = useProject(projectId);
+  const {
+    project: selectedProject,
+    updateProject,
+    isLoading,
+    projectExists,
+    projectName,
+  } = useProject(projectId);
+  const { subjectData, isLoading: isSubjectLoading } = useSubjectData(projectId);
   const decodedProjectId = decodeURIComponent(projectId);
-  const projectName = decodedProjectId;
+  const displayHeading = projectName?.trim()
+    ? projectName
+    : decodedProjectId;
+
+  const subjectCore = useMemo(() => {
+    if (!subjectData?.core || typeof subjectData.core !== "object") return null;
+    return subjectData.core as Record<string, unknown>;
+  }, [subjectData]);
 
 
   const [isJsonMode, setIsJsonMode] = useState(false);
@@ -44,18 +57,8 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
     setJsonError(null);
   }, [isJsonMode, selectedProject]);
 
-  const handleSubjectChange = (field: EditableSubjectFields, value: string) => {
-    updateProject((project) => ({
-      ...project,
-      subject: {
-        ...project.subject,
-        [field]: value,
-      },
-    }));
-  };
-
   const handleJsonApply = () => {
-    if (!projectName) return;
+    if (!selectedProject) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const parsed = JSON.parse(jsonValue);
@@ -123,10 +126,10 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {projectName}
+            {displayHeading}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Manage subject details and property comparables.
+            Report Overview
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -182,168 +185,131 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
       {!isJsonMode && (
         <div className="space-y-6">
           <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Subject Information
+              </h3>
+              <Link
+                href={`/project/${projectId}/subject/overview`}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Edit in Subject Overview
+              </Link>
+            </div>
+
+            {subjectCore && Object.keys(subjectCore).length > 0 ? (
+              <div className="grid gap-x-6 gap-y-3 md:grid-cols-3">
+                {(
+                  [
+                    ["Address", subjectCore.Address],
+                    ["Legal Description", subjectCore.Legal],
+                    ["APN", subjectCore.APN],
+                    ["City", subjectCore.City],
+                    ["State", subjectCore.State],
+                    ["County", subjectCore.County],
+                    ["Zoning", subjectCore.Zoning],
+                    ["Year Built", subjectCore["Year Built"]],
+                    ["Land Size (AC)", subjectCore["Land Size (AC)"]],
+                    ["Land Size (SF)", subjectCore["Land Size (SF)"]],
+                    ["Building Size (SF)", subjectCore["Building Size (SF)"]],
+                    ["Condition", subjectCore.Condition],
+                    ["Construction", subjectCore.Construction],
+                    ["Surface", subjectCore.Surface],
+                  ] as [string, unknown][]
+                )
+                  .filter(([, v]) => v != null && v !== "" && v !== 0)
+                  .map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        {label}
+                      </dt>
+                      <dd className="mt-0.5 text-sm text-gray-800 dark:text-gray-200">
+                        {String(value)}
+                      </dd>
+                    </div>
+                  ))}
+              </div>
+            ) : !isSubjectLoading ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No subject data yet.{" "}
+                <Link
+                  href={`/project/${projectId}/subject/overview`}
+                  className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Open Subject Overview
+                </Link>{" "}
+                to add property details, or process subject documents.
+              </p>
+            ) : null}
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">
-              Subject Information
+              Project Details
             </h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                  Address
+                  Client Company
                 </label>
                 <input
                   type="text"
-                  value={selectedProject.subject.address}
-                  onChange={(event) =>
-                    handleSubjectChange("address", event.target.value)
-                  }
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                  placeholder="123 Main St, Odessa, TX 79761"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                  Address (Display)
-                </label>
-                <input
-                  type="text"
-                  value={selectedProject.subject.addressForDisplay ?? ""}
-                  onChange={(event) =>
-                    handleSubjectChange(
-                      "addressForDisplay",
-                      event.target.value,
-                    )
-                  }
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                  placeholder="Display name for subject..."
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                  Legal Description
-                </label>
-                <input
-                  type="text"
-                  value={selectedProject.subject.legalDescription ?? ""}
-                  onChange={(event) =>
-                    handleSubjectChange(
-                      "legalDescription",
-                      event.target.value,
-                    )
-                  }
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                  placeholder="Legal description..."
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                  Acres
-                </label>
-                <input
-                  type="text"
-                  value={selectedProject.subject.acres ?? ""}
-                  onChange={(event) =>
-                    handleSubjectChange("acres", event.target.value)
-                  }
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                  placeholder="9.834"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                  Subject Photos Folder ID
-                </label>
-                <input
-                  type="text"
-                  value={selectedProject.subjectPhotosFolderId ?? ""}
+                  value={selectedProject.clientCompany ?? ""}
                   onChange={(event) => {
                     updateProject((project) => ({
                       ...project,
-                      subjectPhotosFolderId: event.target.value,
+                      clientCompany: event.target.value,
                     }));
                   }}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                  placeholder="1a2b3c4d5e6f7g8h9i0j"
+                  placeholder="Winkler County Hospital District"
                 />
-                {selectedProject.subjectPhotosFolderId && (
-                  <Link
-                    href={`/project/${projectId}/subject/photos?folderId=${encodeURIComponent(selectedProject.subjectPhotosFolderId)}${selectedProject.projectFolderId ? `&projectFolderId=${encodeURIComponent(selectedProject.projectFolderId)}` : ""}`}
-                    className="mt-2 inline-block rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                  >
-                    View Photos
-                  </Link>
-                )}
               </div>
-               <div>
-                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                    Client Company
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedProject.clientCompany ?? ""}
-                    onChange={(event) => {
-                      updateProject((project) => ({
-                        ...project,
-                        clientCompany: event.target.value,
-                      }));
-                    }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                    placeholder="Winkler County Hospital District"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                    Client Name
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedProject.clientName ?? ""}
-                    onChange={(event) => {
-                      updateProject((project) => ({
-                        ...project,
-                        clientName: event.target.value,
-                      }));
-                    }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                    placeholder="Lorenzo Serrano"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                    Property Type
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedProject.propertyType ?? ""}
-                    onChange={(event) => {
-                      updateProject((project) => ({
-                        ...project,
-                        propertyType: event.target.value,
-                      }));
-                    }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                    placeholder="Commercial Office Building"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
-                    Project Folder ID
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedProject.projectFolderId ?? ""}
-                    onChange={(event) => {
-                      updateProject((project) => ({
-                        ...project,
-                        projectFolderId: event.target.value,
-                      }));
-                    }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                    placeholder="Project folder ID"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                    Used to fetch cover page data
-                  </p>
-                </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Client Name
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.clientName ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      clientName: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                  placeholder="Lorenzo Serrano"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Property Type
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.propertyType ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      propertyType: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                  placeholder="Commercial Office Building"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Project Folder ID
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.projectFolderId ?? ""}
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                />
+              </div>
             </div>
           </section>
 

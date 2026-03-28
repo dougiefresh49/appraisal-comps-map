@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { normalizeProjectData, type ProjectData } from "~/utils/projectStore";
+import { createClient } from "~/utils/supabase/client";
 import {
   fetchProject,
   upsertProjectMetadata,
@@ -89,21 +90,38 @@ async function persistChanges(
 ) {
   try {
     if (
-      prev.subject !== next.subject ||
       prev.clientCompany !== next.clientCompany ||
       prev.clientName !== next.clientName ||
       prev.propertyType !== next.propertyType ||
-      prev.subjectPhotosFolderId !== next.subjectPhotosFolderId ||
       prev.projectFolderId !== next.projectFolderId
     ) {
       await upsertProjectMetadata(projectId, {
-        subject: next.subject,
         clientCompany: next.clientCompany,
         clientName: next.clientName,
         propertyType: next.propertyType,
-        subjectPhotosFolderId: next.subjectPhotosFolderId,
         projectFolderId: next.projectFolderId,
       });
+    }
+
+    if (prev.subject !== next.subject && next.subject) {
+      const supabase = createClient();
+      const coreUpdate: Record<string, unknown> = {};
+      if (next.subject.address) coreUpdate.Address = next.subject.address;
+      if (next.subject.legalDescription) coreUpdate.Legal = next.subject.legalDescription;
+      if (next.subject.acres) coreUpdate["Land Size (AC)"] = parseFloat(next.subject.acres) || next.subject.acres;
+
+      if (Object.keys(coreUpdate).length > 0) {
+        const { data: existing } = await supabase
+          .from("subject_data")
+          .select("core")
+          .eq("project_id", projectId)
+          .maybeSingle();
+
+        const mergedCore = { ...((existing?.core ?? {}) as Record<string, unknown>), ...coreUpdate };
+        await supabase
+          .from("subject_data")
+          .upsert({ project_id: projectId, core: mergedCore, updated_at: new Date().toISOString() }, { onConflict: "project_id" });
+      }
     }
 
     const prevCompIds = new Set(prev.comparables.map((c) => c.id));

@@ -3,6 +3,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import type { SubjectData, SubjectTax } from "~/types/comp-data";
+import {
+  DocumentContextPanel,
+  DocumentPanelToggle,
+} from "~/components/DocumentContextPanel";
 
 interface SubjectDataEditorProps {
   projectId: string;
@@ -126,6 +130,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
 
   useEffect(() => {
     if (subjectData) {
@@ -182,7 +187,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         <div className="flex items-center gap-3">
           {saveSuccess && (
             <span className="text-sm font-medium text-green-600 dark:text-green-400">
-              Saved ✓
+              Saved
             </span>
           )}
           {saveError && (
@@ -190,6 +195,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               {saveError}
             </span>
           )}
+          <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
           <button
             onClick={() => void handleSave()}
             disabled={isSaving}
@@ -398,6 +404,95 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </SectionCard>
       </div>
 
+      {/* FEMA Flood Data & Neighborhood Boundaries */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard title="FEMA Flood Data">
+          <FormField
+            label="FEMA Map Number"
+            value={(core as Record<string, unknown>).FemaMapNum as string | undefined}
+            onChange={(v) => setCore((prev) => ({ ...prev, FemaMapNum: v } as CoreData))}
+          />
+          <FormField
+            label="FEMA Zone"
+            value={(core as Record<string, unknown>).FemaZone as string | undefined}
+            onChange={(v) => setCore((prev) => ({ ...prev, FemaZone: v } as CoreData))}
+          />
+          <SelectField
+            label="Is Hazard Zone"
+            value={(core as Record<string, unknown>).FemaIsHazardZone as string | undefined}
+            options={[
+              { label: "Yes", value: "true" },
+              { label: "No", value: "false" },
+            ]}
+            onChange={(v) => setCore((prev) => ({ ...prev, FemaIsHazardZone: v } as CoreData))}
+          />
+          <FormField
+            label="FEMA Map Date"
+            value={(core as Record<string, unknown>).FemaMapDate as string | undefined}
+            onChange={(v) => setCore((prev) => ({ ...prev, FemaMapDate: v } as CoreData))}
+          />
+        </SectionCard>
+
+        <SectionCard title="Neighborhood Boundaries">
+          <FormField
+            label="North"
+            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.north}
+            onChange={(v) =>
+              setCore((prev) => ({
+                ...prev,
+                neighborhoodBoundaries: {
+                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
+                  north: v,
+                },
+              } as CoreData))
+            }
+            placeholder="Northern boundary"
+          />
+          <FormField
+            label="South"
+            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.south}
+            onChange={(v) =>
+              setCore((prev) => ({
+                ...prev,
+                neighborhoodBoundaries: {
+                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
+                  south: v,
+                },
+              } as CoreData))
+            }
+            placeholder="Southern boundary"
+          />
+          <FormField
+            label="East"
+            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.east}
+            onChange={(v) =>
+              setCore((prev) => ({
+                ...prev,
+                neighborhoodBoundaries: {
+                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
+                  east: v,
+                },
+              } as CoreData))
+            }
+            placeholder="Eastern boundary"
+          />
+          <FormField
+            label="West"
+            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.west}
+            onChange={(v) =>
+              setCore((prev) => ({
+                ...prev,
+                neighborhoodBoundaries: {
+                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
+                  west: v,
+                },
+              } as CoreData))
+            }
+            placeholder="Western boundary"
+          />
+        </SectionCard>
+      </div>
+
       {/* Taxes Section */}
       <SectionCard title="Tax Entities">
         <div className="space-y-2">
@@ -443,6 +538,13 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
           </button>
         </div>
       </SectionCard>
+
+      <DocumentContextPanel
+        projectId={projectId}
+        sectionKey="subject"
+        isOpen={isDocPanelOpen}
+        onClose={() => setIsDocPanelOpen(false)}
+      />
     </div>
   );
 }

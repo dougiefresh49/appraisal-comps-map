@@ -33,10 +33,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = await getGoogleToken();
+    const { token, error: driveAuthError, code } = await getGoogleToken();
     if (!token) {
       return NextResponse.json(
-        { error: "Not authenticated — please sign in again to grant Drive access" },
+        {
+          error:
+            driveAuthError ??
+            "Not authenticated — please sign in again to grant Drive access",
+          code,
+        },
         { status: 401 },
       );
     }

@@ -316,6 +316,28 @@ export interface TaxEntity {
 }
 
 // ============================================================
+// Improvement Analysis (subject_data.improvement_analysis)
+// ============================================================
+
+export type ImprovementCategory =
+  | "Improvement Characteristics"
+  | "Ratios & Parking"
+  | "Age/Life"
+  | "Structural Characteristics"
+  | "Interior Characteristics"
+  | "Mechanical Systems"
+  | "Site Improvements"
+  | "Legal/Conforming Status";
+
+/** One row in subject_data.improvement_analysis (spreadsheet-style). */
+export interface ImprovementAnalysisRow {
+  label: string;
+  category: ImprovementCategory;
+  include: boolean;
+  value: string;
+}
+
+// ============================================================
 // Supabase Row Types
 // ============================================================
 
@@ -338,27 +360,6 @@ export interface SubjectDataRow {
   tax_entities: TaxEntity[];
   parcels: ParcelData[];
   improvements: ParcelImprovement[];
+  improvement_analysis?: ImprovementAnalysisRow[] | null;
   updated_at: string;
-}
-
-// ============================================================
-// Improvement Analysis Category Groupings
-// (mirrors the improvement-analysis-v2 spreadsheet layout)
-// ============================================================
-
-export type ImprovementCategory =
-  | "Improvement Characteristics"
-  | "Ratios & Parking"
-  | "Age/Life"
-  | "Structural Characteristics"
-  | "Interior Characteristics"
-  | "Mechanical Systems"
-  | "Site Improvements"
-  | "Legal/Conforming Status";
-
-export interface ImprovementAnalysisItem {
-  label: string;
-  category: ImprovementCategory;
-  include: boolean;
-  value: string | number | boolean | null;
 }

@@ -146,13 +146,16 @@ async function fetchProjectData(
   supabase: ServerSupabase,
   projectId: string,
 ): Promise<Record<string, unknown>> {
-  const result = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", projectId)
-    .single();
+  const [projectResult, subjectResult] = await Promise.all([
+    supabase.from("projects").select("*").eq("id", projectId).single(),
+    supabase.from("subject_data").select("core").eq("project_id", projectId).maybeSingle(),
+  ]);
 
-  return (result.data ?? {}) as Record<string, unknown>;
+  const projectRow = (projectResult.data ?? {}) as Record<string, unknown>;
+  const subjectCore = (subjectResult.data?.core ?? {}) as Record<string, unknown>;
+  projectRow.subject = subjectCore;
+
+  return projectRow;
 }
 
 async function fetchRelevantDocuments(
@@ -294,19 +297,17 @@ function buildSectionPrompt(
   relatedSections: Record<string, string>,
 ): string {
   const subject = (projectData.subject ?? {}) as Record<string, unknown>;
-  const rawData = (subject.rawData ?? subject) as Record<string, unknown>;
   const address =
-    (rawData.AddressLocal as string) ??
-    (rawData.address as string) ??
-    (subject.address as string) ??
+    (subject.Address as string) ??
+    (subject.AddressLocal as string) ??
     "";
 
   let prompt = `## Subject Property\n\nAddress: ${address}\n\n`;
 
   switch (sectionKey) {
     case "ownership": {
-      const legalDesc = (rawData.legalDescription as string) ?? "";
-      const instrumentNumber = (rawData.instrumentNumber as string) ?? "";
+      const legalDesc = (subject.Legal as string) ?? "";
+      const instrumentNumber = (subject.instrumentNumber as string) ?? "";
       prompt += `Legal Description: ${legalDesc}\n`;
       prompt += `Deed Record: ${instrumentNumber}\n\n`;
 
@@ -321,7 +322,7 @@ function buildSectionPrompt(
     }
 
     case "zoning": {
-      const zoning = (rawData.Zoning as string) ?? "";
+      const zoning = (subject.Zoning as string) ?? "";
       prompt += `Zoning: ${zoning}\n\n`;
       const zoningDoc = documents.find((d) => d.type === "zoning_map");
       if (zoningDoc) {
@@ -337,7 +338,7 @@ function buildSectionPrompt(
       if (neighborhoodDoc) {
         prompt += `## Neighborhood Map Context\n\n${neighborhoodDoc.text}\n\n`;
       }
-      const bounds = (rawData.neighborhoodBounds as string) ?? "";
+      const bounds = (subject.neighborhoodBounds as string) ?? "";
       if (bounds) {
         prompt += `Neighborhood Boundaries:\n${bounds}\n\n`;
       }
@@ -345,7 +346,7 @@ function buildSectionPrompt(
     }
 
     case "subject-site-summary": {
-      prompt += `## Subject Data\n\n\`\`\`json\n${JSON.stringify(rawData, null, 2)}\n\`\`\`\n\n`;
+      prompt += `## Subject Data\n\n\`\`\`json\n${JSON.stringify(subject, null, 2)}\n\`\`\`\n\n`;
 
       const floodDoc = documents.find((d) => d.type === "flood_map");
       if (floodDoc) {
@@ -367,7 +368,7 @@ function buildSectionPrompt(
     }
 
     case "highest-best-use": {
-      prompt += `## Subject Data\n\n\`\`\`json\n${JSON.stringify(rawData, null, 2)}\n\`\`\`\n\n`;
+      prompt += `## Subject Data\n\n\`\`\`json\n${JSON.stringify(subject, null, 2)}\n\`\`\`\n\n`;
 
       if (photoContext) {
         prompt += `${photoContext}\n\n`;

@@ -2,23 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowPathIcon,
   ArrowRightStartOnRectangleIcon,
   MoonIcon,
   SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "~/components/ThemeProvider";
 import { useAuth } from "~/hooks/useAuth";
 
 interface ProfileMenuProps {
   isCollapsed: boolean;
+  /** Top navigation: menu opens below the trigger, aligned right — no sidebar chrome. */
+  variant?: "sidebar" | "header";
 }
 
-export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
-  const { user, signOut } = useAuth();
+export function ProfileMenu({
+  isCollapsed,
+  variant = "sidebar",
+}: ProfileMenuProps) {
+  const { user, signIn, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -47,20 +54,37 @@ export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
     setIsOpen(false);
   }
 
+  async function handleReconnectDrive() {
+    setIsOpen(false);
+    await signIn(pathname ?? "/projects");
+  }
+
   async function handleSignOut() {
     setIsOpen(false);
     await signOut();
     router.replace("/login");
   }
 
+  const isHeader = variant === "header";
+
   return (
     <div
       ref={containerRef}
-      className="relative border-t border-gray-200 p-3 dark:border-gray-800"
+      className={
+        isHeader
+          ? "relative"
+          : "relative border-t border-gray-200 p-3 dark:border-gray-800"
+      }
     >
       {/* Popup menu */}
       {isOpen && (
-        <div className="absolute bottom-full left-0 z-[70] mb-2 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+        <div
+          className={
+            isHeader
+              ? "absolute top-full right-0 z-[70] mt-2 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+              : "absolute bottom-full left-0 z-[70] mb-2 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+          }
+        >
           {/* User info */}
           <div className="px-4 py-3">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -89,6 +113,15 @@ export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
             {theme === "light" ? "Dark Mode" : "Light Mode"}
           </button>
 
+          {/* Reconnect Google Drive */}
+          <button
+            onClick={handleReconnectDrive}
+            className="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <ArrowPathIcon className="h-4 w-4 shrink-0" />
+            Reconnect Google Drive
+          </button>
+
           <div className="border-t border-gray-100 dark:border-gray-700" />
 
           {/* Sign out */}
@@ -105,9 +138,15 @@ export function ProfileMenu({ isCollapsed }: ProfileMenuProps) {
       {/* Trigger button */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex w-full items-center gap-3 rounded-md px-2 py-1.5 transition hover:bg-gray-100 dark:hover:bg-gray-800 ${
-          isCollapsed ? "justify-center" : ""
-        }`}
+        className={
+          isHeader
+            ? `flex w-auto items-center gap-3 rounded-md px-1.5 py-1.5 transition hover:bg-gray-200 dark:hover:bg-gray-800 ${
+                isCollapsed ? "justify-center" : ""
+              }`
+            : `flex w-full items-center gap-3 rounded-md px-2 py-1.5 transition hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                isCollapsed ? "justify-center" : ""
+              }`
+        }
         title={isCollapsed ? userEmail || "Profile" : undefined}
         aria-label="Open profile menu"
         aria-expanded={isOpen}

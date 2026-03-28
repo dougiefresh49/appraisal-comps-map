@@ -60,6 +60,12 @@ export type MapType =
   | "comp-location";
 
 /** Property data for a comparable. No map visualization state. */
+export type ComparableParsedDataStatus =
+  | "none"
+  | "processing"
+  | "parsed"
+  | "error";
+
 export interface Comparable {
   id: string;
   type: ComparableType;
@@ -70,6 +76,8 @@ export interface Comparable {
   instrumentNumber?: string;
   folderId?: string;
   images?: ImageData[];
+  /** Synced from Supabase `comparables.parsed_data_status`. */
+  parsedDataStatus?: ComparableParsedDataStatus;
 }
 
 /** Position of a subject or comparable on a specific map. */
@@ -112,15 +120,34 @@ export interface MapView {
 // ProjectData (normalized shape)
 // ============================================================
 
+/** Drive subfolder IDs discovered at project setup (JSONB on `projects`). */
+export interface ProjectFolderStructure {
+  subjectFolderId?: string;
+  subjectPhotosFolderId?: string;
+  subjectSketchesFolderId?: string;
+  reportsFolderId?: string;
+  reportMapsFolderId?: string;
+  costReportFolderId?: string;
+  engagementFolderId?: string;
+  compsFolderIds?: {
+    land?: string;
+    sales?: string;
+    rentals?: string;
+  };
+}
+
 export interface ProjectData {
+  /** Derived from subject_data.core at fetch time — NOT a DB column on projects. */
   subject: SubjectInfo;
   comparables: Comparable[];
   maps: MapView[];
-  subjectPhotosFolderId?: string;
   projectFolderId?: string;
   clientCompany?: string;
   clientName?: string;
   propertyType?: string;
+  folderStructure?: ProjectFolderStructure;
+  effectiveDate?: string;
+  reportDueDate?: string;
 }
 
 export type ProjectsMap = Record<string, ProjectData>;
@@ -597,7 +624,6 @@ function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
     subject,
     comparables,
     maps,
-    subjectPhotosFolderId: legacy.subjectPhotosFolderId,
     projectFolderId: legacy.projectFolderId,
     clientCompany: legacy.clientCompany,
     clientName: legacy.clientName,
@@ -715,6 +741,16 @@ function normalizeComparableEntity(
 ): Comparable {
   const resolvedType =
     c.type && COMPARABLE_TYPES.includes(c.type) ? c.type : fallbackType;
+  const status = c.parsedDataStatus;
+  const validStatuses: ComparableParsedDataStatus[] = [
+    "none",
+    "processing",
+    "parsed",
+    "error",
+  ];
+  const parsedDataStatus =
+    status && validStatuses.includes(status) ? status : undefined;
+
   return {
     id:
       typeof c.id === "string" && c.id.trim().length > 0
@@ -732,6 +768,7 @@ function normalizeComparableEntity(
         : undefined,
     folderId: c.folderId,
     images: c.images,
+    parsedDataStatus,
   };
 }
 
@@ -807,15 +844,21 @@ function normalizeNewShape(data?: Partial<ProjectData>): ProjectData {
     }
   }
 
+  const rawFs = data as Partial<ProjectData> & {
+    folder_structure?: ProjectFolderStructure;
+  };
+  const folderStructure =
+    data?.folderStructure ?? rawFs.folder_structure;
+
   return {
     subject,
     comparables,
     maps,
-    subjectPhotosFolderId: data?.subjectPhotosFolderId,
     projectFolderId: data?.projectFolderId,
     clientCompany: data?.clientCompany,
     clientName: data?.clientName,
     propertyType: data?.propertyType,
+    folderStructure,
   };
 }
 

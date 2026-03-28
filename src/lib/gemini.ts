@@ -101,7 +101,8 @@ export async function extractDocumentContent(
           : text,
       structuredData: parsed,
     };
-  } catch {
+  } catch (err) {
+    console.warn("[extractDocumentContent] Failed to parse Gemini JSON response:", err);
     return { extractedText: text, structuredData: {} };
   }
 }

@@ -6,13 +6,20 @@ import type {
 import { createClient } from "~/utils/supabase/client";
 import type {
   ProjectData,
-  SubjectInfo,
+  ProjectFolderStructure,
   Comparable,
   MapView,
   MapMarker,
   MapDrawings,
   LatLng,
 } from "~/utils/projectStore";
+
+function parseFolderStructure(
+  raw: Record<string, unknown> | null | undefined,
+): ProjectFolderStructure | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  return raw as ProjectFolderStructure;
+}
 
 // ============================================================
 // DB Row types (snake_case, matching Supabase schema)
@@ -24,11 +31,21 @@ interface ProjectRow {
   client_company: string | null;
   client_name: string | null;
   property_type: string | null;
-  subject_photos_folder_id: string | null;
   project_folder_id: string | null;
-  subject: SubjectInfo;
+  folder_structure: Record<string, unknown> | null;
+  effective_date: string | null;
+  report_due_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface ProjectListRow {
+  id: string;
+  name: string;
+  property_type: string | null;
+  client_company: string | null;
+  updated_at: string;
+  subject_data: { core: Record<string, unknown> }[] | null;
 }
 
 interface ComparableRow {
@@ -48,6 +65,7 @@ interface ComparableRow {
     webViewUrl: string;
     mimeType: string;
   }> | null;
+  parsed_data_status?: string | null;
 }
 
 interface MapRow {
@@ -78,6 +96,15 @@ interface MapMarkerRow {
 // ============================================================
 
 function comparableFromRow(row: ComparableRow): Comparable {
+  const rawStatus = row.parsed_data_status;
+  const parsedDataStatus =
+    rawStatus === "none" ||
+    rawStatus === "processing" ||
+    rawStatus === "parsed" ||
+    rawStatus === "error"
+      ? rawStatus
+      : undefined;
+
   return {
     id: row.id,
     type: row.type as Comparable["type"],
@@ -88,6 +115,7 @@ function comparableFromRow(row: ComparableRow): Comparable {
     instrumentNumber: row.instrument_number ?? undefined,
     folderId: row.folder_id ?? undefined,
     images: row.images ?? undefined,
+    parsedDataStatus,
   };
 }
 
@@ -125,7 +153,7 @@ function mapViewFromRow(row: MapRow, markers: MapMarker[]): MapView {
 export interface ProjectListItem {
   id: string;
   name: string;
-  subject: SubjectInfo;
+  address?: string;
   propertyType?: string;
   clientCompany?: string;
   updatedAt: string;
@@ -135,19 +163,25 @@ export async function fetchProjectsList(): Promise<ProjectListItem[]> {
   const supabase = createClient();
   const listResult = (await supabase
     .from("projects")
-    .select("id, name, subject, property_type, client_company, updated_at")
-    .order("updated_at", { ascending: false })) as PostgrestResponse<ProjectRow>;
+    .select("id, name, property_type, client_company, updated_at, subject_data(core)")
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false })) as PostgrestResponse<ProjectListRow>;
 
   if (listResult.error) throw listResult.error;
 
-  return (listResult.data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    subject: row.subject,
-    propertyType: row.property_type ?? undefined,
-    clientCompany: row.client_company ?? undefined,
-    updatedAt: row.updated_at,
-  }));
+  return (listResult.data ?? []).map((row) => {
+    const core = row.subject_data?.[0]?.core;
+    const addr = core && typeof core === "object" ? core.Address : undefined;
+    const address = typeof addr === "string" ? addr : undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      address: address ?? undefined,
+      propertyType: row.property_type ?? undefined,
+      clientCompany: row.client_company ?? undefined,
+      updatedAt: row.updated_at,
+    };
+  });
 }
 
 export async function fetchProject(
@@ -155,14 +189,16 @@ export async function fetchProject(
 ): Promise<{ project: ProjectData; name: string } | null> {
   const supabase = createClient();
 
-  const [projectRes, compsRes, mapsRes] = (await Promise.all([
+  const [projectRes, compsRes, mapsRes, subjectRes] = (await Promise.all([
     supabase.from("projects").select("*").eq("id", projectId).single(),
     supabase.from("comparables").select("*").eq("project_id", projectId),
     supabase.from("maps").select("*").eq("project_id", projectId),
+    supabase.from("subject_data").select("core").eq("project_id", projectId).maybeSingle(),
   ])) as [
     PostgrestSingleResponse<ProjectRow>,
     PostgrestResponse<ComparableRow>,
     PostgrestResponse<MapRow>,
+    PostgrestSingleResponse<{ core: Record<string, unknown> } | null>,
   ];
 
   if (projectRes.error || !projectRes.data) return null;
@@ -190,17 +226,39 @@ export async function fetchProject(
     markersByMapId.set(row.map_id, existing);
   }
 
+  const folderStructure = parseFolderStructure(projectRow.folder_structure);
+  const subjectCore: Record<string, unknown> = {
+    ...(subjectRes.data?.core ?? {}),
+  };
+
+  const landAcRaw = subjectCore["Land Size (AC)"];
+  const acres =
+    landAcRaw == null
+      ? undefined
+      : typeof landAcRaw === "string" || typeof landAcRaw === "number"
+        ? String(landAcRaw)
+        : undefined;
+
   const project: ProjectData = {
-    subject: projectRow.subject,
+    subject: {
+      address: typeof subjectCore.Address === "string" ? subjectCore.Address : "",
+      addressForDisplay: typeof subjectCore.AddressLocal === "string"
+        ? subjectCore.AddressLocal
+        : typeof subjectCore.Address === "string" ? subjectCore.Address : "",
+      legalDescription: typeof subjectCore.Legal === "string" ? subjectCore.Legal : undefined,
+      acres,
+    },
     comparables: compRows.map(comparableFromRow),
     maps: mapRows.map((m) =>
       mapViewFromRow(m, markersByMapId.get(m.id) ?? []),
     ),
-    subjectPhotosFolderId: projectRow.subject_photos_folder_id ?? undefined,
     projectFolderId: projectRow.project_folder_id ?? undefined,
     clientCompany: projectRow.client_company ?? undefined,
     clientName: projectRow.client_name ?? undefined,
     propertyType: projectRow.property_type ?? undefined,
+    folderStructure,
+    effectiveDate: projectRow.effective_date ?? undefined,
+    reportDueDate: projectRow.report_due_date ?? undefined,
   };
 
   return { project, name: projectRow.name };
@@ -223,9 +281,7 @@ export async function insertProject(
       client_company: project.clientCompany ?? null,
       client_name: project.clientName ?? null,
       property_type: project.propertyType ?? null,
-      subject_photos_folder_id: project.subjectPhotosFolderId ?? null,
       project_folder_id: project.projectFolderId ?? null,
-      subject: project.subject,
     })
     .select("id")
     .single()) as unknown as PostgrestSingleResponse<{ id: string }>;
@@ -263,6 +319,7 @@ async function batchInsertComparables(
     instrument_number: c.instrumentNumber ?? null,
     folder_id: c.folderId ?? null,
     images: c.images ?? [],
+    parsed_data_status: c.parsedDataStatus ?? "none",
   }));
 
   const { error } = await supabase.from("comparables").upsert(rows);
@@ -316,28 +373,29 @@ export async function upsertProjectMetadata(
   projectId: string,
   data: {
     name?: string;
-    subject?: SubjectInfo;
     clientCompany?: string;
     clientName?: string;
     propertyType?: string;
-    subjectPhotosFolderId?: string;
     projectFolderId?: string;
+    effectiveDate?: string;
+    reportDueDate?: string;
   },
 ) {
   const supabase = createClient();
 
   const updates: Record<string, unknown> = {};
   if (data.name !== undefined) updates.name = data.name;
-  if (data.subject !== undefined) updates.subject = data.subject;
   if (data.clientCompany !== undefined)
     updates.client_company = data.clientCompany;
   if (data.clientName !== undefined) updates.client_name = data.clientName;
   if (data.propertyType !== undefined)
     updates.property_type = data.propertyType;
-  if (data.subjectPhotosFolderId !== undefined)
-    updates.subject_photos_folder_id = data.subjectPhotosFolderId;
   if (data.projectFolderId !== undefined)
     updates.project_folder_id = data.projectFolderId;
+  if (data.effectiveDate !== undefined)
+    updates.effective_date = data.effectiveDate || null;
+  if (data.reportDueDate !== undefined)
+    updates.report_due_date = data.reportDueDate || null;
 
   if (Object.keys(updates).length === 0) return;
 
@@ -364,6 +422,7 @@ export async function upsertComparable(
     instrument_number: comp.instrumentNumber ?? null,
     folder_id: comp.folderId ?? null,
     images: comp.images ?? [],
+    parsed_data_status: comp.parsedDataStatus ?? "none",
   });
   if (error) throw error;
 }
@@ -501,6 +560,15 @@ export async function deleteProject(projectId: string) {
   const { error } = await supabase
     .from("projects")
     .delete()
+    .eq("id", projectId);
+  if (error) throw error;
+}
+
+export async function archiveProject(projectId: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("projects")
+    .update({ archived_at: new Date().toISOString() })
     .eq("id", projectId);
   if (error) throw error;
 }

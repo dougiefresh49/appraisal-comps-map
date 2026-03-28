@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, use } from "react";
 import { useProject } from "~/hooks/useProject";
-import { upsertProjectMetadata } from "~/lib/supabase-queries";
+import { useSubjectData } from "~/hooks/useSubjectData";
 
 interface CoverPageProps {
   params: Promise<{
@@ -13,6 +13,7 @@ interface CoverPageProps {
 export default function ProjectCoverPage({ params }: CoverPageProps) {
   const { projectId } = use(params);
   const { project, isLoading, updateProject } = useProject(projectId);
+  const { subjectData } = useSubjectData(projectId);
 
   const [clientCompany, setClientCompany] = useState("");
   const [clientName, setClientName] = useState("");
@@ -62,8 +63,9 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
     );
   }
 
+  const core = subjectData?.core as Record<string, unknown> | undefined;
   const subjectAddress =
-    project.subject.addressForDisplay ?? project.subject.address ?? "";
+    (core?.Address as string) ?? "";
 
   /* eslint-disable @next/next/no-img-element */
   return (
@@ -177,7 +179,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                         body: JSON.stringify({
                           projectFolderId: project.projectFolderId,
                           subjectPhotosFolderId:
-                            project.subjectPhotosFolderId ?? undefined,
+                            project.folderStructure?.subjectPhotosFolderId ?? undefined,
                         }),
                       });
 
@@ -193,18 +195,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       };
 
                       if (photoData) {
-                        if (photoData.subjectPhotosFolderId) {
-                          updateProject((prev) => ({
-                            ...prev,
-                            subjectPhotosFolderId:
-                              photoData.subjectPhotosFolderId,
-                          }));
-                          await upsertProjectMetadata(projectId, {
-                            subjectPhotosFolderId:
-                              photoData.subjectPhotosFolderId,
-                          });
-                        }
-
                         if (photoData.subjectPhotoBase64) {
                           setSubjectPhotoUrl(
                             `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`,

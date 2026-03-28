@@ -28,6 +28,15 @@ export async function createClient() {
   );
 }
 
+/** Result of resolving a Google OAuth access token for Drive API calls. */
+export type GoogleTokenResult = {
+  token: string | null;
+  /** Present when `token` is null — safe to show in API error bodies for UX. */
+  error?: string;
+  /** Optional machine-readable hint for clients (e.g. `needs_reauth`). */
+  code?: string;
+};
+
 /**
  * Retrieves a valid Google OAuth access token for Drive API calls.
  *
@@ -37,21 +46,22 @@ export async function createClient() {
  *    OAuth to mint a fresh access token (requires GOOGLE_CLIENT_ID/SECRET)
  * 3. Falls back to Supabase session.provider_token (only works right after login)
  */
-export async function getGoogleToken(): Promise<string | null> {
+export async function getGoogleToken(): Promise<GoogleTokenResult> {
   const cookieStore = await cookies();
 
   // 1. Try the access token cookie
   const accessToken = cookieStore.get("google_provider_token")?.value;
-  if (accessToken) return accessToken;
+  if (accessToken) {
+    return { token: accessToken };
+  }
 
   // 2. Try refreshing with the refresh token
   const refreshToken = cookieStore.get("google_provider_refresh_token")?.value;
   if (refreshToken) {
     const refreshed = await refreshGoogleAccessToken(refreshToken);
-    if (refreshed) {
-      // Persist the new access token in a cookie for subsequent requests
+    if (refreshed.access_token) {
       try {
-        cookieStore.set("google_provider_token", refreshed, {
+        cookieStore.set("google_provider_token", refreshed.access_token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
@@ -61,8 +71,26 @@ export async function getGoogleToken(): Promise<string | null> {
       } catch {
         // Can't set cookies in some contexts (e.g. Server Component)
       }
-      return refreshed;
+      return { token: refreshed.access_token };
     }
+    return {
+      token: null,
+      error:
+        refreshed.userMessage ??
+        "Could not refresh Google session — try signing in again.",
+      code: refreshed.code ?? "refresh_failed",
+    };
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return {
+      token: null,
+      error:
+        "No Google Drive session. Sign in with Google again and ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set for token refresh.",
+      code: "missing_refresh_and_oauth_config",
+    };
   }
 
   // 3. Last resort: Supabase session (only has provider_token right after login)
@@ -70,21 +98,41 @@ export async function getGoogleToken(): Promise<string | null> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  return session?.provider_token ?? null;
+  const providerToken = session?.provider_token;
+  if (providerToken) {
+    return { token: providerToken };
+  }
+
+  return {
+    token: null,
+    error:
+      "Not authenticated — please sign in again to grant Drive access. Your session may have expired.",
+    code: "needs_reauth",
+  };
 }
+
+type RefreshResult = {
+  access_token: string | null;
+  userMessage?: string;
+  code?: string;
+};
 
 async function refreshGoogleAccessToken(
   refreshToken: string,
-): Promise<string | null> {
+): Promise<RefreshResult> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     console.warn(
-      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required to refresh Google tokens. " +
-        "Set these env vars to enable automatic token refresh.",
+      "[getGoogleToken] GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required to refresh Google tokens.",
     );
-    return null;
+    return {
+      access_token: null,
+      userMessage:
+        "Drive token refresh is not configured (missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET on the server).",
+      code: "oauth_not_configured",
+    };
   }
 
   try {
@@ -99,11 +147,63 @@ async function refreshGoogleAccessToken(
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let bodyText = "";
+      try {
+        bodyText = await res.text();
+      } catch {
+        bodyText = "";
+      }
+
+      let parsed: { error?: string; error_description?: string } = {};
+      try {
+        parsed = JSON.parse(bodyText) as typeof parsed;
+      } catch {
+        // not JSON
+      }
+
+      const googleError = parsed.error ?? "unknown";
+      console.warn(
+        "[getGoogleToken] Google token refresh failed:",
+        res.status,
+        googleError,
+        parsed.error_description ?? bodyText,
+      );
+
+      if (googleError === "invalid_grant") {
+        return {
+          access_token: null,
+          userMessage:
+            "Google access was revoked or expired — please sign out and sign in again with Google.",
+          code: "invalid_grant",
+        };
+      }
+
+      return {
+        access_token: null,
+        userMessage: `Could not refresh Google session (${googleError}). Try signing in again.`,
+        code: "refresh_failed",
+      };
+    }
 
     const data = (await res.json()) as { access_token?: string };
-    return data.access_token ?? null;
-  } catch {
-    return null;
+    const at = data.access_token ?? null;
+    if (!at) {
+      console.warn("[getGoogleToken] Google token refresh OK but no access_token in body");
+      return {
+        access_token: null,
+        userMessage: "Invalid response from Google when refreshing — try signing in again.",
+        code: "refresh_malformed",
+      };
+    }
+    return { access_token: at };
+  } catch (err) {
+    console.error("[getGoogleToken] refresh request error:", err);
+    return {
+      access_token: null,
+      userMessage:
+        "Failed to reach Google to refresh your session. Check your network and try again.",
+      code: "refresh_network_error",
+    };
   }
 }

@@ -44,7 +44,8 @@ function LoginContent() {
         )}
 
         <button
-          onClick={signIn}
+          type="button"
+          onClick={() => void signIn()}
           className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
         >
           <svg viewBox="0 0 24 24" width="20" height="20">
