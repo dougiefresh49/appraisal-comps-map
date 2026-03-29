@@ -4,9 +4,26 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
 export const metadata: Metadata = {
-  title: "Appraisal Comps Maps",
-  description: "Appraisal Comps Maps",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  title: "AppraisalBot Reports",
+  description:
+    "Commercial appraisal reporting workspace — projects, comps, and AI-assisted workflows.",
+  icons: {
+    icon: [{ url: "/logo128.png", type: "image/png", sizes: "128x128" }],
+    apple: "/logo128.png",
+  },
+  openGraph: {
+    title: "AppraisalBot Reports",
+    description:
+      "Commercial appraisal reporting workspace — projects, comps, and AI-assisted workflows.",
+    images: [{ url: "/logo128.png", width: 128, height: 128, alt: "AppraisalBot" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "AppraisalBot Reports",
+    description:
+      "Commercial appraisal reporting workspace — projects, comps, and AI-assisted workflows.",
+    images: ["/logo128.png"],
+  },
 };
 
 const geist = Geist({
