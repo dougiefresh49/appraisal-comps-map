@@ -12,6 +12,8 @@ type StructuredData = Record<string, unknown>;
  * concurrent document processors never overwrite each other's fields.
  * Only empty/null/0 fields in `core` are filled — user-edited values
  * are never clobbered.
+ *
+ * flood_map documents are routed to the dedicated `fema` JSONB column.
  */
 export async function mergeDocumentIntoSubjectData(
   projectId: string,
@@ -20,6 +22,10 @@ export async function mergeDocumentIntoSubjectData(
 ): Promise<void> {
   if (!projectId || !structuredData || typeof structuredData !== "object") {
     return;
+  }
+
+  if (documentType === "flood_map") {
+    return mergeFemaData(projectId, structuredData);
   }
 
   const mapper = MERGE_MAP[documentType];
@@ -53,7 +59,6 @@ export async function mergeDocumentIntoSubjectData(
   if (error) {
     console.error("[mergeDocumentIntoSubjectData] rpc merge_subject_core failed:", error);
 
-    // Fallback: read-then-write (original behaviour, still better than nothing)
     const { data: existing } = await supabase
       .from("subject_data")
       .select("core")
@@ -86,6 +91,71 @@ export async function mergeDocumentIntoSubjectData(
   }
 }
 
+/**
+ * Merge FEMA-specific fields into the dedicated `subject_data.fema` column.
+ * Only fills keys whose current value is null/empty — user-edited values
+ * are never clobbered.
+ */
+async function mergeFemaData(
+  projectId: string,
+  structuredData: StructuredData,
+): Promise<void> {
+  if (!projectId || !structuredData) return;
+
+  const fields = (
+    typeof structuredData.structured_data === "object" &&
+    structuredData.structured_data !== null
+      ? structuredData.structured_data
+      : structuredData
+  ) as StructuredData;
+
+  const femaPayload: Record<string, unknown> = {};
+  const mapNum = str(fields.fema_map_number);
+  const zone = str(fields.flood_zone);
+  const mapDate = str(fields.map_effective_date);
+  const hazard = fields.in_special_flood_hazard_area;
+
+  if (mapNum) femaPayload.FemaMapNum = mapNum;
+  if (zone) femaPayload.FemaZone = zone;
+  if (mapDate) femaPayload.FemaMapDate = mapDate;
+  if (hazard === true || hazard === "true") femaPayload.FemaIsHazardZone = true;
+  else if (hazard === false || hazard === "false") femaPayload.FemaIsHazardZone = false;
+
+  if (Object.keys(femaPayload).length === 0) return;
+
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("subject_data")
+    .select("fema")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  const currentFema = (existing?.fema ?? {}) as Record<string, unknown>;
+  const merged = { ...currentFema };
+  for (const [key, value] of Object.entries(femaPayload)) {
+    const cur = merged[key];
+    if (cur == null || cur === "" || cur === 0) {
+      merged[key] = value;
+    }
+  }
+
+  const { error } = await supabase
+    .from("subject_data")
+    .upsert(
+      {
+        project_id: projectId,
+        fema: merged,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id" },
+    );
+
+  if (error) {
+    console.error("[mergeFemaData] upsert failed:", error);
+  }
+}
+
 // ------------------------------------------------------------------
 // Per-document-type field mappers
 // ------------------------------------------------------------------
@@ -105,22 +175,6 @@ const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
     "Land Size (AC)": num(d.lot_area_acres),
     "Land Size (SF)": num(d.lot_area_sqft),
     "Year Built": num(d.year_built),
-  }),
-
-  flood_map: (d) => ({
-    FemaMapNum: str(d.fema_map_number),
-    FemaZone: str(d.flood_zone),
-    FemaIsHazardZone:
-      d.in_special_flood_hazard_area === true
-        ? true
-        : d.in_special_flood_hazard_area === false
-          ? false
-          : d.in_special_flood_hazard_area === "true"
-            ? true
-            : d.in_special_flood_hazard_area === "false"
-              ? false
-              : null,
-    FemaMapDate: str(d.map_effective_date),
   }),
 
   engagement: (d) => ({

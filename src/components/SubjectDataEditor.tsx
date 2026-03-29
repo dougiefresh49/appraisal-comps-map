@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useSubjectData } from "~/hooks/useSubjectData";
-import type { SubjectData, SubjectTax } from "~/types/comp-data";
+import type { SubjectData, SubjectTax, FemaData } from "~/types/comp-data";
 import {
   DocumentContextPanel,
   DocumentPanelToggle,
@@ -126,6 +126,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     useSubjectData(projectId);
 
   const [core, setCore] = useState<CoreData>({});
+  const [fema, setFema] = useState<FemaData>({});
   const [taxes, setTaxes] = useState<SubjectTax[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -135,6 +136,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   useEffect(() => {
     if (subjectData) {
       setCore(subjectData.core as CoreData);
+      setFema(subjectData.fema ?? {});
       setTaxes(subjectData.taxes);
     }
   }, [subjectData]);
@@ -151,7 +153,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     setSaveError(null);
     setSaveSuccess(false);
     try {
-      await saveSubjectData({ core: core as SubjectData, taxes });
+      await saveSubjectData({ core: core as SubjectData, fema, taxes });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -409,27 +411,39 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         <SectionCard title="FEMA Flood Data">
           <FormField
             label="FEMA Map Number"
-            value={(core as Record<string, unknown>).FemaMapNum as string | undefined}
-            onChange={(v) => setCore((prev) => ({ ...prev, FemaMapNum: v } as CoreData))}
+            value={fema.FemaMapNum}
+            onChange={(v) => setFema((prev) => ({ ...prev, FemaMapNum: v }))}
           />
           <FormField
             label="FEMA Zone"
-            value={(core as Record<string, unknown>).FemaZone as string | undefined}
-            onChange={(v) => setCore((prev) => ({ ...prev, FemaZone: v } as CoreData))}
+            value={fema.FemaZone}
+            onChange={(v) => setFema((prev) => ({ ...prev, FemaZone: v }))}
           />
           <SelectField
             label="Is Hazard Zone"
-            value={(core as Record<string, unknown>).FemaIsHazardZone as string | undefined}
+            value={
+              fema.FemaIsHazardZone === true
+                ? "true"
+                : fema.FemaIsHazardZone === false
+                  ? "false"
+                  : undefined
+            }
             options={[
               { label: "Yes", value: "true" },
               { label: "No", value: "false" },
             ]}
-            onChange={(v) => setCore((prev) => ({ ...prev, FemaIsHazardZone: v } as CoreData))}
+            onChange={(v) =>
+              setFema((prev) => ({
+                ...prev,
+                FemaIsHazardZone:
+                  v === "true" ? true : v === "false" ? false : null,
+              }))
+            }
           />
           <FormField
             label="FEMA Map Date"
-            value={(core as Record<string, unknown>).FemaMapDate as string | undefined}
-            onChange={(v) => setCore((prev) => ({ ...prev, FemaMapDate: v } as CoreData))}
+            value={fema.FemaMapDate}
+            onChange={(v) => setFema((prev) => ({ ...prev, FemaMapDate: v }))}
           />
         </SectionCard>
 
