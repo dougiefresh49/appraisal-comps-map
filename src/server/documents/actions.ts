@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { PostgrestResponse } from "@supabase/supabase-js";
-import { createClient } from "~/utils/supabase/server";
+import type { PostgrestResponse, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, createServiceClient } from "~/utils/supabase/server";
 import { extractDocumentContent } from "~/lib/gemini";
 import { generateEmbedding } from "~/lib/embeddings";
 import { getExtractionPrompt } from "~/lib/document-prompts";
@@ -49,7 +49,9 @@ export async function addDocument(
   const documentId = (data as { id: string }).id;
 
   if (input.fileBuffer || input.fileId) {
+    const serviceClient = createServiceClient();
     void processDocument(
+      serviceClient,
       documentId,
       input.projectId,
       input.documentType,
@@ -63,6 +65,7 @@ export async function addDocument(
 }
 
 async function processDocument(
+  supabase: SupabaseClient,
   documentId: string,
   projectId: string,
   documentType: string,
@@ -102,8 +105,6 @@ async function processDocument(
       }
     }
 
-    const supabase = await createClient();
-
     const updatePayload: Record<string, unknown> = {
       extracted_text: extractedText,
       structured_data: structuredData,
@@ -129,6 +130,7 @@ async function processDocument(
           projectId,
           documentType,
           structuredData,
+          supabase,
         );
       } catch (mergeErr) {
         console.error("Failed to merge document data into subject_data", mergeErr);
@@ -138,7 +140,6 @@ async function processDocument(
     console.error("Document processing failed", err);
 
     try {
-      const supabase = await createClient();
       await supabase
         .from("project_documents")
         .update({
@@ -188,7 +189,9 @@ export async function reprocessDocument(
     .update({ processed_at: null, extracted_text: null, structured_data: {} })
     .eq("id", documentId);
 
+  const serviceClient = createServiceClient();
   void processDocument(
+    serviceClient,
     documentId,
     row.project_id,
     row.document_type,

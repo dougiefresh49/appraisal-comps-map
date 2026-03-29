@@ -338,6 +338,17 @@ export interface ImprovementAnalysisRow {
 }
 
 // ============================================================
+// FEMA Flood Data (subject_data.fema)
+// ============================================================
+
+export interface FemaData {
+  FemaMapNum?: string | null;
+  FemaZone?: string | null;
+  FemaIsHazardZone?: boolean | null;
+  FemaMapDate?: string | null;
+}
+
+// ============================================================
 // Supabase Row Types
 // ============================================================
 
@@ -356,6 +367,7 @@ export interface SubjectDataRow {
   id: string;
   project_id: string;
   core: SubjectData | Record<string, unknown>;
+  fema: FemaData;
   taxes: SubjectTax[];
   tax_entities: TaxEntity[];
   parcels: ParcelData[];
