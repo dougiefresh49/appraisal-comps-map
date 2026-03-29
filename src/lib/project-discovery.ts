@@ -79,18 +79,34 @@ export async function discoverFolderStructure(
 }
 
 const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const REPORT_DATA_PREFIX = "report-data";
 
 /**
- * Find the Google Spreadsheet file ID inside a project folder.
- * Searches the root level of the folder for a Sheets file.
+ * Find Google Spreadsheet candidates matching the `report-data*` naming
+ * convention.  Searches the `reports/` subfolder first (where the spreadsheet
+ * normally lives), then falls back to the project root for backward compat.
  */
-export async function findSpreadsheetId(
+export async function findSpreadsheetCandidates(
   token: string,
+  reportsFolderId: string | undefined,
   projectFolderId: string,
-): Promise<string | null> {
-  const files = await listFolderChildren(token, projectFolderId);
-  const sheet = files.find((f) => f.mimeType === SPREADSHEET_MIME);
-  return sheet?.id ?? null;
+): Promise<DriveFile[]> {
+  const isReportDataSheet = (f: DriveFile) =>
+    f.mimeType === SPREADSHEET_MIME &&
+    f.name.toLowerCase().startsWith(REPORT_DATA_PREFIX);
+
+  if (reportsFolderId) {
+    const reportsFiles = await listFolderChildren(token, reportsFolderId);
+    const matches = reportsFiles.filter(isReportDataSheet);
+    if (matches.length > 0) return matches;
+  }
+
+  const rootFiles = await listFolderChildren(token, projectFolderId);
+  const rootMatches = rootFiles.filter(isReportDataSheet);
+  if (rootMatches.length > 0) return rootMatches;
+
+  const anySheet = rootFiles.filter((f) => f.mimeType === SPREADSHEET_MIME);
+  return anySheet;
 }
 
 /**
