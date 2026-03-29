@@ -8,8 +8,10 @@ type StructuredData = Record<string, unknown>;
  * After a document is processed by Gemini, merge the extracted
  * structured data into the project's `subject_data` row.
  *
- * The merge is **additive** — only empty/null fields are overwritten
- * so user-edited values are never clobbered.
+ * Uses an atomic Postgres function (`merge_subject_core`) so that
+ * concurrent document processors never overwrite each other's fields.
+ * Only empty/null/0 fields in `core` are filled — user-edited values
+ * are never clobbered.
  */
 export async function mergeDocumentIntoSubjectData(
   projectId: string,
@@ -23,7 +25,6 @@ export async function mergeDocumentIntoSubjectData(
   const mapper = MERGE_MAP[documentType];
   if (!mapper) return;
 
-  // Gemini returns { extracted_text, structured_data: { ... } } — unwrap nesting
   const fields = (
     typeof structuredData.structured_data === "object" &&
     structuredData.structured_data !== null
@@ -31,39 +32,57 @@ export async function mergeDocumentIntoSubjectData(
       : structuredData
   ) as StructuredData;
 
-  const supabase = await createClient();
-
-  const { data: existing } = await supabase
-    .from("subject_data")
-    .select("core")
-    .eq("project_id", projectId)
-    .maybeSingle();
-
-  const currentCore = (existing?.core ?? {}) as Record<string, unknown>;
   const patch = mapper(fields);
 
-  const mergedCore = { ...currentCore };
+  const cleanPatch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
-    if (value == null || value === "") continue;
-    const cur = mergedCore[key];
-    if (cur == null || cur === "" || cur === 0) {
-      mergedCore[key] = value;
+    if (value != null && value !== "") {
+      cleanPatch[key] = value;
     }
   }
 
-  const { error: upsertError } = await supabase
-    .from("subject_data")
-    .upsert(
-      {
-        project_id: projectId,
-        core: mergedCore,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "project_id" },
-    );
+  if (Object.keys(cleanPatch).length === 0) return;
 
-  if (upsertError) {
-    console.error("[mergeDocumentIntoSubjectData] upsert failed:", upsertError);
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("merge_subject_core", {
+    p_project_id: projectId,
+    p_patch: cleanPatch,
+  });
+
+  if (error) {
+    console.error("[mergeDocumentIntoSubjectData] rpc merge_subject_core failed:", error);
+
+    // Fallback: read-then-write (original behaviour, still better than nothing)
+    const { data: existing } = await supabase
+      .from("subject_data")
+      .select("core")
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    const currentCore = (existing?.core ?? {}) as Record<string, unknown>;
+    const mergedCore = { ...currentCore };
+    for (const [key, value] of Object.entries(cleanPatch)) {
+      const cur = mergedCore[key];
+      if (cur == null || cur === "" || cur === 0) {
+        mergedCore[key] = value;
+      }
+    }
+
+    const { error: upsertError } = await supabase
+      .from("subject_data")
+      .upsert(
+        {
+          project_id: projectId,
+          core: mergedCore,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "project_id" },
+      );
+
+    if (upsertError) {
+      console.error("[mergeDocumentIntoSubjectData] fallback upsert failed:", upsertError);
+    }
   }
 }
 
