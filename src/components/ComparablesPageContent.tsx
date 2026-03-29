@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useProject } from "~/hooks/useProject";
 import { MergeCompsDialog, type MergeConflict } from "./MergeCompsDialog";
 import { ComparablesList } from "./ComparablesList";
 import { MapBanner } from "~/components/MapBanner";
+import { CompAddFlow } from "~/components/CompAddFlow";
 import {
   type ComparableType,
-  type Comparable,
   type ProjectData,
   getComparablesByType,
   getMapByType,
@@ -52,16 +53,30 @@ function compSectionHeading(compType: ComparableType): string {
   }
 }
 
+function compsFolderKey(
+  compType: ComparableType,
+): "land" | "sales" | "rentals" {
+  switch (compType) {
+    case "Land":
+      return "land";
+    case "Sales":
+      return "sales";
+    case "Rentals":
+      return "rentals";
+  }
+}
+
 export function ComparablesPageContent({
   projectId,
   type,
 }: ComparablesPageContentProps) {
+  const router = useRouter();
   const { project, updateProject, isLoading, projectExists } =
     useProject(projectId);
-  /** Populated when a future comps-import flow supplies merge conflicts. */
   const [mergeConflicts, setMergeConflicts] = useState<MergeConflict[] | null>(
     null,
   );
+  const [showAddFlow, setShowAddFlow] = useState(false);
 
   if (isLoading) {
     return (
@@ -87,18 +102,19 @@ export function ComparablesPageContent({
   const typeSlug = routeSlugForCompType(type);
   const comparablesMapHref = `/project/${projectId}/${typeSlug}/comparables-map`;
 
+  const compsFolderIdForType =
+    project.folderStructure?.compsFolderIds?.[compsFolderKey(type)];
+
+  const existingFolderIds = comparables
+    .map((c) => c.folderId)
+    .filter((id): id is string => !!id);
+
   const handleAddComparable = () => {
-    const id = `comp-${Date.now()}-${Math.random()}`;
-    const newComparable: Comparable = {
-      id,
-      address: "",
-      addressForDisplay: "",
-      type,
-    };
-    updateProject((proj: ProjectData) => ({
-      ...proj,
-      comparables: [...proj.comparables, newComparable],
-    }));
+    setShowAddFlow(true);
+  };
+
+  const handleAddFlowComplete = (compId: string) => {
+    router.push(`/project/${projectId}/${typeSlug}/comps/${compId}`);
   };
 
   const handleComparableChange = (
@@ -179,8 +195,6 @@ export function ComparablesPageContent({
         <MergeCompsDialog
           conflicts={mergeConflicts}
           onMerge={() => {
-            // When a new import flow sets `mergeConflicts`, wire `onMerge` to apply decisions
-            // (see prior `handleMergeComplete` / `pendingComps` merge logic).
             setMergeConflicts(null);
           }}
           onClose={() => setMergeConflicts(null)}
@@ -196,6 +210,18 @@ export function ComparablesPageContent({
         onRemove={handleRemoveComparable}
         onChange={handleComparableChange}
       />
+
+      {showAddFlow && (
+        <CompAddFlow
+          projectId={projectId}
+          compType={type}
+          compsFolderId={compsFolderIdForType}
+          projectFolderId={project.projectFolderId}
+          existingFolderIds={existingFolderIds}
+          onComplete={handleAddFlowComplete}
+          onClose={() => setShowAddFlow(false)}
+        />
+      )}
     </div>
   );
 }
