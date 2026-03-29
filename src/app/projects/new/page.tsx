@@ -84,6 +84,7 @@ export default function NewProjectPage() {
 
   const [folderStructure, setFolderStructure] = useState<FolderStructure>({});
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
+  const [spreadsheetCandidates, setSpreadsheetCandidates] = useState<DriveFileItem[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
 
   const [engagementFiles, setEngagementFiles] = useState<DriveFileItem[]>([]);
@@ -135,10 +136,12 @@ export default function NewProjectPage() {
         const discoverData = (await discoverRes.json()) as {
           folderStructure: FolderStructure;
           spreadsheetId: string | null;
+          spreadsheetCandidates: DriveFileItem[];
         };
 
         setFolderStructure(discoverData.folderStructure);
         setSpreadsheetId(discoverData.spreadsheetId);
+        setSpreadsheetCandidates(discoverData.spreadsheetCandidates ?? []);
 
         if (discoverData.folderStructure.engagementFolderId) {
           const listRes = await fetch("/api/drive/list", {
@@ -571,9 +574,42 @@ export default function NewProjectPage() {
                   <span>Reports folder: {folderStructure.reportsFolderId ? "Found" : "—"}</span>
                   <span>Maps folder: {folderStructure.reportMapsFolderId ? "Found" : "—"}</span>
                   <span>Comps folders: {folderStructure.compsFolderIds ? "Found" : "—"}</span>
-                  <span>Spreadsheet: {spreadsheetId ? "Found" : "—"}</span>
+                  <span>Spreadsheet: {spreadsheetId ? "Found" : spreadsheetCandidates.length > 1 ? "Select below \u2193" : "\u2014"}</span>
                 </div>
               </div>
+
+              {spreadsheetCandidates.length > 1 && !spreadsheetId && (
+                <div className="mb-6 rounded-lg border border-amber-800/60 bg-amber-950/30 p-4">
+                  <h3 className="mb-1 text-sm font-semibold text-amber-100">
+                    Multiple spreadsheets found
+                  </h3>
+                  <p className="mb-3 text-xs text-amber-200/70">
+                    Select the report-data spreadsheet for this project.
+                  </p>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700">
+                    {spreadsheetCandidates.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={async () => {
+                          setSpreadsheetId(f.id);
+                          if (projectId) {
+                            await fetch("/api/projects/select-spreadsheet", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ projectId, spreadsheetId: f.id }),
+                            });
+                          }
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-200 transition hover:bg-gray-800"
+                      >
+                        <span className="text-green-500">📊</span>
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {engagementFiles.length > 0 && !engagementData && (
                 <div className="mb-4">
