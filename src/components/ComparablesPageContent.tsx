@@ -41,14 +41,23 @@ function routeSlugForCompType(compType: ComparableType): string {
   }
 }
 
+function compSectionHeading(compType: ComparableType): string {
+  switch (compType) {
+    case "Land":
+      return "Land Comparables";
+    case "Sales":
+      return "Sales Comparables";
+    case "Rentals":
+      return "Rental Comparables";
+  }
+}
+
 export function ComparablesPageContent({
   projectId,
   type,
 }: ComparablesPageContentProps) {
-  const { project, updateProject, isLoading, projectExists, projectName } =
+  const { project, updateProject, isLoading, projectExists } =
     useProject(projectId);
-  const decodedProjectId = decodeURIComponent(projectId);
-
   /** Populated when a future comps-import flow supplies merge conflicts. */
   const [mergeConflicts, setMergeConflicts] = useState<MergeConflict[] | null>(
     null,
@@ -75,7 +84,6 @@ export function ComparablesPageContent({
   }
 
   const comparables = getComparablesByType(project, type);
-  const displayName = projectName?.trim() ? projectName : decodedProjectId;
   const typeSlug = routeSlugForCompType(type);
   const comparablesMapHref = `/project/${projectId}/${typeSlug}/comparables-map`;
 
@@ -152,7 +160,7 @@ export function ComparablesPageContent({
       <div className="mt-6 mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {displayName}
+            {compSectionHeading(type)}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Manage {type.toLowerCase()} comparables.

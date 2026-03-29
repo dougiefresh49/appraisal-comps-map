@@ -1,6 +1,12 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { XMarkIcon, PhotoIcon } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 
@@ -21,6 +27,62 @@ interface SubjectSketchesPageProps {
 
 function isImageFile(f: DriveListFile): boolean {
   return f.mimeType.startsWith("image/");
+}
+
+function SketchThumbnailCard({
+  file,
+  onOpen,
+}: {
+  file: DriveListFile;
+  onOpen: () => void;
+}) {
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "240px", threshold: 0.01 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const thumbUrl = `https://drive.google.com/thumbnail?id=${file.id}&sz=w600`;
+
+  return (
+    <button
+      ref={cardRef}
+      type="button"
+      onClick={onOpen}
+      className="group relative aspect-square overflow-hidden rounded-lg border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+    >
+      {shouldLoad ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={thumbUrl}
+          alt={file.name}
+          className="h-full w-full object-cover transition group-hover:opacity-90"
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className="h-full w-full animate-pulse bg-gray-800/90"
+          aria-hidden
+        />
+      )}
+      <span className="absolute inset-x-0 bottom-0 truncate bg-gray-950/85 px-2 py-1 text-[10px] text-gray-400">
+        {file.name}
+      </span>
+    </button>
+  );
 }
 
 export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps) {
@@ -74,6 +136,15 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
     void loadFiles();
   }, [loadFiles]);
 
+  useEffect(() => {
+    if (!lightboxId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightboxId]);
+
   const images = files.filter(isImageFile);
 
   const openLightbox = (file: DriveListFile) => {
@@ -123,34 +194,21 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {images.map((file) => (
-              <button
+              <SketchThumbnailCard
                 key={file.id}
-                type="button"
-                onClick={() => openLightbox(file)}
-                className="group relative aspect-square overflow-hidden rounded-lg border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://drive.google.com/thumbnail?id=${file.id}&sz=w600`}
-                  alt={file.name}
-                  className="h-full w-full object-cover transition group-hover:opacity-90"
-                  loading="lazy"
-                />
-                <span className="absolute inset-x-0 bottom-0 truncate bg-gray-950/85 px-2 py-1 text-[10px] text-gray-400">
-                  {file.name}
-                </span>
-              </button>
+                file={file}
+                onOpen={() => openLightbox(file)}
+              />
             ))}
           </div>
         )}
       </div>
 
       {lightboxId && (
-        <button
-          type="button"
+        <div
+          role="presentation"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
           onClick={() => setLightboxId(null)}
-          aria-label="Close preview"
         >
           <span
             className="relative max-h-[90vh] max-w-[min(96vw,1200px)] overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-2xl"
@@ -180,7 +238,7 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
               />
             </div>
           </span>
-        </button>
+        </div>
       )}
     </div>
   );
