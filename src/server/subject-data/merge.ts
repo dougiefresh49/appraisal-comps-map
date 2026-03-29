@@ -1,6 +1,7 @@
 import "server-only";
 
-import { createClient } from "~/utils/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "~/utils/supabase/server";
 
 type StructuredData = Record<string, unknown>;
 
@@ -14,18 +15,24 @@ type StructuredData = Record<string, unknown>;
  * are never clobbered.
  *
  * flood_map documents are routed to the dedicated `fema` JSONB column.
+ *
+ * Accepts an optional pre-built SupabaseClient; when omitted a
+ * service-role client is created so this works outside request context.
  */
 export async function mergeDocumentIntoSubjectData(
   projectId: string,
   documentType: string,
   structuredData: StructuredData,
+  injectedClient?: SupabaseClient,
 ): Promise<void> {
   if (!projectId || !structuredData || typeof structuredData !== "object") {
     return;
   }
 
+  const supabase = injectedClient ?? createServiceClient();
+
   if (documentType === "flood_map") {
-    return mergeFemaData(projectId, structuredData);
+    return mergeFemaData(projectId, structuredData, supabase);
   }
 
   const mapper = MERGE_MAP[documentType];
@@ -48,8 +55,6 @@ export async function mergeDocumentIntoSubjectData(
   }
 
   if (Object.keys(cleanPatch).length === 0) return;
-
-  const supabase = await createClient();
 
   const { error } = await supabase.rpc("merge_subject_core", {
     p_project_id: projectId,
@@ -99,6 +104,7 @@ export async function mergeDocumentIntoSubjectData(
 async function mergeFemaData(
   projectId: string,
   structuredData: StructuredData,
+  supabase: SupabaseClient,
 ): Promise<void> {
   if (!projectId || !structuredData) return;
 
@@ -122,8 +128,6 @@ async function mergeFemaData(
   else if (hazard === false || hazard === "false") femaPayload.FemaIsHazardZone = false;
 
   if (Object.keys(femaPayload).length === 0) return;
-
-  const supabase = await createClient();
 
   const { data: existing } = await supabase
     .from("subject_data")
