@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchProjectsList, deleteProject, archiveProject, type ProjectListItem } from "~/lib/supabase-queries";
 import { ProjectCard } from "~/components/ProjectCard";
 import { CreateProjectCard } from "~/components/CreateProjectCard";
-import { ProfileMenu } from "~/components/ProfileMenu";
+import { AppSiteHeader } from "~/components/AppSiteHeader";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
@@ -44,23 +44,28 @@ export default function ProjectsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">Loading projects...</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-[#030712]">
+        <AppSiteHeader />
+        <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4">
+          <p className="text-sm font-medium text-slate-500 dark:text-cyan-200/70">
+            Loading projects…
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 dark:bg-gray-900">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Projects</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              Select a project to view details or start a new one.
-            </p>
-          </div>
-          <ProfileMenu isCollapsed variant="header" />
+    <div className="min-h-screen bg-slate-50 dark:bg-[#030712]">
+      <AppSiteHeader />
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-cyan-50">
+            Projects
+          </h1>
+          <p className="mt-2 text-slate-600 dark:text-cyan-100/65">
+            Select a project to view details or start a new one.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -82,7 +87,7 @@ export default function ProjectsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
