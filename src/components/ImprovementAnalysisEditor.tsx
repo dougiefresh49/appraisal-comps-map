@@ -23,39 +23,54 @@ const CATEGORY_ORDER: ImprovementCategory[] = [
   "Legal/Conforming Status",
 ];
 
+/** Subtle panel: light = border-{color}-200 + bg-{color}-50/50; dark = border-{color}-800/40 + bg-{color}-950/10 */
 const CATEGORY_PANEL: Record<ImprovementCategory, string> = {
   "Improvement Characteristics":
-    "rounded-xl border bg-blue-950/30 border-blue-800",
-  "Ratios & Parking": "rounded-xl border bg-purple-950/30 border-purple-800",
-  "Age/Life": "rounded-xl border bg-amber-950/30 border-amber-800",
+    "rounded-xl border border-blue-200 bg-blue-50/50 dark:border-blue-800/40 dark:bg-blue-950/10",
+  "Ratios & Parking":
+    "rounded-xl border border-purple-200 bg-purple-50/50 dark:border-purple-800/40 dark:bg-purple-950/10",
+  "Age/Life":
+    "rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-800/40 dark:bg-amber-950/10",
   "Structural Characteristics":
-    "rounded-xl border bg-green-950/30 border-green-800",
+    "rounded-xl border border-green-200 bg-green-50/50 dark:border-green-800/40 dark:bg-green-950/10",
   "Interior Characteristics":
-    "rounded-xl border bg-teal-950/30 border-teal-800",
+    "rounded-xl border border-teal-200 bg-teal-50/50 dark:border-teal-800/40 dark:bg-teal-950/10",
   "Mechanical Systems":
-    "rounded-xl border bg-orange-950/30 border-orange-800",
-  "Site Improvements": "rounded-xl border bg-lime-950/30 border-lime-800",
+    "rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-800/40 dark:bg-orange-950/10",
+  "Site Improvements":
+    "rounded-xl border border-lime-200 bg-lime-50/50 dark:border-lime-800/40 dark:bg-lime-950/10",
   "Legal/Conforming Status":
-    "rounded-xl border bg-gray-800 border-gray-700",
+    "rounded-xl border border-gray-300 bg-gray-50/80 dark:border-gray-700/60 dark:bg-gray-950/20",
+};
+
+const CATEGORY_HEADER: Record<ImprovementCategory, string> = {
+  "Improvement Characteristics": "text-blue-800 dark:text-blue-200",
+  "Ratios & Parking": "text-purple-800 dark:text-purple-200",
+  "Age/Life": "text-amber-800 dark:text-amber-200",
+  "Structural Characteristics": "text-green-800 dark:text-green-200",
+  "Interior Characteristics": "text-teal-800 dark:text-teal-200",
+  "Mechanical Systems": "text-orange-800 dark:text-orange-200",
+  "Site Improvements": "text-lime-800 dark:text-lime-200",
+  "Legal/Conforming Status": "text-gray-800 dark:text-gray-200",
 };
 
 const CATEGORY_CHIP: Record<ImprovementCategory, string> = {
   "Improvement Characteristics":
-    "border-blue-800 bg-blue-950/40 text-blue-100 data-[active=true]:ring-2 data-[active=true]:ring-blue-400",
+    "border-blue-300 bg-blue-50/80 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100 data-[active=true]:ring-2 data-[active=true]:ring-blue-400",
   "Ratios & Parking":
-    "border-purple-800 bg-purple-950/40 text-purple-100 data-[active=true]:ring-2 data-[active=true]:ring-purple-400",
+    "border-purple-300 bg-purple-50/80 text-purple-900 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-100 data-[active=true]:ring-2 data-[active=true]:ring-purple-400",
   "Age/Life":
-    "border-amber-800 bg-amber-950/40 text-amber-100 data-[active=true]:ring-2 data-[active=true]:ring-amber-400",
+    "border-amber-300 bg-amber-50/80 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 data-[active=true]:ring-2 data-[active=true]:ring-amber-400",
   "Structural Characteristics":
-    "border-green-800 bg-green-950/40 text-green-100 data-[active=true]:ring-2 data-[active=true]:ring-green-400",
+    "border-green-300 bg-green-50/80 text-green-900 dark:border-green-800 dark:bg-green-950/30 dark:text-green-100 data-[active=true]:ring-2 data-[active=true]:ring-green-400",
   "Interior Characteristics":
-    "border-teal-800 bg-teal-950/40 text-teal-100 data-[active=true]:ring-2 data-[active=true]:ring-teal-400",
+    "border-teal-300 bg-teal-50/80 text-teal-900 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-100 data-[active=true]:ring-2 data-[active=true]:ring-teal-400",
   "Mechanical Systems":
-    "border-orange-800 bg-orange-950/40 text-orange-100 data-[active=true]:ring-2 data-[active=true]:ring-orange-400",
+    "border-orange-300 bg-orange-50/80 text-orange-900 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-100 data-[active=true]:ring-2 data-[active=true]:ring-orange-400",
   "Site Improvements":
-    "border-lime-800 bg-lime-950/40 text-lime-100 data-[active=true]:ring-2 data-[active=true]:ring-lime-400",
+    "border-lime-400 bg-lime-50/80 text-lime-900 dark:border-lime-800 dark:bg-lime-950/30 dark:text-lime-100 data-[active=true]:ring-2 data-[active=true]:ring-lime-400",
   "Legal/Conforming Status":
-    "border-gray-700 bg-gray-800 text-gray-100 data-[active=true]:ring-2 data-[active=true]:ring-gray-400",
+    "border-gray-300 bg-gray-100 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 data-[active=true]:ring-2 data-[active=true]:ring-gray-400",
 };
 
 function isImprovementCategory(v: unknown): v is ImprovementCategory {
@@ -257,7 +272,7 @@ export function ImprovementAnalysisEditor({
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center rounded-xl border border-gray-800 bg-gray-950 py-16 text-sm text-gray-400">
+      <div className="flex min-h-[40vh] items-center justify-center rounded-xl border border-gray-200 bg-gray-50 py-16 text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
         Loading improvement analysis…
       </div>
     );
@@ -265,18 +280,18 @@ export function ImprovementAnalysisEditor({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 rounded-xl border border-gray-800 bg-gray-950 p-6 text-gray-100 shadow-inner">
+    <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 text-gray-900 shadow-inner dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
       {/* Header: filters + save */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-500">
             Category filter
           </p>
           <div className="flex flex-wrap gap-2">
@@ -284,7 +299,7 @@ export function ImprovementAnalysisEditor({
               type="button"
               data-active={filterCategory === "all"}
               onClick={() => setFilterCategory("all")}
-              className="rounded-full border border-gray-600 bg-gray-900 px-3 py-1 text-xs font-medium text-gray-200 transition hover:bg-gray-800 data-[active=true]:ring-2 data-[active=true]:ring-gray-400"
+              className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800 transition hover:bg-gray-200 data-[active=true]:ring-2 data-[active=true]:ring-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
             >
               All
             </button>
@@ -303,10 +318,12 @@ export function ImprovementAnalysisEditor({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
           {saveSuccess && (
-            <span className="text-sm font-medium text-emerald-400">Saved</span>
+            <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+              Saved
+            </span>
           )}
           {saveError && (
-            <span className="max-w-xs text-right text-sm text-red-400">
+            <span className="max-w-xs text-right text-sm text-red-600 dark:text-red-400">
               {saveError}
             </span>
           )}
@@ -326,27 +343,30 @@ export function ImprovementAnalysisEditor({
         {visibleCategories.map((category) => {
           const inCategory = rows.filter((r) => r.category === category);
           const panel = CATEGORY_PANEL[category];
+          const headerTone = CATEGORY_HEADER[category];
 
           return (
             <section
               key={category}
               className={`overflow-hidden ${panel}`}
             >
-              <div className="border-b border-white/10 px-4 py-3">
-                <h2 className="text-sm font-semibold tracking-tight text-gray-100">
+              <div className="border-b border-gray-200/80 px-4 py-3 dark:border-white/10">
+                <h2
+                  className={`text-sm font-semibold tracking-tight ${headerTone}`}
+                >
                   {category}
                 </h2>
               </div>
 
               {/* Column headers */}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] gap-3 border-b border-white/5 bg-black/20 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] gap-3 border-b border-gray-200/60 bg-gray-100/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:border-white/5 dark:bg-black/20">
                 <span>Label</span>
                 <span className="text-center">Include</span>
                 <span className="text-right">Value</span>
                 <span className="sr-only">Remove</span>
               </div>
 
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-gray-200/70 dark:divide-white/5">
                 {inCategory.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-gray-500">
                     No rows in this category yet.
@@ -355,7 +375,7 @@ export function ImprovementAnalysisEditor({
                   inCategory.map((row) => (
                     <div
                       key={row.clientId}
-                      className="group relative grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] items-center gap-3 px-4 py-2.5 transition hover:bg-black/15"
+                      className="group relative grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] items-center gap-3 px-4 py-2.5 transition hover:bg-gray-100/90 dark:hover:bg-black/15"
                     >
                       <input
                         type="text"
@@ -364,7 +384,7 @@ export function ImprovementAnalysisEditor({
                           updateRow(row.clientId, { label: e.target.value })
                         }
                         placeholder="Characteristic"
-                        className="w-full rounded-md border border-transparent bg-gray-900/60 px-2 py-1.5 text-sm text-gray-100 placeholder:text-gray-600 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full rounded-md border border-transparent bg-gray-100 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-900/60 dark:text-gray-100 dark:placeholder:text-gray-600"
                       />
                       <div className="flex justify-center">
                         <input
@@ -375,7 +395,7 @@ export function ImprovementAnalysisEditor({
                               include: e.target.checked,
                             })
                           }
-                          className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                          className="h-4 w-4 rounded border-gray-400 bg-white text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-gray-600 dark:bg-gray-900"
                         />
                       </div>
                       <input
@@ -385,14 +405,14 @@ export function ImprovementAnalysisEditor({
                           updateRow(row.clientId, { value: e.target.value })
                         }
                         placeholder="—"
-                        className="w-full rounded-md border border-transparent bg-gray-900/60 px-2 py-1.5 text-right text-sm text-gray-100 placeholder:text-gray-600 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full rounded-md border border-transparent bg-gray-100 px-2 py-1.5 text-right text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-900/60 dark:text-gray-100 dark:placeholder:text-gray-600"
                       />
                       <div className="flex justify-end">
                         <button
                           type="button"
                           onClick={() => removeRow(row.clientId)}
                           title="Remove row"
-                          className="rounded p-1 text-gray-600 opacity-0 transition hover:bg-red-950/50 hover:text-red-400 group-hover:opacity-100"
+                          className="rounded p-1 text-gray-500 opacity-0 transition hover:bg-red-100 hover:text-red-600 group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
                         >
                           <XMarkIcon className="h-4 w-4" aria-hidden />
                           <span className="sr-only">Remove row</span>
@@ -403,11 +423,11 @@ export function ImprovementAnalysisEditor({
                 )}
               </div>
 
-              <div className="border-t border-white/10 bg-black/10 px-4 py-3">
+              <div className="border-t border-gray-200/80 bg-gray-50/80 px-4 py-3 dark:border-white/10 dark:bg-black/10">
                 <button
                   type="button"
                   onClick={() => addRow(category)}
-                  className="text-xs font-semibold uppercase tracking-wide text-gray-400 transition hover:text-gray-200"
+                  className="text-xs font-semibold uppercase tracking-wide text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   + Add row
                 </button>

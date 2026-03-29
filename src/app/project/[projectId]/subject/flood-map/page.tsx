@@ -113,7 +113,7 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
         <MapBanner
           projectId={decodedProjectId}
           imageType="flood"
-          editHref="#"
+          actionType="expand"
           height="h-56"
         />
 

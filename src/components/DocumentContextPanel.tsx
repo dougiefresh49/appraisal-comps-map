@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   XMarkIcon,
   CheckCircleIcon,
@@ -9,6 +9,7 @@ import {
   ArrowPathIcon,
   ChevronDownIcon,
   PlusIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "~/utils/supabase/client";
 
@@ -311,6 +312,18 @@ function DocumentRow({
         </div>
 
         <div className="flex items-center gap-1">
+          {doc.file_id && (
+            <a
+              href={`https://drive.google.com/file/d/${doc.file_id}/view`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded p-1 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
+              title="View in Google Drive"
+            >
+              <EyeIcon className="h-3.5 w-3.5" />
+              <span className="sr-only">View in Google Drive</span>
+            </a>
+          )}
           {(status === "stale" || status === "unprocessed") && (
             <button
               onClick={onReprocess}

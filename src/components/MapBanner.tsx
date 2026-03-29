@@ -2,16 +2,34 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PencilSquareIcon, MapIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowsPointingOutIcon,
+  PencilSquareIcon,
+  MapIcon,
+} from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 
-interface MapBannerProps {
+export type MapBannerActionType = "edit" | "expand";
+
+type MapBannerBase = {
   projectId: string;
   imageType: string;
-  editHref: string;
   height?: string;
   fallbackLabel?: string;
-}
+  /** Overrides the default action label ("Edit Map" or "Expand"). */
+  actionLabel?: string;
+};
+
+type MapBannerProps =
+  | (MapBannerBase & {
+      actionType?: "edit";
+      /** Map editor route when actionType is edit (default). */
+      editHref: string;
+    })
+  | (MapBannerBase & {
+      actionType: "expand";
+      editHref?: undefined;
+    });
 
 interface FolderStructure {
   reportMapsFolderId?: string;
@@ -22,16 +40,20 @@ interface FolderStructure {
  * Displays a map image banner loaded from the project's Google Drive
  * reports/maps/ folder. Shows a placeholder when the image is unavailable.
  */
-export function MapBanner({
-  projectId,
-  imageType,
-  editHref,
-  height = "h-56",
-  fallbackLabel,
-}: MapBannerProps) {
+export function MapBanner(props: MapBannerProps) {
+  const {
+    projectId,
+    imageType,
+    height = "h-56",
+    fallbackLabel,
+    actionLabel,
+  } = props;
+  const actionType = props.actionType ?? "edit";
   const { project } = useProject(projectId);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +96,9 @@ export function MapBanner({
           setImageUrl(
             `https://drive.google.com/thumbnail?id=${match.id}&sz=w1200`,
           );
+          setFullImageUrl(
+            `https://drive.google.com/uc?export=view&id=${match.id}`,
+          );
         }
       } catch {
         // Silently fail -- show placeholder
@@ -89,6 +114,21 @@ export function MapBanner({
   }, [project, imageType]);
 
   const label = fallbackLabel ?? `${imageType.charAt(0).toUpperCase()}${imageType.slice(1)} Map`;
+
+  const resolvedActionLabel =
+    actionLabel ?? (actionType === "expand" ? "Expand" : "Edit Map");
+
+  const actionButtonClass =
+    "absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg ring-1 ring-gray-700 backdrop-blur-sm transition hover:bg-gray-800 hover:ring-gray-600";
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxOpen]);
 
   return (
     <div
@@ -110,18 +150,58 @@ export function MapBanner({
           <MapIcon className="h-10 w-10 text-gray-700" />
           <p className="text-sm font-medium text-gray-500">{label}</p>
           <p className="text-xs text-gray-600">
-            Edit the map to update this preview
+            {actionType === "expand"
+              ? "Map image will appear here when available in Drive"
+              : "Edit the map to update this preview"}
           </p>
         </div>
       )}
 
-      <Link
-        href={editHref}
-        className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg ring-1 ring-gray-700 backdrop-blur-sm transition hover:bg-gray-800 hover:ring-gray-600"
-      >
-        <PencilSquareIcon className="h-3.5 w-3.5" />
-        Edit Map
-      </Link>
+      {props.actionType === "expand" ? (
+        <button
+          type="button"
+          disabled={!fullImageUrl}
+          onClick={() => setLightboxOpen(true)}
+          className={`${actionButtonClass} disabled:pointer-events-none disabled:opacity-40`}
+        >
+          <ArrowsPointingOutIcon className="h-3.5 w-3.5" />
+          {resolvedActionLabel}
+        </button>
+      ) : (
+        <Link href={props.editHref} className={actionButtonClass}>
+          <PencilSquareIcon className="h-3.5 w-3.5" />
+          {resolvedActionLabel}
+        </Link>
+      )}
+
+      {lightboxOpen && fullImageUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${label} full size`}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute inset-0 cursor-default"
+            aria-label="Close lightbox"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={fullImageUrl}
+            alt={label}
+            className="relative z-[1] max-h-[min(92vh,1200px)] max-w-full object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 z-[2] rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-200 ring-1 ring-gray-600 hover:bg-gray-700"
+          >
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }
