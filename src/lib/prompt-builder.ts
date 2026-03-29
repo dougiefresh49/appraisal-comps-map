@@ -148,12 +148,14 @@ async function fetchProjectData(
 ): Promise<Record<string, unknown>> {
   const [projectResult, subjectResult] = await Promise.all([
     supabase.from("projects").select("*").eq("id", projectId).single(),
-    supabase.from("subject_data").select("core").eq("project_id", projectId).maybeSingle(),
+    supabase.from("subject_data").select("core, fema").eq("project_id", projectId).maybeSingle(),
   ]);
 
   const projectRow = (projectResult.data ?? {}) as Record<string, unknown>;
   const subjectCore = (subjectResult.data?.core ?? {}) as Record<string, unknown>;
+  const subjectFema = (subjectResult.data?.fema ?? {}) as Record<string, unknown>;
   projectRow.subject = subjectCore;
+  projectRow.subjectFema = subjectFema;
 
   return projectRow;
 }
@@ -348,9 +350,14 @@ function buildSectionPrompt(
     case "subject-site-summary": {
       prompt += `## Subject Data\n\n\`\`\`json\n${JSON.stringify(subject, null, 2)}\n\`\`\`\n\n`;
 
+      const femaData = (projectData.subjectFema ?? {}) as Record<string, unknown>;
+      if (Object.keys(femaData).length > 0) {
+        prompt += `## FEMA Flood Data\n\n\`\`\`json\n${JSON.stringify(femaData, null, 2)}\n\`\`\`\n\n`;
+      }
+
       const floodDoc = documents.find((d) => d.type === "flood_map");
       if (floodDoc) {
-        prompt += `## FEMA Flood Map Info\n\n${floodDoc.text}\n\n`;
+        prompt += `## FEMA Flood Map Document\n\n${floodDoc.text}\n\n`;
         if (Object.keys(floodDoc.structured).length > 0) {
           prompt += `${JSON.stringify(floodDoc.structured, null, 2)}\n\n`;
         }

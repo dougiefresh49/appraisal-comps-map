@@ -13,6 +13,7 @@ export const env = createEnv({
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     N8N_WEBHOOK_BASE_URL: z.string().optional(),
     GOOGLE_GEMINI_API_KEY: z.string().optional(),
+    SUPABASE_SECRET_KEY: z.string().optional(),
   },
 
   /**
@@ -39,6 +40,7 @@ export const env = createEnv({
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     N8N_WEBHOOK_BASE_URL: process.env.N8N_WEBHOOK_BASE_URL,
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
+    SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,

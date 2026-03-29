@@ -7,15 +7,6 @@ import {
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { useSubjectData } from "~/hooks/useSubjectData";
-import type { SubjectDataRow } from "~/types/comp-data";
-
-interface FloodCore extends Record<string, unknown> {
-  FemaMapNum?: string;
-  FemaZone?: string;
-  FemaIsHazardZone?: boolean | null;
-  FemaMapDate?: string;
-}
-
 interface SubjectFloodMapPageProps {
   params: Promise<{ projectId: string }>;
 }
@@ -38,13 +29,13 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
 
   useEffect(() => {
     if (!subjectData) return;
-    const c = subjectData.core as FloodCore;
-    setFemaMapNum(typeof c.FemaMapNum === "string" ? c.FemaMapNum : "");
-    setFemaZone(typeof c.FemaZone === "string" ? c.FemaZone : "");
-    if (c.FemaIsHazardZone === true) setFemaIsHazardZone("yes");
-    else if (c.FemaIsHazardZone === false) setFemaIsHazardZone("no");
+    const f = subjectData.fema ?? {};
+    setFemaMapNum(typeof f.FemaMapNum === "string" ? f.FemaMapNum : "");
+    setFemaZone(typeof f.FemaZone === "string" ? f.FemaZone : "");
+    if (f.FemaIsHazardZone === true) setFemaIsHazardZone("yes");
+    else if (f.FemaIsHazardZone === false) setFemaIsHazardZone("no");
     else setFemaIsHazardZone("");
-    setFemaMapDate(typeof c.FemaMapDate === "string" ? c.FemaMapDate : "");
+    setFemaMapDate(typeof f.FemaMapDate === "string" ? f.FemaMapDate : "");
   }, [subjectData]);
 
   const handleSaveFema = useCallback(async () => {
@@ -53,25 +44,17 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
     setSaveError(null);
     setSaveSuccess(false);
     try {
-      const prevCore = (subjectData.core ?? {}) as Record<string, unknown>;
       let hazard: boolean | null = null;
       if (femaIsHazardZone === "yes") hazard = true;
       else if (femaIsHazardZone === "no") hazard = false;
 
-      const core = {
-        ...prevCore,
-        FemaMapNum: femaMapNum,
-        FemaZone: femaZone,
-        FemaIsHazardZone: hazard,
-        FemaMapDate: femaMapDate,
-      } as SubjectDataRow["core"];
-
       await saveSubjectData({
-        core,
-        taxes: subjectData.taxes,
-        tax_entities: subjectData.tax_entities,
-        parcels: subjectData.parcels,
-        improvements: subjectData.improvements,
+        fema: {
+          FemaMapNum: femaMapNum,
+          FemaZone: femaZone,
+          FemaIsHazardZone: hazard,
+          FemaMapDate: femaMapDate,
+        },
       });
       setSaveSuccess(true);
       window.setTimeout(() => setSaveSuccess(false), 2500);

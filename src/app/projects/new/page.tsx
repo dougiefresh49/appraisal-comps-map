@@ -351,19 +351,21 @@ export default function NewProjectPage() {
         }
       }
 
-      // Seed subject_data so Subject Overview starts populated
+      // Seed subject_data so Subject Overview starts populated.
+      // FEMA data goes into its own `fema` column to avoid collisions with core.
       const subjectCore: Record<string, unknown> = { Address: address };
       const addressParts = parseAddressParts(address);
       if (addressParts.city) subjectCore.City = addressParts.city;
       if (addressParts.state) subjectCore.State = addressParts.state;
       if (addressParts.zip) subjectCore.Zip = addressParts.zip;
 
+      const femaPayload: Record<string, unknown> = {};
       if (floodData) {
-        if (floodData.fema_map_number) subjectCore.FemaMapNum = floodData.fema_map_number;
-        if (floodData.flood_zone) subjectCore.FemaZone = floodData.flood_zone;
-        if (floodData.map_effective_date) subjectCore.FemaMapDate = floodData.map_effective_date;
-        if (floodData.in_special_flood_hazard_area === "true") subjectCore.FemaIsHazardZone = true;
-        else if (floodData.in_special_flood_hazard_area === "false") subjectCore.FemaIsHazardZone = false;
+        if (floodData.fema_map_number) femaPayload.FemaMapNum = floodData.fema_map_number;
+        if (floodData.flood_zone) femaPayload.FemaZone = floodData.flood_zone;
+        if (floodData.map_effective_date) femaPayload.FemaMapDate = floodData.map_effective_date;
+        if (floodData.in_special_flood_hazard_area === "true") femaPayload.FemaIsHazardZone = true;
+        else if (floodData.in_special_flood_hazard_area === "false") femaPayload.FemaIsHazardZone = false;
       }
 
       await supabase
@@ -372,6 +374,7 @@ export default function NewProjectPage() {
           {
             project_id: projectId,
             core: subjectCore,
+            fema: femaPayload,
             taxes: [],
             tax_entities: [],
             parcels: [],

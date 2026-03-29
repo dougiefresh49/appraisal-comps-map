@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 export async function createClient() {
@@ -26,6 +27,25 @@ export async function createClient() {
       },
     },
   );
+}
+
+/**
+ * Creates a Supabase client using the service-role (secret) key.
+ * Bypasses RLS — use ONLY for trusted server-side background work
+ * that runs outside an HTTP request context (e.g. fire-and-forget
+ * document processing).
+ */
+export function createServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+
+  if (!url || !secretKey) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY must be set for service-role access",
+    );
+  }
+
+  return createSupabaseClient(url, secretKey);
 }
 
 /** Result of resolving a Google OAuth access token for Drive API calls. */
