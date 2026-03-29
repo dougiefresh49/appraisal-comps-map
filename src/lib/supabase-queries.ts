@@ -1072,6 +1072,7 @@ interface ProjectDocumentRow {
   extracted_text: string | null;
   structured_data: Record<string, unknown>;
   processed_at: string | null;
+  section_tag: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1087,6 +1088,7 @@ export interface ProjectDocument {
   extractedText: string | null;
   structuredData: Record<string, unknown>;
   processedAt: string | null;
+  sectionTag: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1103,6 +1105,7 @@ function projectDocumentFromRow(row: ProjectDocumentRow): ProjectDocument {
     extractedText: row.extracted_text,
     structuredData: row.structured_data ?? {},
     processedAt: row.processed_at,
+    sectionTag: row.section_tag,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1138,6 +1141,22 @@ export async function fetchDocumentsByType(
   return (docsResult.data ?? []).map(projectDocumentFromRow);
 }
 
+export async function fetchDocumentsBySectionTag(
+  projectId: string,
+  sectionTag: string,
+): Promise<ProjectDocument[]> {
+  const supabase = createClient();
+  const docsResult = (await supabase
+    .from("project_documents")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("section_tag", sectionTag)
+    .order("created_at", { ascending: true })) as PostgrestResponse<ProjectDocumentRow>;
+
+  if (docsResult.error) throw docsResult.error;
+  return (docsResult.data ?? []).map(projectDocumentFromRow);
+}
+
 export async function insertProjectDocument(
   projectId: string,
   doc: {
@@ -1146,6 +1165,7 @@ export async function insertProjectDocument(
     fileId?: string;
     fileName?: string;
     mimeType?: string;
+    sectionTag?: string;
   },
 ): Promise<ProjectDocument> {
   const supabase = createClient();
@@ -1158,6 +1178,7 @@ export async function insertProjectDocument(
       file_id: doc.fileId ?? null,
       file_name: doc.fileName ?? null,
       mime_type: doc.mimeType ?? null,
+      section_tag: doc.sectionTag ?? null,
     })
     .select("*")
     .single();
