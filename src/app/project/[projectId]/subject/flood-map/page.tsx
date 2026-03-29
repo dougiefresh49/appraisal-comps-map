@@ -7,8 +7,6 @@ import {
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { useSubjectData } from "~/hooks/useSubjectData";
-import type { FemaData } from "~/types/comp-data";
-
 interface SubjectFloodMapPageProps {
   params: Promise<{ projectId: string }>;
 }
@@ -31,7 +29,7 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
 
   useEffect(() => {
     if (!subjectData) return;
-    const f = (subjectData.fema ?? {}) as FemaData;
+    const f = subjectData.fema ?? {};
     setFemaMapNum(typeof f.FemaMapNum === "string" ? f.FemaMapNum : "");
     setFemaZone(typeof f.FemaZone === "string" ? f.FemaZone : "");
     if (f.FemaIsHazardZone === true) setFemaIsHazardZone("yes");
