@@ -291,6 +291,40 @@ async function fetchSimilarPastSections(
   }
 }
 
+const NEIGHBORHOOD_BOUNDARY_SIDES = [
+  { key: "north", label: "North" },
+  { key: "south", label: "South" },
+  { key: "east", label: "East" },
+  { key: "west", label: "West" },
+] as const;
+
+/** Reads `subject_data.core.neighborhoodBoundaries` (subject is core in projectData). */
+function formatNeighborhoodBoundariesForPrompt(
+  core: Record<string, unknown>,
+): string {
+  const raw = core.neighborhoodBoundaries;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    const parts: string[] = [];
+    for (const { key, label } of NEIGHBORHOOD_BOUNDARY_SIDES) {
+      const val = o[key];
+      if (typeof val === "string" && val.trim().length > 0) {
+        parts.push(`${label}: ${val.trim()}`);
+      }
+    }
+    if (parts.length > 0) {
+      return `Neighborhood Boundaries: ${parts.join(", ")}`;
+    }
+  }
+
+  const legacy = core.neighborhoodBounds;
+  if (typeof legacy === "string" && legacy.trim().length > 0) {
+    return `Neighborhood Boundaries: ${legacy.trim()}`;
+  }
+
+  return "";
+}
+
 function buildSectionPrompt(
   sectionKey: SectionKey,
   projectData: Record<string, unknown>,
@@ -340,9 +374,9 @@ function buildSectionPrompt(
       if (neighborhoodDoc) {
         prompt += `## Neighborhood Map Context\n\n${neighborhoodDoc.text}\n\n`;
       }
-      const bounds = (subject.neighborhoodBounds as string) ?? "";
-      if (bounds) {
-        prompt += `Neighborhood Boundaries:\n${bounds}\n\n`;
+      const boundsLine = formatNeighborhoodBoundariesForPrompt(subject);
+      if (boundsLine) {
+        prompt += `${boundsLine}\n\n`;
       }
       break;
     }
