@@ -163,6 +163,19 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     driveFileName: "",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  /** Browse Drive multi-select: files chosen before Add & process */
+  const [selectedDriveFiles, setSelectedDriveFiles] = useState<
+    { id: string; name: string }[]
+  >([]);
+  /** Per-file progress while posting multiple Drive files to /api/documents */
+  const [driveBatchProgress, setDriveBatchProgress] = useState<
+    {
+      fileId: string;
+      fileName: string;
+      status: "pending" | "working" | "done" | "error";
+      error?: string;
+    }[]
+  >([]);
   const [isAdding, setIsAdding] = useState(false);
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(
     new Set(),
@@ -220,6 +233,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
   }, [loadDocuments]);
 
   useEffect(() => {
+    setSelectedDriveFiles([]);
+    setDriveBatchProgress([]);
+  }, [addForm.documentType, browseRootId]);
+
+  useEffect(() => {
     if (!projectId) return;
 
     const channel = subscribeToProjectDocuments(projectId, (payload) => {
@@ -269,6 +287,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       driveFileName: "",
     });
     setSelectedFile(null);
+    setSelectedDriveFiles([]);
+    setDriveBatchProgress([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setShowAddForm(false);
     setError(null);
@@ -277,24 +297,37 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
 
   const handleAdd = async () => {
     if (!addForm.documentType) return;
-    if (!selectedFile && !addForm.fileId.trim()) {
-      setError("Please select a file from Drive, upload a file, or paste a file ID");
+
+    const hasBrowseMulti =
+      addSourceMode === "browse" && selectedDriveFiles.length > 0;
+    const hasManualOrSingleDrive =
+      addSourceMode === "manual" &&
+      (!!selectedFile || !!addForm.fileId.trim());
+
+    if (!hasBrowseMulti && !hasManualOrSingleDrive) {
+      setError(
+        "Please select one or more files from Drive, upload a file, or paste a file ID",
+      );
       return;
     }
 
     setIsAdding(true);
     setError(null);
+    setDriveBatchProgress([]);
+
+    const documentLabel = addForm.documentLabel.trim() || undefined;
+    const sectionTag = addForm.sectionTag.trim() || undefined;
 
     try {
       if (selectedFile) {
         const formData = new FormData();
         formData.append("projectId", projectId);
         formData.append("documentType", addForm.documentType);
-        if (addForm.documentLabel.trim()) {
-          formData.append("documentLabel", addForm.documentLabel.trim());
+        if (documentLabel) {
+          formData.append("documentLabel", documentLabel);
         }
-        if (addForm.sectionTag.trim()) {
-          formData.append("sectionTag", addForm.sectionTag.trim());
+        if (sectionTag) {
+          formData.append("sectionTag", sectionTag);
         }
         formData.append("file", selectedFile);
 
@@ -306,6 +339,66 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? "Failed to upload document");
         }
+        resetForm();
+      } else if (hasBrowseMulti) {
+        setDriveBatchProgress(
+          selectedDriveFiles.map((f) => ({
+            fileId: f.id,
+            fileName: f.name,
+            status: "pending" as const,
+          })),
+        );
+
+        let hadError = false;
+        for (const file of selectedDriveFiles) {
+          setDriveBatchProgress((prev) =>
+            prev.map((row) =>
+              row.fileId === file.id ? { ...row, status: "working" } : row,
+            ),
+          );
+          try {
+            const res = await fetch("/api/documents", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                projectId,
+                documentType: addForm.documentType,
+                documentLabel,
+                sectionTag,
+                fileId: file.id,
+                fileName: file.name,
+              }),
+            });
+            if (!res.ok) {
+              const data = (await res.json()) as { error?: string };
+              throw new Error(data.error ?? "Failed to add document");
+            }
+            setDriveBatchProgress((prev) =>
+              prev.map((row) =>
+                row.fileId === file.id ? { ...row, status: "done" } : row,
+              ),
+            );
+          } catch (err) {
+            hadError = true;
+            const message =
+              err instanceof Error ? err.message : "Failed to add document";
+            setDriveBatchProgress((prev) =>
+              prev.map((row) =>
+                row.fileId === file.id
+                  ? { ...row, status: "error", error: message }
+                  : row,
+              ),
+            );
+          }
+        }
+
+        if (!hadError) {
+          resetForm();
+        } else {
+          setError(
+            "One or more files could not be added. See status below each file.",
+          );
+        }
       } else {
         const res = await fetch("/api/documents", {
           method: "POST",
@@ -313,8 +406,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           body: JSON.stringify({
             projectId,
             documentType: addForm.documentType,
-            documentLabel: addForm.documentLabel.trim() || undefined,
-            sectionTag: addForm.sectionTag.trim() || undefined,
+            documentLabel,
+            sectionTag,
             fileId: addForm.fileId.trim(),
             fileName: addForm.driveFileName.trim() || undefined,
           }),
@@ -323,8 +416,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? "Failed to add document");
         }
+        resetForm();
       }
-      resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add document");
     } finally {
@@ -495,7 +588,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           <div className="mt-4 flex gap-1 rounded-lg border border-zinc-700 bg-zinc-950/80 p-1">
             <button
               type="button"
-              onClick={() => setAddSourceMode("browse")}
+              onClick={() => {
+                setAddSourceMode("browse");
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
                 addSourceMode === "browse"
                   ? "bg-zinc-700 text-white shadow-sm"
@@ -506,7 +603,10 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
             </button>
             <button
               type="button"
-              onClick={() => setAddSourceMode("manual")}
+              onClick={() => {
+                setAddSourceMode("manual");
+                setSelectedDriveFiles([]);
+              }}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
                 addSourceMode === "manual"
                   ? "bg-zinc-700 text-white shadow-sm"
@@ -528,33 +628,80 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               ) : (
                 <>
                   <p className="text-xs text-zinc-500">
-                    Pick a file from the folder scoped for this document type.
+                    Select one or more files (checkboxes), then Add &amp; process.
+                    Each file becomes its own document and processes independently.
                   </p>
                   <DriveFolderBrowser
                     key={`${addForm.documentType}-${browseRootId}`}
                     rootFolderId={browseRootId}
                     rootFolderName={getTypeLabel(addForm.documentType)}
                     filter="files"
-                    onSelect={(file) => {
+                    multiSelect
+                    onMultiSelect={(files) => {
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
+                      setSelectedDriveFiles(
+                        files.map((f) => ({ id: f.id, name: f.name })),
+                      );
                       setAddForm((f) => ({
                         ...f,
-                        fileId: file.id,
-                        driveFileName: file.name,
+                        fileId: "",
+                        driveFileName: "",
                       }));
                     }}
                   />
-                  {(addForm.fileId || addForm.driveFileName) && (
-                    <div className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm">
-                      <span className="text-zinc-500">Selected: </span>
-                      <span className="font-medium text-zinc-200">
-                        {addForm.driveFileName || "—"}
-                      </span>
-                      <span className="ml-2 font-mono text-xs text-zinc-500">
-                        {addForm.fileId}
-                      </span>
-                    </div>
+                  {selectedDriveFiles.length > 0 && (
+                    <ul className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm">
+                      {selectedDriveFiles.map((f) => {
+                        const progress = driveBatchProgress.find(
+                          (p) => p.fileId === f.id,
+                        );
+                        return (
+                          <li
+                            key={f.id}
+                            className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 py-2 last:border-0 last:pb-0 first:pt-0"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="font-medium text-zinc-200">
+                                {f.name}
+                              </span>
+                              <span className="mt-0.5 block font-mono text-xs text-zinc-500">
+                                {f.id}
+                              </span>
+                            </div>
+                            {progress && (
+                              <span className="shrink-0 text-xs">
+                                {progress.status === "pending" && (
+                                  <span className="text-zinc-500">Queued</span>
+                                )}
+                                {progress.status === "working" && (
+                                  <span className="inline-flex items-center gap-1.5 text-sky-300">
+                                    <span
+                                      className="h-3 w-3 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"
+                                      aria-hidden
+                                    />
+                                    Adding…
+                                  </span>
+                                )}
+                                {progress.status === "done" && (
+                                  <span className="text-emerald-400">
+                                    Queued for processing
+                                  </span>
+                                )}
+                                {progress.status === "error" && (
+                                  <span
+                                    className="max-w-[12rem] truncate text-red-300"
+                                    title={progress.error}
+                                  >
+                                    {progress.error ?? "Error"}
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </>
               )}
@@ -632,7 +779,9 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               disabled={
                 isAdding ||
                 !addForm.documentType ||
-                (!selectedFile && !addForm.fileId.trim())
+                (addSourceMode === "browse"
+                  ? selectedDriveFiles.length === 0
+                  : !selectedFile && !addForm.fileId.trim())
               }
               className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
