@@ -9,6 +9,7 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
 import {
   normalizeProjectData,
@@ -126,6 +127,7 @@ export default function SalesComparablesMapPage({
   } | null>(null);
 
   const hasHydratedRef = useRef(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
 
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
@@ -450,7 +452,15 @@ export default function SalesComparablesMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full flex-col">
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="comparables-map-sales"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
       <ComparablesPanel
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
@@ -487,9 +497,10 @@ export default function SalesComparablesMapPage({
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
         // No Land Map link for Sales
         onOpenLandMap={undefined}
+        readOnly={mapReadOnly}
       />
 
-      <div className="relative flex-1">
+      <div className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -499,19 +510,23 @@ export default function SalesComparablesMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
+            gestureHandling={readOnly ? "none" : "auto"}
             onCenterChanged={(e) => {
+              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
             }}
             onZoomChanged={(e) => {
+              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
               }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -556,8 +571,9 @@ export default function SalesComparablesMapPage({
             {subjectMarkerPosition && !hideUI && (
               <AdvancedMarker
                 position={subjectMarkerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -581,7 +597,9 @@ export default function SalesComparablesMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -609,6 +627,7 @@ export default function SalesComparablesMapPage({
                 tailDirection="right"
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -632,6 +651,7 @@ export default function SalesComparablesMapPage({
                 isTailPinned={comp.isTailPinned}
                 pinnedTailTipPosition={comp.pinnedTailTipPosition}
                 color="#2563eb"
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -641,6 +661,9 @@ export default function SalesComparablesMapPage({
           size={documentFrameSize}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }

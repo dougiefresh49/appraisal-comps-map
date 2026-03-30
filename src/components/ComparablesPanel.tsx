@@ -128,6 +128,7 @@ interface ComparablesPanelProps {
   isRepositioningSubjectTail: boolean;
   onIsRepositioningSubjectTailChange: (repositioning: boolean) => void;
   onOpenLandMap?: (compId: string) => void;
+  readOnly?: boolean;
 }
 
 export function ComparablesPanel({
@@ -156,6 +157,7 @@ export function ComparablesPanel({
   isRepositioningSubjectTail,
   onIsRepositioningSubjectTailChange,
   onOpenLandMap,
+  readOnly = false,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
   const [coordinateInputsById, setCoordinateInputsById] = useState<
@@ -284,6 +286,7 @@ export function ComparablesPanel({
             <input
               type="text"
               value={searchAddress}
+              readOnly={readOnly}
               onChange={(e) => handleSubjectAddressChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -294,8 +297,10 @@ export function ComparablesPanel({
               className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
             />
             <button
+              type="button"
+              disabled={readOnly}
               onClick={handleSubjectSearch}
-              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               title="Search"
             >
               🔍
@@ -309,6 +314,7 @@ export function ComparablesPanel({
           <input
             type="text"
             value={subjectInfo.addressForDisplay ?? ""}
+            readOnly={readOnly}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -324,6 +330,7 @@ export function ComparablesPanel({
           <input
             type="text"
             value={subjectInfo.acres ?? ""}
+            readOnly={readOnly}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -341,6 +348,7 @@ export function ComparablesPanel({
           <input
             type="text"
             value={subjectInfo.legalDescription ?? ""}
+            readOnly={readOnly}
             onChange={(e) =>
               onSubjectInfoChange({
                 ...subjectInfo,
@@ -355,10 +363,12 @@ export function ComparablesPanel({
           <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Tail Pin</label>
           <div className="flex gap-2">
             <button
+              type="button"
+              disabled={readOnly}
               onClick={() => {
                 onIsRepositioningSubjectTailChange(true);
               }}
-              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 isRepositioningSubjectTail
                   ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -369,6 +379,8 @@ export function ComparablesPanel({
                 : "📍 Reposition Tail Tip"}
             </button>
             <button
+              type="button"
+              disabled={readOnly}
               onClick={() => {
                 onIsSubjectTailPinnedChange(!isSubjectTailPinned);
                 if (
@@ -388,7 +400,7 @@ export function ComparablesPanel({
                   onIsRepositioningSubjectTailChange(false);
                 }
               }}
-              className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 isSubjectTailPinned
                   ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -419,8 +431,10 @@ export function ComparablesPanel({
             Comparable Properties
           </label>
            <button
+             type="button"
+             disabled={readOnly}
              onClick={handleAddComparable}
-             className="rounded-md border border-blue-500 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60"
+             className="rounded-md border border-blue-500 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60"
            >
              + Add
            </button>
@@ -451,11 +465,13 @@ export function ComparablesPanel({
                 </div>
                 {filteredComparables.length > 1 && !isCollapsed && (
                   <button
+                    type="button"
+                    disabled={readOnly}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveComparable(comp.id);
                     }}
-                    className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    className="text-xs text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Remove
                   </button>
@@ -475,8 +491,10 @@ export function ComparablesPanel({
                     />
 
                     <button
+                        type="button"
+                        disabled={readOnly}
                         onClick={() => handleOpenGis(comp.apn?.[0] ?? "")}
-                        className="mt-1 w-full rounded-md border border-indigo-500 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-800/60"
+                        className="mt-1 w-full rounded-md border border-indigo-500 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-800/60"
                     >
                         🌐 Open GIS Overlay
                     </button>
@@ -489,6 +507,7 @@ export function ComparablesPanel({
                   <input
                     type="text"
                     value={coordinateInputsById[comp.id] ?? ""}
+                    readOnly={readOnly}
                     onChange={(e) => {
                       const value = e.target.value;
                       setCoordinateInputsById((prev) => ({
@@ -529,6 +548,7 @@ export function ComparablesPanel({
                     <input
                       type="text"
                       value={comp.address}
+                      readOnly={readOnly}
                       onChange={(e) =>
                         handleComparableChange(comp.id, { address: e.target.value })
                       }
@@ -541,12 +561,14 @@ export function ComparablesPanel({
                       className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
                     />
                     <button
+                      type="button"
+                      disabled={readOnly}
                       onClick={() => {
                         if (comp.address.trim()) {
                           onComparableAddressSearch(comp.id, comp.address);
                         }
                       }}
-                      className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      className="rounded-md bg-gray-100 px-2 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       title="Search"
                     >
                       🔍
@@ -561,6 +583,7 @@ export function ComparablesPanel({
                   <input
                     type="text"
                     value={comp.addressForDisplay}
+                    readOnly={readOnly}
                     onChange={(e) =>
                       handleComparableChange(comp.id, {
                         addressForDisplay: e.target.value,
@@ -577,10 +600,12 @@ export function ComparablesPanel({
                   </label>
                   <div className="flex gap-2">
                     <button
+                      type="button"
+                      disabled={readOnly}
                       onClick={() => {
                         onPinningTailForCompIdChange(comp.id);
                       }}
-                      className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         pinningTailForCompId === comp.id
                           ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
                           : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -591,6 +616,8 @@ export function ComparablesPanel({
                         : "📍 Reposition Tail Tip"}
                     </button>
                     <button
+                      type="button"
+                      disabled={readOnly}
                       onClick={() => {
                         handleComparableChange(comp.id, {
                           isTailPinned: !comp.isTailPinned,
@@ -602,7 +629,7 @@ export function ComparablesPanel({
                           onPinningTailForCompIdChange(null);
                         }
                       }}
-                      className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         comp.isTailPinned
                           ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
                           : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -626,8 +653,10 @@ export function ComparablesPanel({
                   {activeType === "Land" && onOpenLandMap && (
                     <div className="mt-3">
                       <button
+                        type="button"
+                        disabled={readOnly}
                         onClick={() => onOpenLandMap(comp.id)}
-                        className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100 dark:border-green-500 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-800/40"
+                        className="w-full rounded-md border border-green-600 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-green-500 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-800/40"
                       >
                         Open Land Location Map
                       </button>
@@ -648,8 +677,10 @@ export function ComparablesPanel({
         </label>
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => onBubbleSizeChange(Math.max(0.5, bubbleSize - 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Decrease bubble size"
           >
             −
@@ -658,10 +689,12 @@ export function ComparablesPanel({
             {Math.round(bubbleSize * 100)}%
           </span>
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() =>
               onBubbleSizeChange(Math.min(1.667, bubbleSize + 0.1))
             }
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Increase bubble size"
           >
             +
@@ -678,8 +711,10 @@ export function ComparablesPanel({
           Screenshot Mode
         </label>
         <button
+          type="button"
+          disabled={readOnly}
           onClick={() => onHideUIChange(!hideUI)}
-          className={`w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+          className={`w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             hideUI
               ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/40 dark:text-green-300"
               : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -691,8 +726,10 @@ export function ComparablesPanel({
         </button>
         {onShowDocumentOverlayChange && (
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
-            className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               showDocumentOverlay
                 ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/40 dark:text-blue-300"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -712,12 +749,14 @@ export function ComparablesPanel({
               </label>
               <div className="flex items-center gap-3">
                 <button
+                  type="button"
+                  disabled={readOnly}
                   onClick={() =>
                     onDocumentFrameSizeChange(
                       Math.max(0.5, documentFrameSize - 0.1),
                     )
                   }
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Decrease frame size"
                 >
                   −
@@ -726,12 +765,14 @@ export function ComparablesPanel({
                   {Math.round(documentFrameSize * 100)}%
                 </span>
                 <button
+                  type="button"
+                  disabled={readOnly}
                   onClick={() =>
                     onDocumentFrameSizeChange(
                       Math.min(2.0, documentFrameSize + 0.1),
                     )
                   }
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Increase frame size"
                 >
                   +

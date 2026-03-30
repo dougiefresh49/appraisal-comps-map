@@ -27,6 +27,7 @@ interface ComparableMarkerProps {
   tailDirection?: "left" | "right";
   isTailPinned?: boolean;
   pinnedTailTipPosition?: { lat: number; lng: number };
+  readOnly?: boolean;
 }
 
 // Base dimensions (reference: 360x160px)
@@ -48,6 +49,7 @@ export function ComparableMarker({
   tailDirection = "right",
   isTailPinned = false,
   pinnedTailTipPosition,
+  readOnly = false,
 }: ComparableMarkerProps) {
   // Apply size multiplier to base dimensions
   const bubbleWidth = BASE_WIDTH * sizeMultiplier;
@@ -132,8 +134,9 @@ export function ComparableMarker({
     <>
       <AdvancedMarker
         position={position}
-        draggable
+        draggable={!readOnly}
         onDragEnd={(e) => {
+          if (readOnly) return;
           if (e.latLng) {
             onPositionChange({
               lat: e.latLng.lat(),
@@ -141,10 +144,10 @@ export function ComparableMarker({
             });
           }
         }}
-        onClick={onClick}
+        onClick={readOnly ? undefined : onClick}
       >
         <div
-            className="relative cursor-move select-none"
+            className={`relative select-none ${readOnly ? "cursor-default" : "cursor-move"}`}
             style={{
                 width: `${bubbleWidth}px`,
                 height: `${shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}px`,

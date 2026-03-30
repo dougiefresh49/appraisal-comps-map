@@ -13,6 +13,7 @@ import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
 import { registerMapContext } from "~/lib/map-context";
 import {
@@ -95,6 +96,7 @@ export default function NeighborhoodMapPage({
   const markerPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -406,13 +408,21 @@ export default function NeighborhoodMapPage({
   }
 
   return (
-    <div className="relative flex h-screen w-full">
+    <div className="relative flex h-screen w-full flex-col">
       <Link
         href={`/project/${projectId}/neighborhood`}
         className="absolute top-4 left-4 z-[100] inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-200"
       >
         ← Back to Neighborhood
       </Link>
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="neighborhood-map"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
       <PropertyInfoPanel
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
@@ -442,13 +452,16 @@ export default function NeighborhoodMapPage({
         documentFrameSize={documentFrameSize}
         onDocumentFrameSizeChange={setDocumentFrameSize}
         onCaptureScreenshot={handleCaptureScreenshot}
+        readOnly={mapReadOnly}
       />
 
       {isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => setHideUI(!hideUI)}
-            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
             title="Toggle UI Visibility"
           >
             {hideUI ? "Show UI" : "Hide UI"}
@@ -457,10 +470,12 @@ export default function NeighborhoodMapPage({
           {showDocumentOverlay && (
             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
               <button
+                type="button"
+                disabled={readOnly}
                 onClick={() =>
                   setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))
                 }
-                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="h-8 w-8 rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-700"
                 title="Decrease Frame Size"
               >
                 -
@@ -469,10 +484,12 @@ export default function NeighborhoodMapPage({
                 {Math.round(documentFrameSize * 100)}%
               </span>
               <button
+                type="button"
+                disabled={readOnly}
                 onClick={() =>
                   setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))
                 }
-                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="h-8 w-8 rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-700"
                 title="Increase Frame Size"
               >
                 +
@@ -482,7 +499,7 @@ export default function NeighborhoodMapPage({
         </div>
       )}
 
-      <div id="neighborhood-map-container" className="relative flex-1">
+      <div id="neighborhood-map-container" className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -492,19 +509,23 @@ export default function NeighborhoodMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
+            gestureHandling={readOnly ? "none" : "auto"}
             onCenterChanged={(e) => {
+              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
             }}
             onZoomChanged={(e) => {
+              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
               }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -540,6 +561,7 @@ export default function NeighborhoodMapPage({
               onIsDrawingChange={setIsDrawing}
               polygonPath={polygonPath}
               onPolygonPathChange={setPolygonPath}
+              readOnly={readOnly}
               hideUI={hideUI}
             />
 
@@ -548,8 +570,9 @@ export default function NeighborhoodMapPage({
             {markerPosition && !hideUI && (
               <AdvancedMarker
                 position={markerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -576,7 +599,9 @@ export default function NeighborhoodMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -604,6 +629,7 @@ export default function NeighborhoodMapPage({
                 tailDirection={tailDirection}
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -644,6 +670,7 @@ export default function NeighborhoodMapPage({
                 }}
                 hideUI={hideUI}
                 sizeMultiplier={labelSize}
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -665,8 +692,12 @@ export default function NeighborhoodMapPage({
           circles={circles}
           onClearCircles={() => setCircles([])}
           hideUI={hideUI}
+          readOnly={readOnly}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }
