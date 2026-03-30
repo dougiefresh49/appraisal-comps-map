@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useSubjectData } from "~/hooks/useSubjectData";
+import { useProject } from "~/hooks/useProject";
+import { fetchProjectDocuments } from "~/lib/supabase-queries";
+import { populateImprovementRowsFromSources } from "~/lib/improvement-analysis-populate";
 import type {
   ImprovementAnalysisRow,
   ImprovementCategory,
@@ -186,10 +189,13 @@ function toPayloadRows(rows: LocalRow[]): ImprovementAnalysisRow[] {
 export function ImprovementAnalysisEditor({
   projectId,
 }: ImprovementAnalysisEditorProps) {
+  const decodedId = decodeURIComponent(projectId);
   const { subjectData, isLoading, error, saveSubjectData } =
-    useSubjectData(projectId);
+    useSubjectData(decodedId);
+  const { project } = useProject(decodedId);
 
   const [rows, setRows] = useState<LocalRow[]>([]);
+  const [docStructuredSlices, setDocStructuredSlices] = useState<unknown[]>([]);
   const [filterCategory, setFilterCategory] = useState<
     ImprovementCategory | "all"
   >("all");
@@ -202,6 +208,11 @@ export function ImprovementAnalysisEditor({
     [subjectData?.improvement_analysis],
   );
 
+  const coreJson = useMemo(
+    () => JSON.stringify(subjectData?.core ?? null),
+    [subjectData?.core],
+  );
+
   useEffect(() => {
     const raw = subjectData?.improvement_analysis;
     const normalized = raw ? normalizeFromDb(raw) : [];
@@ -211,6 +222,47 @@ export function ImprovementAnalysisEditor({
     // (taxes, core, etc.) do not reset local row state.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when improvement_analysis payload changes
   }, [improvementAnalysisJson]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProjectDocuments(decodedId).then((docs) => {
+      if (cancelled) return;
+      const slices = docs
+        .filter((d) =>
+          ["cad", "deed", "engagement"].includes(d.documentType),
+        )
+        .map((d) => d.structuredData);
+      setDocStructuredSlices(slices);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [decodedId]);
+
+  useEffect(() => {
+    if (!subjectData) return;
+    const core = (subjectData.core ?? {}) as Record<string, unknown>;
+    setRows((prev) => {
+      if (prev.length === 0) return prev;
+      const merged = populateImprovementRowsFromSources(
+        toPayloadRows(prev),
+        core,
+        project?.propertyType,
+        docStructuredSlices,
+      );
+      let changed = false;
+      const next = prev.map((r, i) => {
+        const m = merged[i];
+        if (!m || m.label !== r.label) return r;
+        const wasEmpty = !(r.value?.trim());
+        const newVal = m.value ?? "";
+        if (!wasEmpty || !newVal) return r;
+        changed = true;
+        return { ...r, value: newVal };
+      });
+      return changed ? next : prev;
+    });
+  }, [subjectData, coreJson, project?.propertyType, docStructuredSlices]);
 
   const visibleCategories = useMemo(() => {
     if (filterCategory === "all") return CATEGORY_ORDER;
@@ -242,6 +294,25 @@ export function ImprovementAnalysisEditor({
       },
     ]);
   }, []);
+
+  const handlePopulateFromSubjectData = useCallback(() => {
+    const core = (subjectData?.core ?? {}) as Record<string, unknown>;
+    setRows((prev) => {
+      const merged = populateImprovementRowsFromSources(
+        toPayloadRows(prev),
+        core,
+        project?.propertyType,
+        docStructuredSlices,
+      );
+      return prev.map((r, i) => {
+        const m = merged[i];
+        if (!m || m.label !== r.label) return r;
+        const nextVal = (m.value ?? "").trim();
+        if (!nextVal) return r;
+        return { ...r, value: m.value };
+      });
+    });
+  }, [subjectData?.core, project?.propertyType, docStructuredSlices]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -327,6 +398,13 @@ export function ImprovementAnalysisEditor({
               {saveError}
             </span>
           )}
+          <button
+            type="button"
+            onClick={handlePopulateFromSubjectData}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+          >
+            Populate from Subject Data
+          </button>
           <button
             type="button"
             onClick={() => void handleSave()}

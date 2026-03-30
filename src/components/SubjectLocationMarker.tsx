@@ -19,6 +19,7 @@ interface SubjectLocationMarkerProps {
   isTailPinned?: boolean;
   pinnedTailTipPosition?: { lat: number; lng: number };
   title?: string; // Optional title override. If not provided, uses address or "Subject"
+  readOnly?: boolean;
 }
 
 // Base dimensions (reference: 400x200px)
@@ -39,6 +40,7 @@ export function SubjectLocationMarker({
   isTailPinned = false,
   // pinnedTailTipPosition,
   title,
+  readOnly = false,
 }: SubjectLocationMarkerProps) {
   // Apply size multiplier to base dimensions
   const bubbleWidth = BASE_WIDTH * sizeMultiplier;
@@ -123,8 +125,9 @@ export function SubjectLocationMarker({
   return (
     <AdvancedMarker
       position={position}
-      draggable
+      draggable={!readOnly}
       onDragEnd={(e) => {
+        if (readOnly) return;
         if (e.latLng) {
           onPositionChange({
             lat: e.latLng.lat(),
@@ -134,7 +137,7 @@ export function SubjectLocationMarker({
       }}
     >
       <div
-        className="relative cursor-move select-none"
+        className={`relative select-none ${readOnly ? "cursor-default" : "cursor-move"}`}
         style={{
           width: `${bubbleWidth}px`,
           height: `${shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}px`,
