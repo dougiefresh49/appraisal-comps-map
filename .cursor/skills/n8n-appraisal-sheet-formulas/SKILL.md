@@ -93,11 +93,11 @@ Inside **`data`** (the blocks array):
 - Each `"0"` / `"1"` value is an **array of row objects**. Keys are **column headers** (or, on tabs like `report-inputs`, fields such as `row_number`, `variableName`, `label`, `value`).
 - **Formulas** appear as string values starting with `=` in whichever field holds the cell (often the header name or `value`). Literals are numbers or strings without a leading `=`.
 
-A real sample (MCP-style outer array) is in [docs/mcp-example-output.json](../../../docs/mcp-example-output.json). Use it when parsing or debugging; exact keys vary by sheet layout.
+A real sample (MCP-style outer array) is in [mcp-example-output.json](./mcp-example-output.json). Use it when parsing or debugging; exact keys vary by sheet layout.
 
 ## Path B — HTTP webhook (fallback)
 
-`POST` to the webhook URL with `Content-Type: application/json` and the same body as `webhookData.body` above. The JSON response body is **`{ "data": [ ... ] }`** (no outer array). See **Response shape** above; [docs/mcp-example-output.json](../../../docs/mcp-example-output.json) shows the same inner `data` array with an MCP-style wrapper for comparison.
+`POST` to the webhook URL with `Content-Type: application/json` and the same body as `webhookData.body` above. The JSON response body is **`{ "data": [ ... ] }`** (no outer array). See **Response shape** above; [mcp-example-output.json](./mcp-example-output.json) shows the same inner `data` array with an MCP-style wrapper for comparison.
 
 Example:
 
@@ -109,7 +109,7 @@ curl -sS -X POST 'https://dougiefreshdesigns.app.n8n.cloud/webhook/get-formulas'
 
 ## HTML layout reference (local)
 
-Static exports of each tab live under the repo folder `docs/examples/report-data-spreasheet--html/`. Filename is **`{sheetName}.html`** (spaces preserved, e.g. `sale comps.html`). Open in a browser to understand layout and pick ranges.
+Static exports of each tab live under the repo folder `docs/report-data-spreadsheet/sheets-exported--html/`. Filename is **`{sheetName}.html`** (spaces preserved, e.g. `sale comps.html`). Open in a browser to understand layout and pick ranges.
 
 ## Sheet name catalog
 

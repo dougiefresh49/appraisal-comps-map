@@ -78,14 +78,23 @@ src/
   utils/                  # Client utilities (projectStore, supabase client, etc.)
 
 supabase/
-  migrations/             # 15 SQL migration files (001-015)
+  migrations/             # SQL migration files (001-016)
 
 docs/
   issues/                 # Open issue tracker (016-018)
   product/                # Architecture docs, API reference, n8n deps
-  examples/               # Spreadsheet HTML exports, cost report examples
-  parser-type-defs.md     # Canonical TypeScript interfaces for comp/subject data
-  named-functions.md      # Google Sheets named functions with formulas
+  report-data-spreadsheet/
+    parser-type-defs.md   # TypeScript interfaces for Gemini parsing + Apps Script importer
+    named-functions.md    # Google Sheets named functions with formulas
+    report-data - ai-prompts.csv  # AI prompts from spreadsheet
+    sheets-exported--html/        # HTML exports of every spreadsheet tab (38 files)
+  n8n/
+    workflows/            # Exported n8n workflow JSON files
+    gemini-node-prompts/  # Prompts used in n8n Gemini nodes
+  cost-report-examples/   # SwiftEstimator cost report HTML + screenshots
+  notes/                  # Miscellaneous notes (agent auth, etc.)
+  old-local-data-backups/ # Legacy localStorage data exports
+  examples/screenshots/   # UI screenshots for reference
 ```
 
 ## Database Schema (Supabase)
@@ -164,12 +173,14 @@ See `.cursor/skills/n8n-appraisal-sheet-formulas/reference.md` for the full shee
 
 | Document | What it Contains | When to Use |
 |----------|-----------------|-------------|
-| `docs/parser-type-defs.md` | TypeScript interfaces for `LandSaleData`, `SaleData`, `RentalData`, `SubjectData`, `SubjectTax`, `ParcelImprovement`, `ParcelData`, `TaxEntity` | Building comp detail forms, comp parsing prompts, subject editors |
-| `docs/named-functions.md` | Google Sheets named functions with formulas (`AC_TO_SF`, `CALC_MONTHLY_INCREASE`, `GET_NOI`, etc.) | Implementing calculated fields |
-| `docs/examples/report-data-spreasheet--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
+| `docs/report-data-spreadsheet/parser-type-defs.md` | TypeScript interfaces for `LandSaleData`, `SaleData`, `RentalData`, `SubjectData`, `SubjectTax`, `ParcelImprovement`, `ParcelData`, `TaxEntity` | Building comp detail forms, comp parsing prompts, subject editors |
+| `docs/report-data-spreadsheet/named-functions.md` | Google Sheets named functions with formulas (`AC_TO_SF`, `CALC_MONTHLY_INCREASE`, `GET_NOI`, etc.) | Implementing calculated fields |
+| `docs/report-data-spreadsheet/sheets-exported--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
 | `docs/cost-report-examples/` | SwiftEstimator cost report HTML | Building the cost report viewer page |
+| `docs/n8n/workflows/` | Exported n8n workflow JSON files | Understanding legacy n8n flows being replaced |
 | `docs/issues/` | Open issue tracker (016-018) with priorities, complexity, dependencies | Picking work items |
 | `docs/product/` | Architecture overview, data flow, API reference, n8n dependencies | Understanding system architecture |
+| [appraisal-bot Apps Scripts](https://github.com/dougiefresh49/appraisal-bot/tree/main/app-scripts/apbot-report-data) | Google Sheets automation: JSON importer, UI templates, comp editor, adjustments, reconciliation | Understanding how parsed data flows into the spreadsheet, template logic, named range handling |
 
 ## Open Issues
 
