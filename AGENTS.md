@@ -81,7 +81,7 @@ supabase/
   migrations/             # 15 SQL migration files (001-015)
 
 docs/
-  issues/                 # Open issue tracker (015-021)
+  issues/                 # Open issue tracker (016-018)
   product/                # Architecture docs, API reference, n8n deps
   examples/               # Spreadsheet HTML exports, cost report examples
   parser-type-defs.md     # Canonical TypeScript interfaces for comp/subject data
@@ -168,18 +168,12 @@ See `.cursor/skills/n8n-appraisal-sheet-formulas/reference.md` for the full shee
 | `docs/named-functions.md` | Google Sheets named functions with formulas (`AC_TO_SF`, `CALC_MONTHLY_INCREASE`, `GET_NOI`, etc.) | Implementing calculated fields |
 | `docs/examples/report-data-spreasheet--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
 | `docs/cost-report-examples/` | SwiftEstimator cost report HTML | Building the cost report viewer page |
-| `docs/issues/` | Open issue tracker (015-021) with priorities, complexity, dependencies | Picking work items |
+| `docs/issues/` | Open issue tracker (016-018) with priorities, complexity, dependencies | Picking work items |
 | `docs/product/` | Architecture overview, data flow, API reference, n8n dependencies | Understanding system architecture |
 
 ## Open Issues
 
-See `docs/issues/000-index.md` for the full list. Key items:
-
-**Quick wins (Low complexity):**
-- 015: Comp detail document panel scoping + auto-tagging
-- 019: Update product documentation
-- 020: Neighborhood boundary prompt key mismatch
-- 021: Document manager multi-select in Drive browser
+See `docs/issues/000-index.md` for the full list (3 remaining):
 
 **Medium tasks:**
 - 016: Comp UI templates -- sales variants, persistence, label sources
