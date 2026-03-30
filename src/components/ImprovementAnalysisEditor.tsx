@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  XMarkIcon,
+  FunnelIcon,
+  CheckIcon,
+  CloudArrowUpIcon,
+  ArrowDownOnSquareStackIcon,
+} from "@heroicons/react/24/outline";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import { useProject } from "~/hooks/useProject";
 import { fetchProjectDocuments } from "~/lib/supabase-queries";
@@ -57,23 +63,15 @@ const CATEGORY_HEADER: Record<ImprovementCategory, string> = {
   "Legal/Conforming Status": "text-gray-800 dark:text-gray-200",
 };
 
-const CATEGORY_CHIP: Record<ImprovementCategory, string> = {
-  "Improvement Characteristics":
-    "border-blue-300 bg-blue-50/80 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100 data-[active=true]:ring-2 data-[active=true]:ring-blue-400",
-  "Ratios & Parking":
-    "border-purple-300 bg-purple-50/80 text-purple-900 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-100 data-[active=true]:ring-2 data-[active=true]:ring-purple-400",
-  "Age/Life":
-    "border-amber-300 bg-amber-50/80 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 data-[active=true]:ring-2 data-[active=true]:ring-amber-400",
-  "Structural Characteristics":
-    "border-green-300 bg-green-50/80 text-green-900 dark:border-green-800 dark:bg-green-950/30 dark:text-green-100 data-[active=true]:ring-2 data-[active=true]:ring-green-400",
-  "Interior Characteristics":
-    "border-teal-300 bg-teal-50/80 text-teal-900 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-100 data-[active=true]:ring-2 data-[active=true]:ring-teal-400",
-  "Mechanical Systems":
-    "border-orange-300 bg-orange-50/80 text-orange-900 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-100 data-[active=true]:ring-2 data-[active=true]:ring-orange-400",
-  "Site Improvements":
-    "border-lime-400 bg-lime-50/80 text-lime-900 dark:border-lime-800 dark:bg-lime-950/30 dark:text-lime-100 data-[active=true]:ring-2 data-[active=true]:ring-lime-400",
-  "Legal/Conforming Status":
-    "border-gray-300 bg-gray-100 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 data-[active=true]:ring-2 data-[active=true]:ring-gray-400",
+const CATEGORY_CHECK: Record<ImprovementCategory, string> = {
+  "Improvement Characteristics": "text-blue-500",
+  "Ratios & Parking": "text-purple-500",
+  "Age/Life": "text-amber-500",
+  "Structural Characteristics": "text-green-500",
+  "Interior Characteristics": "text-teal-500",
+  "Mechanical Systems": "text-orange-500",
+  "Site Improvements": "text-lime-500",
+  "Legal/Conforming Status": "text-gray-500",
 };
 
 function isImprovementCategory(v: unknown): v is ImprovementCategory {
@@ -186,6 +184,97 @@ function toPayloadRows(rows: LocalRow[]): ImprovementAnalysisRow[] {
   return rows.map(({ clientId: _c, ...rest }) => rest);
 }
 
+/** Multi-select filter dropdown */
+function CategoryFilterDropdown({
+  activeCategories,
+  onToggle,
+  onClear,
+}: {
+  activeCategories: Set<ImprovementCategory>;
+  onToggle: (cat: ImprovementCategory) => void;
+  onClear: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const activeCount = activeCategories.size;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+          activeCount > 0
+            ? "border-blue-500 bg-blue-600/10 text-blue-400 dark:border-blue-500"
+            : "border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600 hover:bg-gray-800"
+        }`}
+        title="Filter by category"
+      >
+        <FunnelIcon className="h-4 w-4" />
+        {activeCount > 0 && (
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[220px] rounded-xl border border-gray-700 bg-gray-900 py-1 shadow-2xl">
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 transition hover:text-gray-300"
+            >
+              Show All
+            </button>
+          )}
+          <div className="px-1">
+            {CATEGORY_ORDER.map((cat) => {
+              const isActive = activeCategories.has(cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => onToggle(cat)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition hover:bg-gray-800"
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      isActive
+                        ? "border-blue-500 bg-blue-600"
+                        : "border-gray-600 bg-transparent"
+                    }`}
+                  >
+                    {isActive && <CheckIcon className="h-3 w-3 text-white" />}
+                  </span>
+                  <span className={`text-left ${isActive ? "text-gray-100" : "text-gray-400"}`}>
+                    {cat}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ImprovementAnalysisEditor({
   projectId,
 }: ImprovementAnalysisEditorProps) {
@@ -196,9 +285,7 @@ export function ImprovementAnalysisEditor({
 
   const [rows, setRows] = useState<LocalRow[]>([]);
   const [docStructuredSlices, setDocStructuredSlices] = useState<unknown[]>([]);
-  const [filterCategory, setFilterCategory] = useState<
-    ImprovementCategory | "all"
-  >("all");
+  const [activeCategories, setActiveCategories] = useState<Set<ImprovementCategory>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -265,9 +352,9 @@ export function ImprovementAnalysisEditor({
   }, [subjectData, coreJson, project?.propertyType, docStructuredSlices]);
 
   const visibleCategories = useMemo(() => {
-    if (filterCategory === "all") return CATEGORY_ORDER;
-    return [filterCategory];
-  }, [filterCategory]);
+    if (activeCategories.size === 0) return CATEGORY_ORDER;
+    return CATEGORY_ORDER.filter((c) => activeCategories.has(c));
+  }, [activeCategories]);
 
   const updateRow = useCallback(
     (clientId: string, patch: Partial<ImprovementAnalysisRow>) => {
@@ -337,13 +424,20 @@ export function ImprovementAnalysisEditor({
     }
   };
 
-  const toggleFilter = (cat: ImprovementCategory) => {
-    setFilterCategory((prev) => (prev === cat ? "all" : cat));
+  const toggleCategory = (cat: ImprovementCategory) => {
+    setActiveCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
   };
+
+  const clearFilter = () => setActiveCategories(new Set());
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center rounded-xl border border-gray-200 bg-gray-50 py-16 text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
+      <div className="flex min-h-[40vh] items-center justify-center py-16 text-sm text-gray-500 dark:text-gray-400">
         Loading improvement analysis…
       </div>
     );
@@ -358,70 +452,63 @@ export function ImprovementAnalysisEditor({
   }
 
   return (
-    <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 text-gray-900 shadow-inner dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
-      {/* Header: filters + save */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-500">
-            Category filter
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              data-active={filterCategory === "all"}
-              onClick={() => setFilterCategory("all")}
-              className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800 transition hover:bg-gray-200 data-[active=true]:ring-2 data-[active=true]:ring-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              All
-            </button>
-            {CATEGORY_ORDER.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                data-active={filterCategory === cat}
-                onClick={() => toggleFilter(cat)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition hover:opacity-90 ${CATEGORY_CHIP[cat]}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
-          {saveSuccess && (
-            <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-              Saved
-            </span>
+    <div className="space-y-4">
+      {/* Sticky action bar */}
+      <div className="sticky top-14 z-30 flex items-center gap-2 border-b border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm md:top-0 md:px-0 md:py-4 md:border-0 md:bg-transparent md:backdrop-blur-none">
+        <CategoryFilterDropdown
+          activeCategories={activeCategories}
+          onToggle={toggleCategory}
+          onClear={clearFilter}
+        />
+
+        <div className="flex-1" />
+
+        {saveSuccess && (
+          <span className="text-xs font-medium text-emerald-400">
+            Saved ✓
+          </span>
+        )}
+        {saveError && (
+          <span className="max-w-[140px] truncate text-xs text-red-400" title={saveError}>
+            Error
+          </span>
+        )}
+
+        {/* Populate from subject data */}
+        <button
+          type="button"
+          onClick={handlePopulateFromSubjectData}
+          title="Pull values from parsed subject data documents"
+          className="flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 p-2 text-gray-300 transition hover:border-gray-600 hover:bg-gray-800 hover:text-gray-100"
+        >
+          <ArrowDownOnSquareStackIcon className="h-4 w-4" />
+          <span className="sr-only">Populate from Subject Data</span>
+        </button>
+
+        {/* Save */}
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={isSaving}
+          title="Save to database"
+          className="flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-500 disabled:opacity-50"
+        >
+          {isSaving ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : (
+            <CloudArrowUpIcon className="h-4 w-4" />
           )}
-          {saveError && (
-            <span className="max-w-xs text-right text-sm text-red-600 dark:text-red-400">
-              {saveError}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handlePopulateFromSubjectData}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
-          >
-            Populate from Subject Data
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-          >
-            {isSaving ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
+          <span className="sr-only">Save Changes</span>
+        </button>
       </div>
 
       {/* Grouped sections */}
-      <div className="space-y-6">
+      <div className="space-y-4 px-4 md:px-0">
         {visibleCategories.map((category) => {
           const inCategory = rows.filter((r) => r.category === category);
           const panel = CATEGORY_PANEL[category];
           const headerTone = CATEGORY_HEADER[category];
+          const checkColor = CATEGORY_CHECK[category];
 
           return (
             <section
@@ -436,14 +523,6 @@ export function ImprovementAnalysisEditor({
                 </h2>
               </div>
 
-              {/* Column headers */}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] gap-3 border-b border-gray-200/60 bg-gray-100/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:border-white/5 dark:bg-black/20">
-                <span>Label</span>
-                <span className="text-center">Include</span>
-                <span className="text-right">Value</span>
-                <span className="sr-only">Remove</span>
-              </div>
-
               <div className="divide-y divide-gray-200/70 dark:divide-white/5">
                 {inCategory.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-gray-500">
@@ -451,52 +530,13 @@ export function ImprovementAnalysisEditor({
                   </p>
                 ) : (
                   inCategory.map((row) => (
-                    <div
+                    <ImprovementRow
                       key={row.clientId}
-                      className="group relative grid grid-cols-[minmax(0,1fr)_auto_minmax(8rem,1.2fr)_2.25rem] items-center gap-3 px-4 py-2.5 transition hover:bg-gray-100/90 dark:hover:bg-black/15"
-                    >
-                      <input
-                        type="text"
-                        value={row.label}
-                        onChange={(e) =>
-                          updateRow(row.clientId, { label: e.target.value })
-                        }
-                        placeholder="Characteristic"
-                        className="w-full rounded-md border border-transparent bg-gray-100 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-900/60 dark:text-gray-100 dark:placeholder:text-gray-600"
-                      />
-                      <div className="flex justify-center">
-                        <input
-                          type="checkbox"
-                          checked={row.include}
-                          onChange={(e) =>
-                            updateRow(row.clientId, {
-                              include: e.target.checked,
-                            })
-                          }
-                          className="h-4 w-4 rounded border-gray-400 bg-white text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-gray-600 dark:bg-gray-900"
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        value={row.value}
-                        onChange={(e) =>
-                          updateRow(row.clientId, { value: e.target.value })
-                        }
-                        placeholder="—"
-                        className="w-full rounded-md border border-transparent bg-gray-100 px-2 py-1.5 text-right text-sm text-gray-900 placeholder:text-gray-500 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-900/60 dark:text-gray-100 dark:placeholder:text-gray-600"
-                      />
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(row.clientId)}
-                          title="Remove row"
-                          className="rounded p-1 text-gray-500 opacity-0 transition hover:bg-red-100 hover:text-red-600 group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-                        >
-                          <XMarkIcon className="h-4 w-4" aria-hidden />
-                          <span className="sr-only">Remove row</span>
-                        </button>
-                      </div>
-                    </div>
+                      row={row}
+                      checkColor={checkColor}
+                      onUpdate={(patch) => updateRow(row.clientId, patch)}
+                      onRemove={() => removeRow(row.clientId)}
+                    />
                   ))
                 )}
               </div>
@@ -514,6 +554,89 @@ export function ImprovementAnalysisEditor({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Single improvement row — mobile-friendly stacked layout */
+function ImprovementRow({
+  row,
+  checkColor,
+  onUpdate,
+  onRemove,
+}: {
+  row: LocalRow;
+  checkColor: string;
+  onUpdate: (patch: Partial<ImprovementAnalysisRow>) => void;
+  onRemove: () => void;
+}) {
+  const isCustom = !buildDefaultRows().some(
+    (d) => d.label === row.label && d.category === row.category,
+  );
+
+  return (
+    <div className="group relative px-4 py-3 transition hover:bg-gray-100/60 dark:hover:bg-black/10">
+      {/* Label row + include toggle + remove */}
+      <div className="mb-1.5 flex items-start gap-2">
+        {/* Label — editable only for custom rows */}
+        <div className="flex-1">
+          {isCustom ? (
+            <input
+              type="text"
+              value={row.label}
+              onChange={(e) => onUpdate({ label: e.target.value })}
+              placeholder="Field name"
+              className="w-full rounded border border-transparent bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-800/60 dark:text-gray-300 dark:placeholder:text-gray-600"
+            />
+          ) : (
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {row.label}
+            </span>
+          )}
+        </div>
+
+        {/* Include checkbox */}
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={row.include}
+          onClick={() => onUpdate({ include: !row.include })}
+          title={row.include ? "Included in report — click to exclude" : "Excluded from report — click to include"}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+            row.include
+              ? `border-current bg-current/10 ${checkColor}`
+              : "border-gray-600 text-gray-600"
+          }`}
+        >
+          {row.include && <CheckIcon className="h-3 w-3" strokeWidth={3} />}
+          <span className="sr-only">{row.include ? "Included" : "Excluded"}</span>
+        </button>
+
+        {/* Remove — always visible on mobile, hover only on desktop */}
+        <button
+          type="button"
+          onClick={onRemove}
+          title="Remove row"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 transition hover:bg-red-100 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+        >
+          <XMarkIcon className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">Remove row</span>
+        </button>
+      </div>
+
+      {/* Value field */}
+      <textarea
+        value={row.value}
+        onChange={(e) => onUpdate({ value: e.target.value })}
+        placeholder="—"
+        rows={1}
+        className="w-full resize-none rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-gray-700/60 dark:bg-gray-900/60 dark:text-gray-100 dark:placeholder:text-gray-600"
+        onInput={(e) => {
+          const el = e.currentTarget;
+          el.style.height = "auto";
+          el.style.height = `${el.scrollHeight}px`;
+        }}
+      />
     </div>
   );
 }
