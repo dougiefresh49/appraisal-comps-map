@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   XMarkIcon,
   CheckCircleIcon,
@@ -10,8 +10,12 @@ import {
   ChevronDownIcon,
   PlusIcon,
   EyeIcon,
+  ArrowLeftIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "~/utils/supabase/client";
+import { useProject } from "~/hooks/useProject";
+import { DriveFolderBrowser } from "~/components/DriveFolderBrowser";
+import type { ProjectFolderStructure } from "~/utils/projectStore";
 
 interface ProjectDocument {
   id: string;
@@ -23,6 +27,7 @@ interface ProjectDocument {
   structured_data: Record<string, unknown> | null;
   processed_at: string | null;
   drive_modified_at: string | null;
+  section_tag: string | null;
   created_at: string;
 }
 
@@ -73,16 +78,77 @@ const SECTION_DOCUMENT_MAP: Record<string, string[]> = {
   neighborhood: ["neighborhood_map"],
   "subject-site-summary": ["flood_map", "deed"],
   "highest-best-use": [],
-  /** Comp detail: show full project document list as relevant context. */
   "comp-detail": [],
 };
+
+/**
+ * Maps a sectionKey to the section_tag value stored on documents.
+ * Comp detail pages pass sectionKeys like "sales-comp-1".
+ */
+function sectionKeyToTag(sectionKey: string): string | null {
+  // comp detail pages: sectionKey is something like "comp-detail" with
+  // an optional compTag passed separately — return null here
+  if (sectionKey === "comp-detail") return null;
+  // Analysis/subject pages map 1:1 to tags
+  const MAP: Record<string, string> = {
+    subject: "subject",
+    ownership: "ownership",
+    zoning: "zoning",
+    neighborhood: "neighborhood",
+    flood_map: "flood-map",
+    "subject-site-summary": "subject",
+    "highest-best-use": "subject",
+  };
+  return MAP[sectionKey] ?? null;
+}
+
+/**
+ * Determines the Drive folder to pre-navigate to when adding a doc
+ * from a given section.
+ */
+function folderIdForSection(
+  sectionKey: string,
+  fs: ProjectFolderStructure | undefined,
+  compFolderId: string | undefined,
+): string | null {
+  if (!fs) return null;
+
+  if (compFolderId) return compFolderId;
+
+  switch (sectionKey) {
+    case "ownership":
+    case "subject":
+    case "subject-site-summary":
+    case "highest-best-use":
+      return fs.subjectFolderId ?? null;
+    case "zoning":
+    case "flood_map":
+    case "neighborhood":
+      return fs.reportMapsFolderId ?? fs.subjectFolderId ?? null;
+    default:
+      return fs.subjectFolderId ?? null;
+  }
+}
+
+function getFolderStructure(project: unknown): ProjectFolderStructure | undefined {
+  if (!project || typeof project !== "object") return undefined;
+  const p = project as Record<string, unknown>;
+  const a = p.folderStructure;
+  const b = p.folder_structure;
+  if (a && typeof a === "object") return a as ProjectFolderStructure;
+  if (b && typeof b === "object") return b as ProjectFolderStructure;
+  return undefined;
+}
 
 interface DocumentContextPanelProps {
   projectId: string;
   sectionKey: string;
   isOpen: boolean;
   onClose: () => void;
+  /** When set, the inline browser starts here and documents are filtered to this tag. */
   compFolderId?: string;
+  /** Explicit section_tag override (e.g. "sales-comp-1"). */
+  sectionTag?: string;
 }
 
 export function DocumentContextPanel({
@@ -90,14 +156,37 @@ export function DocumentContextPanel({
   sectionKey,
   isOpen,
   onClose,
-  compFolderId: _compFolderId,
+  compFolderId,
+  sectionTag: sectionTagProp,
 }: DocumentContextPanelProps) {
+  const { project } = useProject(projectId);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+  const [showAddBrowser, setShowAddBrowser] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
-  const relevantTypes = SECTION_DOCUMENT_MAP[sectionKey] ?? [];
+  const folderStructure = useMemo(
+    () => getFolderStructure(project),
+    [project],
+  );
+
+  const relevantTypes = useMemo(
+    () => SECTION_DOCUMENT_MAP[sectionKey] ?? [],
+    [sectionKey],
+  );
+
+  // The tag used to filter/scope documents for this section
+  const effectiveSectionTag =
+    sectionTagProp ?? sectionKeyToTag(sectionKey);
+
+  // The folder to pre-navigate in the inline browser
+  const browserRootFolderId = useMemo(
+    () => folderIdForSection(sectionKey, folderStructure, compFolderId),
+    [sectionKey, folderStructure, compFolderId],
+  );
 
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
@@ -169,12 +258,57 @@ export function DocumentContextPanel({
     });
   }, []);
 
-  const relevant = documents.filter(
-    (d) => relevantTypes.length === 0 || relevantTypes.includes(d.document_type),
+  const handleFileSelect = useCallback(
+    async (file: { id: string; name: string; mimeType: string }) => {
+      if (file.mimeType === "application/vnd.google-apps.folder") return;
+      setIsAdding(true);
+      setAddError(null);
+      try {
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            documentType: "other",
+            fileName: file.name,
+            fileId: file.id,
+            sectionTag: effectiveSectionTag ?? undefined,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Failed to add document");
+        }
+        setShowAddBrowser(false);
+      } catch (err) {
+        setAddError(err instanceof Error ? err.message : "Failed to add document");
+      } finally {
+        setIsAdding(false);
+      }
+    },
+    [projectId, effectiveSectionTag],
   );
-  const other = documents.filter(
-    (d) => relevantTypes.length > 0 && !relevantTypes.includes(d.document_type),
-  );
+
+  // Section-scoped docs (matching sectionTag or relevantTypes)
+  const scopedDocs = useMemo(() => {
+    if (effectiveSectionTag) {
+      return documents.filter((d) => d.section_tag === effectiveSectionTag);
+    }
+    if (relevantTypes.length > 0) {
+      return documents.filter((d) => relevantTypes.includes(d.document_type));
+    }
+    return documents;
+  }, [documents, effectiveSectionTag, relevantTypes]);
+
+  const otherDocs = useMemo(() => {
+    if (effectiveSectionTag) {
+      return documents.filter((d) => d.section_tag !== effectiveSectionTag);
+    }
+    if (relevantTypes.length > 0) {
+      return documents.filter((d) => !relevantTypes.includes(d.document_type));
+    }
+    return [];
+  }, [documents, effectiveSectionTag, relevantTypes]);
 
   if (!isOpen) return null;
 
@@ -206,74 +340,144 @@ export function DocumentContextPanel({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+          {/* Inline Add Browser */}
+          {showAddBrowser && (
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  Select a file to add
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddBrowser(false);
+                    setAddError(null);
+                  }}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
+                >
+                  <ArrowLeftIcon className="h-3 w-3" />
+                  Cancel
+                </button>
+              </div>
+              {addError && (
+                <p className="mb-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+                  {addError}
+                </p>
+              )}
+              {isAdding ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-blue-500" />
+                  <span className="ml-2 text-xs text-gray-400">
+                    Adding document…
+                  </span>
+                </div>
+              ) : browserRootFolderId ? (
+                <DriveFolderBrowser
+                  rootFolderId={browserRootFolderId}
+                  rootFolderName="Project"
+                  filter="files"
+                  onSelect={handleFileSelect}
+                />
+              ) : (
+                <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200/90">
+                  No Drive folder configured for this section. Go to the{" "}
+                  <a
+                    href={`/project/${projectId}/documents`}
+                    className="underline hover:text-amber-100"
+                    onClick={onClose}
+                  >
+                    Documents page
+                  </a>{" "}
+                  to add documents manually.
+                </p>
+              )}
             </div>
-          ) : (
+          )}
+
+          {!showAddBrowser && (
             <>
-              {relevant.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Relevant Documents
-                  </h3>
-                  <div className="space-y-2">
-                    {relevant.map((doc) => (
-                      <DocumentRow
-                        key={doc.id}
-                        doc={doc}
-                        isExpanded={expandedIds.has(doc.id)}
-                        isReprocessing={reprocessingIds.has(doc.id)}
-                        onToggleExpand={() => toggleExpanded(doc.id)}
-                        onReprocess={() => void handleReprocess(doc.id)}
-                      />
-                    ))}
-                  </div>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
                 </div>
-              )}
+              ) : (
+                <>
+                  {scopedDocs.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        {effectiveSectionTag
+                          ? `${sectionKey.replace(/-/g, " ")} documents`
+                          : "Relevant Documents"}
+                      </h3>
+                      <div className="space-y-2">
+                        {scopedDocs.map((doc) => (
+                          <DocumentRow
+                            key={doc.id}
+                            doc={doc}
+                            isExpanded={expandedIds.has(doc.id)}
+                            isReprocessing={reprocessingIds.has(doc.id)}
+                            onToggleExpand={() => toggleExpanded(doc.id)}
+                            onReprocess={() => void handleReprocess(doc.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {other.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Other Project Documents
-                  </h3>
-                  <div className="space-y-2">
-                    {other.map((doc) => (
-                      <DocumentRow
-                        key={doc.id}
-                        doc={doc}
-                        isExpanded={expandedIds.has(doc.id)}
-                        isReprocessing={reprocessingIds.has(doc.id)}
-                        onToggleExpand={() => toggleExpanded(doc.id)}
-                        onReprocess={() => void handleReprocess(doc.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+                  {otherDocs.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        Other Project Documents
+                      </h3>
+                      <div className="space-y-2">
+                        {otherDocs.map((doc) => (
+                          <DocumentRow
+                            key={doc.id}
+                            doc={doc}
+                            isExpanded={expandedIds.has(doc.id)}
+                            isReprocessing={reprocessingIds.has(doc.id)}
+                            onToggleExpand={() => toggleExpanded(doc.id)}
+                            onReprocess={() => void handleReprocess(doc.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {documents.length === 0 && (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-gray-500">
-                    No documents uploaded yet.
-                  </p>
-                  <p className="mt-1 text-xs text-gray-600">
-                    Add documents from the Documents page to build context.
-                  </p>
-                </div>
+                  {documents.length === 0 && (
+                    <div className="py-12 text-center">
+                      <p className="text-sm text-gray-500">
+                        No documents uploaded yet.
+                      </p>
+                      <p className="mt-1 text-xs text-gray-600">
+                        Click &quot;Add Document&quot; to browse your Drive.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 px-6 py-3">
+        <div className="border-t border-gray-800 px-6 py-3 space-y-2">
+          {!showAddBrowser && (
+            <button
+              type="button"
+              onClick={() => setShowAddBrowser(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-xs font-medium text-gray-300 transition hover:bg-gray-800 hover:text-gray-100"
+            >
+              <PlusIcon className="h-3.5 w-3.5" />
+              Add Document
+            </button>
+          )}
           <a
             href={`/project/${projectId}/documents`}
-            className="flex items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-xs font-medium text-gray-300 transition hover:bg-gray-800 hover:text-gray-100"
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs text-gray-600 transition hover:text-gray-400"
           >
-            <PlusIcon className="h-3.5 w-3.5" />
-            Add Document
+            Manage all documents →
           </a>
         </div>
       </div>

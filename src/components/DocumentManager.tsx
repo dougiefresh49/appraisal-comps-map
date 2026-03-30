@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { DriveFolderBrowser } from "~/components/DriveFolderBrowser";
@@ -35,6 +36,16 @@ const DOCUMENT_TYPES = [
 ] as const;
 
 type DocumentTypeValue = (typeof DOCUMENT_TYPES)[number]["value"];
+
+const SECTION_TAGS = [
+  { value: "", label: "— None —" },
+  { value: "subject", label: "Subject" },
+  { value: "neighborhood", label: "Neighborhood" },
+  { value: "ownership", label: "Ownership" },
+  { value: "zoning", label: "Zoning" },
+  { value: "flood-map", label: "Flood Map" },
+  { value: "engagement", label: "Engagement" },
+] as const;
 
 const TYPE_BADGE_CLASS: Record<string, string> = {
   deed: "border-amber-600/40 bg-amber-950/60 text-amber-200",
@@ -95,6 +106,11 @@ function getTypeLabel(type: string) {
   return DOCUMENT_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
+function getSectionTagLabel(tag: string | null) {
+  if (!tag) return null;
+  return SECTION_TAGS.find((t) => t.value === tag)?.label ?? tag;
+}
+
 function isProcessingDoc(doc: ProjectDocument, reprocessingIds: Set<string>) {
   return (
     !doc.processedAt &&
@@ -130,16 +146,19 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
   const { project } = useProject(projectId);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addSourceMode, setAddSourceMode] = useState<AddSourceMode>("browse");
   const [addForm, setAddForm] = useState<{
     documentType: DocumentTypeValue;
     documentLabel: string;
+    sectionTag: string;
     fileId: string;
     driveFileName: string;
   }>({
     documentType: "deed",
     documentLabel: "",
+    sectionTag: "",
     fileId: "",
     driveFileName: "",
   });
@@ -166,6 +185,20 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       ),
     [addForm.documentType, folderStructure, project?.projectFolderId],
   );
+
+  // Compute the set of tags actually present in the document list
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const doc of documents) {
+      if (doc.sectionTag) tags.add(doc.sectionTag);
+    }
+    return Array.from(tags).sort();
+  }, [documents]);
+
+  const filteredDocuments = useMemo(() => {
+    if (!activeTagFilter) return documents;
+    return documents.filter((d) => d.sectionTag === activeTagFilter);
+  }, [documents, activeTagFilter]);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -231,6 +264,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     setAddForm({
       documentType: "deed",
       documentLabel: "",
+      sectionTag: "",
       fileId: "",
       driveFileName: "",
     });
@@ -259,6 +293,9 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
         if (addForm.documentLabel.trim()) {
           formData.append("documentLabel", addForm.documentLabel.trim());
         }
+        if (addForm.sectionTag.trim()) {
+          formData.append("sectionTag", addForm.sectionTag.trim());
+        }
         formData.append("file", selectedFile);
 
         const res = await fetch("/api/documents", {
@@ -277,6 +314,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
             projectId,
             documentType: addForm.documentType,
             documentLabel: addForm.documentLabel.trim() || undefined,
+            sectionTag: addForm.sectionTag.trim() || undefined,
             fileId: addForm.fileId.trim(),
             fileName: addForm.driveFileName.trim() || undefined,
           }),
@@ -356,6 +394,40 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
         </button>
       </div>
 
+      {/* Filter chips */}
+      {availableTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <TagIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+          <button
+            type="button"
+            onClick={() => setActiveTagFilter(null)}
+            className={`rounded-full border px-3 py-0.5 text-xs font-medium transition ${
+              activeTagFilter === null
+                ? "border-sky-600 bg-sky-950/60 text-sky-200"
+                : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+            }`}
+          >
+            All
+          </button>
+          {availableTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() =>
+                setActiveTagFilter((prev) => (prev === tag ? null : tag))
+              }
+              className={`rounded-full border px-3 py-0.5 text-xs font-medium transition ${
+                activeTagFilter === tag
+                  ? "border-sky-600 bg-sky-950/60 text-sky-200"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+              }`}
+            >
+              {getSectionTagLabel(tag) ?? tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
           {error}
@@ -399,6 +471,24 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                 placeholder="e.g., Deed — Instrument #2024-1234"
                 className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Section tag (optional)
+              </label>
+              <select
+                value={addForm.sectionTag}
+                onChange={(e) =>
+                  setAddForm((f) => ({ ...f, sectionTag: e.target.value }))
+                }
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                {SECTION_TAGS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -559,16 +649,17 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
         </div>
       )}
 
-      {documents.length === 0 ? (
+      {filteredDocuments.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 p-10 text-center">
           <p className="text-sm text-zinc-500">
-            No documents yet. Add deed records, maps, and other files to build
-            context.
+            {activeTagFilter
+              ? `No documents tagged "${getSectionTagLabel(activeTagFilter) ?? activeTagFilter}".`
+              : "No documents yet. Add deed records, maps, and other files to build context."}
           </p>
         </div>
       ) : (
         <ul className="space-y-3">
-          {documents.map((doc) => (
+          {filteredDocuments.map((doc) => (
             <DocumentListCard
               key={doc.id}
               doc={doc}
@@ -646,6 +737,12 @@ function DocumentListCard({
             >
               {getTypeLabel(doc.documentType)}
             </span>
+            {doc.sectionTag && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-zinc-600/50 bg-zinc-800/60 px-2 py-0.5 text-xs text-zinc-400">
+                <TagIcon className="h-3 w-3" />
+                {getSectionTagLabel(doc.sectionTag) ?? doc.sectionTag}
+              </span>
+            )}
             <DocumentStatusPill
               processing={processing}
               done={done}
