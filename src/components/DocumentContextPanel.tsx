@@ -300,7 +300,11 @@ export function DocumentContextPanel({
     return documents;
   }, [documents, effectiveSectionTag, relevantTypes]);
 
+  /** Explicit tag (e.g. comp detail) — show only matching docs, not the rest of the project. */
+  const isStrictTagScope = sectionTagProp !== undefined;
+
   const otherDocs = useMemo(() => {
+    if (isStrictTagScope) return [];
     if (effectiveSectionTag) {
       return documents.filter((d) => d.section_tag !== effectiveSectionTag);
     }
@@ -308,7 +312,12 @@ export function DocumentContextPanel({
       return documents.filter((d) => !relevantTypes.includes(d.document_type));
     }
     return [];
-  }, [documents, effectiveSectionTag, relevantTypes]);
+  }, [
+    documents,
+    effectiveSectionTag,
+    relevantTypes,
+    isStrictTagScope,
+  ]);
 
   if (!isOpen) return null;
 
@@ -447,13 +456,20 @@ export function DocumentContextPanel({
                     </div>
                   )}
 
-                  {documents.length === 0 && (
+                  {(documents.length === 0 ||
+                    (isStrictTagScope &&
+                      scopedDocs.length === 0 &&
+                      documents.length > 0)) && (
                     <div className="py-12 text-center">
                       <p className="text-sm text-gray-500">
-                        No documents uploaded yet.
+                        {isStrictTagScope && documents.length > 0
+                          ? "No documents tagged for this comp yet."
+                          : "No documents uploaded yet."}
                       </p>
                       <p className="mt-1 text-xs text-gray-600">
-                        Click &quot;Add Document&quot; to browse your Drive.
+                        {isStrictTagScope
+                          ? "Add a document from this comp's folder to tag and attach it here."
+                          : 'Click "Add Document" to browse your Drive.'}
                       </p>
                     </div>
                   )}

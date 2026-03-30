@@ -56,6 +56,36 @@ export function useProject(projectId: string) {
     };
   }, [projectId]);
 
+  useEffect(() => {
+    if (!projectExists) return;
+    let cancelled = false;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`project-${projectId}-comparables`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comparables",
+          filter: `project_id=eq.${projectId}`,
+        },
+        () => {
+          void (async () => {
+            const result = await fetchProject(projectId);
+            if (cancelled || !result) return;
+            setProject(normalizeProjectData(result.project));
+          })();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [projectId, projectExists]);
+
   const updateProject = useCallback(
     (updater: (project: ProjectData) => ProjectData) => {
       setProject((prev) => {
