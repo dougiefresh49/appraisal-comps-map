@@ -81,8 +81,7 @@ supabase/
   migrations/             # 15 SQL migration files (001-015)
 
 docs/
-  feedback/               # User feedback specs (01-07)
-  issues/                 # Open issue tracker (001-014)
+  issues/                 # Open issue tracker (015-021)
   product/                # Architecture docs, API reference, n8n deps
   examples/               # Spreadsheet HTML exports, cost report examples
   parser-type-defs.md     # Canonical TypeScript interfaces for comp/subject data
@@ -169,31 +168,25 @@ See `.cursor/skills/n8n-appraisal-sheet-formulas/reference.md` for the full shee
 | `docs/named-functions.md` | Google Sheets named functions with formulas (`AC_TO_SF`, `CALC_MONTHLY_INCREASE`, `GET_NOI`, etc.) | Implementing calculated fields |
 | `docs/examples/report-data-spreasheet--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
 | `docs/cost-report-examples/` | SwiftEstimator cost report HTML | Building the cost report viewer page |
-| `docs/feedback/` | Original user feedback specs (01-07) | Understanding the "why" behind features |
-| `docs/issues/` | Open issue tracker (001-014) with priorities, complexity, dependencies | Picking work items |
+| `docs/issues/` | Open issue tracker (015-021) with priorities, complexity, dependencies | Picking work items |
 | `docs/product/` | Architecture overview, data flow, API reference, n8n dependencies | Understanding system architecture |
 
 ## Open Issues
 
 See `docs/issues/000-index.md` for the full list. Key items:
 
-**Quick fixes (Low complexity, can be done independently):**
-- 002: Comp list title shows project name instead of section name
-- 005: Sketches page 429 rate limiting
-- 006: Improvements page neon colors too harsh
-- 008: Flood map Edit Map should be Expand
-- 011: Doc panel needs View button
-- 012: Sketches hydration error (button in button)
+**Quick wins (Low complexity):**
+- 015: Comp detail document panel scoping + auto-tagging
+- 019: Update product documentation
+- 020: Neighborhood boundary prompt key mismatch
+- 021: Document manager multi-select in Drive browser
 
-**Medium tasks (can be parallelized):**
-- 001: Comp add flow via Drive folder picker
-- 004: Document panel scoping + inline add
-- 007: Improvements auto-populate from parsed docs
-- 009: Map read-only default + MapLockGuard integration
-- 010: Document tags/categories for filtering
+**Medium tasks:**
+- 016: Comp UI templates -- sales variants, persistence, label sources
+- 017: Analysis pages -- generation context controls + visual polish
 
-**Sequential (has dependency):**
-- 003: Comp detail empty state (depends on 001)
+**High complexity:**
+- 018: Photo analysis -- move from n8n to webapp
 
 ## n8n Status
 
