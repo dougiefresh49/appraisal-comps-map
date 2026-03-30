@@ -313,15 +313,17 @@ export function DocumentContextPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex">
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative ml-auto flex h-full w-full max-w-md flex-col border-l border-gray-800 bg-gray-950 shadow-2xl">
+      {/* Panel — full-screen on mobile, right-side drawer on md+ */}
+      <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-800 bg-gray-950 shadow-2xl md:inset-x-auto md:inset-y-0 md:right-0 md:top-0 md:w-full md:max-w-md md:border-l md:border-t-0">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3 md:px-6 md:py-4">
           <div>
             <h2 className="text-sm font-semibold text-gray-100">
               Document Context
@@ -332,14 +334,15 @@ export function DocumentContextPanel({
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            aria-label="Close document panel"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
           {/* Inline Add Browser */}
           {showAddBrowser && (
             <div className="mb-4">
@@ -461,7 +464,7 @@ export function DocumentContextPanel({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 px-6 py-3 space-y-2">
+        <div className="border-t border-gray-800 px-4 py-3 space-y-2 md:px-6">
           {!showAddBrowser && (
             <button
               type="button"
