@@ -12,7 +12,11 @@ import { CompAddFlow } from "~/components/CompAddFlow";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
 import { useProject } from "~/hooks/useProject";
 import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
-import { getComparablesByType, type ComparableType } from "~/utils/projectStore";
+import {
+  getComparablesByType,
+  type ComparableType,
+  type ComparableParsedDataStatus,
+} from "~/utils/projectStore";
 
 export interface CompDetailPageProps {
   projectId: string;
@@ -45,6 +49,21 @@ function compLocationMapHref(
     return `/project/${projectId}/rentals/comparables-map`;
   }
   return `/project/${projectId}/${typeSlug}/comps/${compId}/location-map`;
+}
+
+function statusBadgeClasses(
+  status: ComparableParsedDataStatus | undefined,
+): string {
+  switch (status) {
+    case "processing":
+      return "bg-blue-950/80 text-blue-300 ring-1 ring-blue-800/80 animate-pulse";
+    case "parsed":
+      return "bg-emerald-950/80 text-emerald-300 ring-1 ring-emerald-800/80";
+    case "error":
+      return "bg-red-950/80 text-red-300 ring-1 ring-red-800/80";
+    default:
+      return "bg-gray-800/80 text-gray-400 ring-1 ring-gray-700";
+  }
 }
 
 const LAND_SECTIONS: SectionDef[] = [
@@ -247,7 +266,10 @@ function sectionsForType(compType: ComparableType): SectionDef[] {
   }
 }
 
-function fieldToInputString(data: Record<string, unknown>, key: string): string {
+function fieldToInputString(
+  data: Record<string, unknown>,
+  key: string,
+): string {
   const val = data[key];
   if (val === null || val === undefined) return "";
   if (typeof val === "boolean") return val ? "Yes" : "No";
@@ -285,9 +307,10 @@ export function CompDetailPage({
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
   const [showParseFlow, setShowParseFlow] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle",
-  );
+  const [folderName, setFolderName] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -299,21 +322,41 @@ export function CompDetailPage({
       }
       setDraft({ ...(parsedData.raw_data as Record<string, unknown>) });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync draft only on row identity / server refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [parsedData?.id, parsedData?.updated_at],
   );
 
-  const comparables = project
-    ? getComparablesByType(project, compType)
-    : [];
+  const comparables = project ? getComparablesByType(project, compType) : [];
   const comp = comparables.find((c) => c.id === compId);
+  const compFolderId = comp?.folderId;
+
+  useEffect(() => {
+    if (!compFolderId) return;
+    void (async () => {
+      try {
+        const res = await fetch("/api/comps-folder-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folderId: compFolderId }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { name?: string };
+        if (data.name) setFolderName(data.name);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [compFolderId]);
+
   const compIndex = comparables.findIndex((c) => c.id === compId);
-  const displayNumber = comp?.number ?? (compIndex >= 0 ? String(compIndex + 1) : "?");
+  const displayNumber =
+    comp?.number ?? (compIndex >= 0 ? String(compIndex + 1) : "?");
   const trimmedAddress = comp?.address?.trim();
-  const displayAddress =
-    trimmedAddress !== undefined && trimmedAddress !== ""
-      ? trimmedAddress
-      : "—";
+  const hasAddress =
+    trimmedAddress !== undefined && trimmedAddress !== "";
+  const displayAddress = hasAddress
+    ? trimmedAddress
+    : folderName ?? "—";
 
   const backHref = `/project/${projectId}/${typeSlug}/comparables`;
   const locationMapHref = compLocationMapHref(
@@ -399,8 +442,67 @@ export function CompDetailPage({
     );
   }
 
+  const isProcessing = comp.parsedDataStatus === "processing";
+
   const headerLabel = `${compType.toUpperCase()} COMP #${displayNumber} — ${displayAddress}`;
   const sections = sectionsForType(compType);
+
+  const renderEmptyState = () => {
+    if (isProcessing) {
+      return (
+        <div className="rounded-xl border border-blue-800/40 bg-blue-950/20 px-6 py-14 text-center">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          <p className="text-sm font-medium text-blue-200">
+            Parsing in progress…
+          </p>
+          <p className="mt-1 text-xs text-blue-300/60">
+            Fields will auto-populate when parsing completes.
+          </p>
+        </div>
+      );
+    }
+
+    if (compFolderId) {
+      return (
+        <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-gray-300">
+            {folderName
+              ? `Folder "${folderName}" linked — select files to parse.`
+              : "Folder linked — select files to parse."}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Choose which documents to extract comp data from.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowParseFlow(true)}
+            className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+          >
+            Select Files & Parse
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-14 text-center">
+        <p className="text-sm font-medium text-gray-300">
+          No parsed data for this comp yet.
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          Run the parse flow to extract fields from Drive documents, or enter
+          data manually after creating a row.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowParseFlow(true)}
+          className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+        >
+          Parse Files
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="p-6 md:p-8">
@@ -418,7 +520,9 @@ export function CompDetailPage({
             <span className="text-xs text-gray-500">Saving…</span>
           )}
           {saveStatus === "saved" && (
-            <span className="text-xs font-medium text-emerald-400">Saved</span>
+            <span className="text-xs font-medium text-emerald-400">
+              Saved
+            </span>
           )}
           {saveStatus === "error" && (
             <span className="text-xs text-red-400">Save failed</span>
@@ -427,9 +531,23 @@ export function CompDetailPage({
       </div>
 
       <div className="mb-6 flex flex-col gap-2 border-b border-gray-800 pb-6">
-        <h1 className="text-xl font-bold tracking-tight text-gray-100 md:text-2xl">
-          {headerLabel}
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold tracking-tight text-gray-100 md:text-2xl">
+            {headerLabel}
+          </h1>
+          {comp.parsedDataStatus && comp.parsedDataStatus !== "none" && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadgeClasses(comp.parsedDataStatus)}`}
+            >
+              {comp.parsedDataStatus}
+            </span>
+          )}
+        </div>
+        {!hasAddress && folderName && (
+          <p className="text-xs text-gray-500">
+            Folder: {folderName}
+          </p>
+        )}
       </div>
 
       <div className="mb-8">
@@ -450,22 +568,7 @@ export function CompDetailPage({
           {parsedError}
         </div>
       ) : !parsedData ? (
-        <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-14 text-center">
-          <p className="text-sm font-medium text-gray-300">
-            No parsed data for this comp yet.
-          </p>
-          <p className="mt-1 text-xs text-gray-500">
-            Run the parse flow to extract fields from Drive documents, or enter
-            data manually after creating a row.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowParseFlow(true)}
-            className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
-          >
-            Parse Files
-          </button>
-        </div>
+        renderEmptyState()
       ) : (
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-2">
@@ -489,7 +592,9 @@ export function CompDetailPage({
                       <input
                         type="text"
                         value={fieldToInputString(draft, key)}
-                        onChange={(e) => handleFieldChange(key, e.target.value)}
+                        onChange={(e) =>
+                          handleFieldChange(key, e.target.value)
+                        }
                         className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
                         placeholder="—"
                       />
@@ -539,7 +644,17 @@ export function CompDetailPage({
           projectId={projectId}
           compId={compId}
           compType={compType}
-          projectFolderId={project?.projectFolderId}
+          compsFolderId={
+            project.folderStructure?.compsFolderIds?.[
+              compType === "Land"
+                ? "land"
+                : compType === "Sales"
+                  ? "sales"
+                  : "rentals"
+            ]
+          }
+          projectFolderId={project.projectFolderId}
+          initialFolderId={compFolderId}
           onComplete={() => {
             void refreshParsedData();
             setShowParseFlow(false);
