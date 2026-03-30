@@ -452,58 +452,61 @@ export function ImprovementAnalysisEditor({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Sticky action bar */}
-      <div className="sticky top-14 z-30 flex items-center gap-2 border-b border-gray-800 bg-gray-950/95 px-4 py-3 backdrop-blur-sm md:top-0 md:px-0 md:py-4 md:border-0 md:bg-transparent md:backdrop-blur-none">
-        <CategoryFilterDropdown
-          activeCategories={activeCategories}
-          onToggle={toggleCategory}
-          onClear={clearFilter}
-        />
+    <div className="space-y-5">
+      {/* Sticky toolbar — scrollport is project main (see layout min-h-0 + overflow-y-auto) */}
+      <div className="sticky top-14 z-30 md:top-0">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200/90 bg-white/85 px-3 py-2.5 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90 dark:ring-white/5 sm:px-4 sm:py-3">
+          <CategoryFilterDropdown
+            activeCategories={activeCategories}
+            onToggle={toggleCategory}
+            onClear={clearFilter}
+          />
 
-        <div className="flex-1" />
+          <div className="min-w-2 flex-1" />
 
-        {saveSuccess && (
-          <span className="text-xs font-medium text-emerald-400">
-            Saved ✓
-          </span>
-        )}
-        {saveError && (
-          <span className="max-w-[140px] truncate text-xs text-red-400" title={saveError}>
-            Error
-          </span>
-        )}
-
-        {/* Populate from subject data */}
-        <button
-          type="button"
-          onClick={handlePopulateFromSubjectData}
-          title="Pull values from parsed subject data documents"
-          className="flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 p-2 text-gray-300 transition hover:border-gray-600 hover:bg-gray-800 hover:text-gray-100"
-        >
-          <ArrowDownOnSquareStackIcon className="h-4 w-4" />
-          <span className="sr-only">Populate from Subject Data</span>
-        </button>
-
-        {/* Save */}
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={isSaving}
-          title="Save to database"
-          className="flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-500 disabled:opacity-50"
-        >
-          {isSaving ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          ) : (
-            <CloudArrowUpIcon className="h-4 w-4" />
+          {saveSuccess && (
+            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              Saved ✓
+            </span>
           )}
-          <span className="sr-only">Save Changes</span>
-        </button>
+          {saveError && (
+            <span className="max-w-[140px] truncate text-xs text-red-500 dark:text-red-400" title={saveError}>
+              Error
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={handlePopulateFromSubjectData}
+            title="Pull values from parsed subject data documents"
+            className="flex items-center justify-center rounded-lg border border-gray-300 bg-gray-50 p-2 text-gray-700 transition hover:border-gray-400 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+          >
+            <ArrowDownOnSquareStackIcon className="h-4 w-4" />
+            <span className="sr-only">Populate from Subject Data</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={isSaving}
+            title="Save to database"
+            className="flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white shadow-sm transition hover:bg-blue-500 disabled:opacity-50"
+          >
+            {isSaving ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <CloudArrowUpIcon className="h-4 w-4" />
+            )}
+            <span className="sr-only">Save Changes</span>
+          </button>
+        </div>
       </div>
 
-      {/* Grouped sections */}
-      <div className="space-y-4 px-4 md:px-0">
+      {/* Masonry-style columns: balances short cards under tall ones; xl = up to 4 columns */}
+      <div
+        className="columns-1 [column-gap:theme(spacing.5)] lg:columns-2 xl:columns-4"
+        aria-label="Improvement categories"
+      >
         {visibleCategories.map((category) => {
           const inCategory = rows.filter((r) => r.category === category);
           const panel = CATEGORY_PANEL[category];
@@ -513,7 +516,7 @@ export function ImprovementAnalysisEditor({
           return (
             <section
               key={category}
-              className={`overflow-hidden ${panel}`}
+              className={`mb-5 break-inside-avoid overflow-hidden ${panel}`}
             >
               <div className="border-b border-gray-200/80 px-4 py-3 dark:border-white/10">
                 <h2
