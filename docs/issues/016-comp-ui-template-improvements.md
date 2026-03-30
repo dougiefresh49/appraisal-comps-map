@@ -18,7 +18,7 @@ The `CompUITemplate` component works but is missing several features from the or
 
 1. Sales UI page has a template variant dropdown: "Default" (`UiTemplateSalesDefaultRange`) and "Income" (`UiTemplateSalesIncomeRange`)
 2. Template row configurations are saved to Supabase (e.g., a `comp_ui_templates` table or JSONB on `projects`) so they persist across sessions
-3. Label dropdowns source from the union of parsed data keys + a predefined list matching spreadsheet headers (ref: `docs/examples/report-data-spreasheet--html/adj vals.html`)
+3. Label dropdowns source from the union of parsed data keys + a predefined list matching spreadsheet headers (ref: `docs/report-data-spreadsheet/sheets-exported--html/adj vals.html`)
 4. Comp detail "Back" link includes the type name
 
 ## Affected Files

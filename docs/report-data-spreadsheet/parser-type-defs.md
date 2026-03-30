@@ -1,3 +1,24 @@
+# Parser Type Definitions
+
+TypeScript interfaces used when prompting Gemini to parse comp/subject documents. The parsed output matches the column headers in the Google Spreadsheet and is consumed by the [Apps Script JSON importer](https://github.com/dougiefresh49/appraisal-bot/blob/main/app-scripts/apbot-report-data/drive-importer/json-parser.js) to populate sheet tabs.
+
+**Spreadsheet tab → interface mapping:**
+
+| Interface | Target Sheet Tab |
+|-----------|-----------------|
+| `LandSaleData` | `land comps` |
+| `SaleData` | `sale comps` |
+| `RentalData` | `rental comps` |
+| `SubjectData` | `subject` |
+| `SubjectTax` | `subject-taxes` |
+| `TaxEntity` | `report-inputs` (TaxEntitiesRange) |
+| `ParcelData` | `comp-parcels` |
+| `ParcelImprovement` | `comp-parcel-improvements` |
+
+**See also:** [Apps Script project](https://github.com/dougiefresh49/appraisal-bot/tree/main/app-scripts/apbot-report-data) for the full Google Sheets automation codebase.
+
+---
+
 ```ts
 // --- UTILITY TYPES ---
 

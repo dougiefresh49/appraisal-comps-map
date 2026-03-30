@@ -2,7 +2,7 @@
 
 Use **exact** tab titles as they appear in Google Sheets. When omitting `range` is required, see **Sheet-wide formula fetch** below.
 
-For a full example of workflow output (rows, `variableName` / `value`, column-header keys, formulas as strings starting with `=`), see `docs/mcp-example-output.json` at the repo root. That file uses the **MCP / `get_execution` shape**: a one-element array `[{ "data": [...] }]`. The **webhook** returns the inner part only: `{ "data": [...] }`.
+For a full example of workflow output (rows, `variableName` / `value`, column-header keys, formulas as strings starting with `=`), see `mcp-example-output.json` in this skill folder. That file uses the **MCP / `get_execution` shape**: a one-element array `[{ "data": [...] }]`. The **webhook** returns the inner part only: `{ "data": [...] }`.
 
 ## All tabs
 
@@ -56,4 +56,4 @@ For these `sheetName` values only, **do not** send `range`; the workflow returns
 
 ## Local HTML filenames
 
-Under `docs/examples/report-data-spreasheet--html/`, each export is `{sheetName}.html` with the same spelling and spacing as the list above (e.g. `land comps.html`, `income-schedule--market.html`, `adj vals.html`).
+Under `docs/report-data-spreadsheet/sheets-exported--html/`, each export is `{sheetName}.html` with the same spelling and spacing as the list above (e.g. `land comps.html`, `income-schedule--market.html`, `adj vals.html`).
