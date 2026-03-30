@@ -12,6 +12,7 @@ export interface AddDocumentInput {
   projectId: string;
   documentType: string;
   documentLabel?: string;
+  sectionTag?: string;
   fileId?: string;
   fileName?: string;
   mimeType?: string;
@@ -35,6 +36,7 @@ export async function addDocument(
       project_id: input.projectId,
       document_type: input.documentType,
       document_label: input.documentLabel ?? null,
+      section_tag: input.sectionTag ?? null,
       file_id: input.fileId ?? null,
       file_name: input.fileName ?? null,
       mime_type: input.mimeType ?? null,

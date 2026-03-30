@@ -57,6 +57,7 @@ async function handleFormData(request: NextRequest) {
   const projectId = formData.get("projectId") as string | null;
   const documentType = formData.get("documentType") as string | null;
   const documentLabel = formData.get("documentLabel") as string | null;
+  const sectionTag = formData.get("sectionTag") as string | null;
   const file = formData.get("file") as File | null;
 
   if (!projectId || !documentType) {
@@ -80,6 +81,7 @@ async function handleFormData(request: NextRequest) {
     projectId,
     documentType,
     documentLabel: documentLabel ?? undefined,
+    sectionTag: sectionTag ?? undefined,
     fileName: file.name,
     mimeType: file.type || "application/octet-stream",
     fileBuffer,
@@ -97,6 +99,7 @@ async function handleJson(request: NextRequest) {
     projectId?: string;
     documentType?: string;
     documentLabel?: string;
+    sectionTag?: string;
     fileId?: string;
     fileName?: string;
     mimeType?: string;
@@ -139,6 +142,7 @@ async function handleJson(request: NextRequest) {
     projectId: body.projectId,
     documentType: body.documentType,
     documentLabel: body.documentLabel,
+    sectionTag: body.sectionTag,
     fileId: body.fileId,
     fileName: body.fileName,
     mimeType: body.mimeType,
