@@ -10,7 +10,7 @@
 | Database | Supabase (PostgreSQL + Realtime + Auth) |
 | Auth | Google OAuth via Supabase Auth |
 | Maps | Google Maps Platform (`@vis.gl/react-google-maps`) |
-| AI / LLM | Google Gemini (`@google/generative-ai`) |
+| AI / LLM | Google Gemini (`@google/genai`) |
 | Embeddings | Gemini `text-embedding-004` (768-d vectors) |
 | Vector Search | pgvector extension in Supabase |
 | Automation | n8n (webhook-based, being phased out) |
@@ -75,8 +75,10 @@ All persistent project data lives in Supabase PostgreSQL. See [database-schema.m
 
 | Table | Purpose |
 |-------|---------|
-| `projects` | Project metadata + subject info (JSONB) |
+| `projects` | Project metadata, `folder_structure`, `spreadsheet_id` |
+| `subject_data` | Subject core, taxes, parcels, improvements, `improvement_analysis`, FEMA, etc. (JSONB columns) |
 | `comparables` | Individual comp records (Land, Sales, Rentals) |
+| `comp_parsed_data` | AI-parsed comp payloads (`raw_data` JSONB) per comparable |
 | `maps` | Map view state (center, zoom, drawings, overlays) |
 | `map_markers` | Per-comp markers on maps (position, bubble, tail) |
 | `page_locks` | Edit locking for concurrent users |
@@ -86,22 +88,17 @@ All persistent project data lives in Supabase PostgreSQL. See [database-schema.m
 | `project_documents` | Uploaded/ingested documents + AI extraction + embeddings |
 | `knowledge_base` | Curated AI prompts/examples + embeddings |
 
-### Google Drive (via n8n)
+### Google Drive (direct API + narrow n8n)
 
 | Data | Format | Access Pattern |
 |------|--------|---------------|
-| Subject photos | Image files in Drive folder | n8n reads from Drive, processes, writes analysis to Supabase |
-| `input.json` | JSON file in Drive | App exports photo labels to Drive via n8n for Google Apps Script |
-| Comp folder contents | PDFs, images | n8n reads, parses, returns to app via webhook |
+| Subject photos | Image files in Drive folder | **Analysis:** n8n reads/processes → Supabase `photo_analyses`. **Previews / cover:** Next.js server uses Drive API with user OAuth |
+| `input.json` | JSON in subject photos folder | `exportInputJson` writes via Drive API (`uploadOrUpdateFile`) for Google Apps Script |
+| Comp folders | PDFs, images | List/metadata/download via `drive-api.ts`; parsing via `POST /api/comps/parse` (Gemini) |
 
-### Google Spreadsheet (Source of Truth for Comp Data)
+### Google Spreadsheet (legacy comp / sheet workflows)
 
-The Google Spreadsheet remains the source of truth for:
-- Raw subject data
-- Comparable sales/land/rental data and adjustments
-- Data formatting for Google Docs linking
-
-The webapp reads comp data via n8n webhooks that query the spreadsheet.
+The spreadsheet still backs **optional** n8n routes (`comps-data`, `comps-exists`). Subject property data and rich comp payloads are primarily in Supabase (`subject_data`, `comp_parsed_data`); sheet integration is shrinking as the app owns more state in Postgres.
 
 ---
 
@@ -149,6 +146,8 @@ The browser Supabase client (`src/utils/supabase/client.ts`) is used by:
 | Hook / Module | Tables Accessed |
 |---------------|----------------|
 | `useProject` | `projects`, `comparables`, `maps`, `map_markers` |
+| `useSubjectData` | `subject_data` |
+| `useCompParsedData` | `comp_parsed_data` |
 | `useProjectPhotos` | `photo_analyses` |
 | `useReportSection` | `report_sections` |
 | `usePresence` | `page_locks` + Supabase Realtime presence |
@@ -163,37 +162,42 @@ Server Supabase client (`src/utils/supabase/server.ts`) is used by:
 |--------|---------|
 | `src/server/reports/actions.ts` | Read/write `report_sections`, `report_section_history` |
 | `src/server/documents/actions.ts` | Read/write `project_documents` |
-| `src/server/photos/actions.ts` | Read `photo_analyses` |
+| `src/server/photos/actions.ts` | Read `photo_analyses`, export `input.json` to Drive, trigger n8n photo analysis |
 | `src/lib/prompt-builder.ts` | Read `knowledge_base`, `projects`, `project_documents`, `photo_analyses`, `report_sections` |
 | `src/app/api/seed/*` | Write `knowledge_base`, `report_sections` |
 
 ### What Calls n8n (Still Active)
 
-| API Route | n8n Endpoint | Purpose |
-|-----------|-------------|---------|
+| Entry point | n8n Endpoint | Purpose |
+|-------------|-------------|---------|
+| `/projects/new` (`useProjectsList`) | `/projects-new` | Client-side list of Drive project folders for the picker |
 | `POST /api/photos/process` | `/subject-photos-analyze` | Trigger photo analysis workflow |
-| `POST /api/photos` | `/subject-photos-save-input` | Export `input.json` to Drive |
-| `POST /api/comps-data` | `/comps-data` | Load comps + image map |
-| `POST /api/comps-parser` | `/comps-parser` | Parse comp folder content |
-| `POST /api/comps-folder-list` | `/comps-folder-list` | List comp subfolders |
-| `POST /api/comps-folder-details` | `/comps-folder-details` | Get comp folder details |
-| `POST /api/comps-exists` | `/comps-exists` | Check if comp exists in sheet |
-| Cover page | `/subject-photo-data` | Refresh cover photo metadata |
-| `projects/new` | `/projects-new`, `/project-data` | List/create projects from Drive |
+| `POST /api/comps-data` | `/comps-data` | Load comps + image map from Spreadsheet (legacy) |
+| `POST /api/comps-exists` | `/comps-exists` | Check if comp exists in Spreadsheet |
 
 ### What Calls Gemini Directly (No n8n)
 
 | Module | Gemini Feature | Model |
 |--------|---------------|-------|
-| `src/lib/gemini.ts` | Report generation, document extraction | `gemini-3.1-flash-lite-preview` |
+| `src/lib/gemini.ts` | Report generation, document extraction, comp parsing | `gemini-2.5-flash-lite` (see `GENERATION_MODEL` in source) |
 | `src/lib/embeddings.ts` | Text embeddings | `text-embedding-004` |
-| `src/app/api/seed/backfill-reports` | PDF section extraction | `gemini-3.1-flash-lite-preview` |
+| `src/app/api/seed/backfill-reports` | PDF section extraction | Gemini multimodal via `gemini.ts` |
 
 ### What Calls Google Drive Directly
 
 | Module | Purpose |
 |--------|---------|
+| `src/lib/drive-api.ts` | List folders, download/upload, metadata (user OAuth) |
 | `src/lib/drive-download.ts` | Download files by ID for document processing |
+| `src/lib/project-discovery.ts` | Discover project folder structure + spreadsheet candidates |
+| `src/lib/comp-parser.ts` | Download comp files and run Gemini extraction |
+| `src/lib/engagement-parser.ts` | Parse engagement letters (upload or Drive file) |
+| `src/lib/map-context.ts` | Register map screenshots as `project_documents` context |
+| `src/lib/document-prompts.ts` | Type-specific extraction prompts |
+| `src/lib/prompt-builder.ts` | Assemble report-generation context |
+| `src/lib/embeddings.ts` | Embedding generation for RAG |
+| `src/lib/supabase-queries.ts` | Shared server/client query helpers |
+| `src/lib/improvement-analysis-populate.ts` | Subject improvement analysis helpers |
 
 ---
 
@@ -216,34 +220,55 @@ Supabase Realtime is used for live collaboration between users:
 ```
 /login                          — Login page
 /projects                       — Project list
-/projects/new                   — Create project from Drive
+/projects/new                   — Create project (Drive discovery + engagement parse + Supabase)
 /restore                        — Migrate localStorage data to Supabase
 /project/seed                   — Seed tools (knowledge base, backfill)
 
 /project/[projectId]/           — Project dashboard
   ├── cover/                    — Cover page (print layout)
-  ├── neighborhood-map/         — Neighborhood map (drawing tools)
+  ├── neighborhood/           — Neighborhood overview (map banner + narrative)
+  ├── neighborhood-map/         — Full-screen neighborhood map editor
+  ├── documents/              — Document manager (upload, AI extraction)
   ├── subject/
+  │   ├── overview/             — Subject summary
+  │   ├── improvements/       — Improvements + improvement analysis editor
   │   ├── location-map/         — Subject location map
-  │   └── photos/               — Subject photos (grid, labeling, AI analysis)
+  │   ├── photos/               — Subject photos (grid, labeling, AI analysis)
+  │   ├── flood-map/            — Flood map viewer/context
+  │   ├── sketches/           — Subject sketches
+  │   └── cost-report/        — Cost report viewer
+  ├── analysis/
+  │   ├── zoning/               — Zoning narrative
+  │   ├── ownership/            — Ownership history
+  │   ├── subject-site-summary/ — Subject site summary
+  │   └── highest-best-use/     — Highest & best use
   ├── land-sales/
   │   ├── comparables/          — Land comp list
   │   ├── comparables-map/      — Land comps map
-  │   └── comps/[compId]/location-map/  — Individual land comp map
+  │   ├── ui/                   — Land comp UI template
+  │   └── comps/[compId]/       — Land comp detail (+ location-map subroute)
   ├── sales/
   │   ├── comparables/          — Sales comp list
   │   ├── comparables-map/      — Sales comps map
-  │   ├── comps/[compId]/location-map/  — Individual sales comp map
-  │   └── ui/                   — Sales UI (prototype)
-  ├── rentals/
-  │   ├── comparables/          — Rentals comp list
-  │   └── comparables-map/      — Rentals comps map
-  ├── parser/[type]/            — Comp folder parser (n8n-powered)
-  ├── reports/
-  │   ├── neighborhood/         — Neighborhood narrative
-  │   ├── zoning/               — Zoning narrative
-  │   ├── subject-site-summary/ — Subject site summary
-  │   ├── highest-best-use/     — Highest & best use
-  │   └── ownership/            — Ownership history
-  └── documents/                — Document manager (upload, AI extraction)
+  │   ├── ui/                   — Sales comp UI template
+  │   └── comps/[compId]/       — Sales comp detail (+ location-map)
+  └── rentals/
+      ├── comparables/          — Rentals comp list
+      ├── comparables-map/      — Rentals comps map
+      ├── ui/                   — Rentals comp UI template
+      └── comps/[compId]/       — Rental comp detail
 ```
+
+### Notable shared components
+
+| Component | Role |
+|-----------|------|
+| `DriveFolderBrowser` | Navigate Drive folders (multi-select in document flows) |
+| `DocumentContextPanel` | Section-scoped document drawer (`section_tag` filtering) |
+| `MapBanner` | Map image preview + link to editor |
+| `MapLockGuard` | Page lock wrapper for map editors (pattern; not all maps wired yet) |
+| `CompAddFlow` | Wizard: pick Drive folder/files → parse new comp |
+| `CompDetailPage` | Shell for comp detail routes |
+| `CompUITemplate` | Shared layout for land/sales/rentals comp UI pages |
+| `ImprovementAnalysisEditor` | Subject improvement analysis editing |
+| `ReportSectionPage` / `ReportSectionContent` | AI report sections (generate + markdown edit) |
