@@ -12,29 +12,34 @@ This document describes how data moves through the system for each major feature
 sequenceDiagram
     participant User
     participant NewProjectPage as /projects/new
-    participant N8N as n8n
+    participant Discover as POST /api/projects/discover
+    participant DriveList as POST /api/drive/list
+    participant ParseEng as POST /api/projects/parse-engagement
     participant GDrive as Google Drive
     participant Supabase
 
-    User->>NewProjectPage: Fill form / select project
-    NewProjectPage->>N8N: POST /projects-new (list Drive folders)
-    N8N->>GDrive: List project folders
-    GDrive-->>N8N: Folder list
-    N8N-->>NewProjectPage: Available projects
+    User->>NewProjectPage: Pick Drive project folder (useProjectsList → n8n /projects-new for list only)
+    NewProjectPage->>Supabase: insertProject() stub row
+    NewProjectPage->>Discover: {projectId, projectFolderId}
+    Discover->>GDrive: Walk folders + spreadsheet candidates
+    GDrive-->>Discover: folderStructure, spreadsheetId
+    Discover-->>NewProjectPage: Discovery payload
 
-    User->>NewProjectPage: Select project
-    NewProjectPage->>N8N: POST /project-data {projectFolderId}
-    N8N->>GDrive: Read project spreadsheet
-    GDrive-->>N8N: Project data JSON
-    N8N-->>NewProjectPage: Normalized project data
+    NewProjectPage->>DriveList: List engagement / subject folder files
+    DriveList->>GDrive: listFolderChildren
+    GDrive-->>NewProjectPage: File pickers populated
 
-    NewProjectPage->>Supabase: insertProject() (projects + comparables + maps + markers)
-    Supabase-->>NewProjectPage: Saved
+    User->>NewProjectPage: Confirm engagement + subject docs
+    NewProjectPage->>ParseEng: Upload or fileId
+    ParseEng->>GDrive: Optional download
+    ParseEng-->>NewProjectPage: EngagementData
+
+    NewProjectPage->>Supabase: Final insert/update (project row, comparables, maps, markers, subject_data as needed)
 ```
 
-**Data stored:** `projects`, `comparables`, `maps`, `map_markers` in Supabase.
+**Data stored:** Primarily `projects` (metadata + `folder_structure`), `comparables`, `maps`, `map_markers`, and `subject_data` as the wizard completes.
 
-**n8n dependency:** Required for project creation (reads Drive folder structure + spreadsheet data).
+**n8n dependency:** The **folder picker list** still comes from n8n `/projects-new` (`useProjectsList`). Everything after you select a folder is in-app (discover, Drive list, engagement/flood parsing, Supabase).
 
 ### Restore from localStorage
 
@@ -143,10 +148,9 @@ sequenceDiagram
 sequenceDiagram
     participant User
     participant PhotoGrid as PhotoGrid Component
-    participant API as /api/photos
+    participant API as POST /api/photos
     participant Server as photos/actions.ts
     participant Supabase
-    participant N8N as n8n
     participant GDrive as Google Drive
 
     User->>PhotoGrid: Click "Save to Drive"
@@ -154,13 +158,14 @@ sequenceDiagram
     API->>Server: exportInputJson()
     Server->>Supabase: Read photo_analyses (included, sorted)
     Supabase-->>Server: Photo list
-    Server->>N8N: POST /subject-photos-save-input {photos, projectFolderId}
-    N8N->>GDrive: Write input.json
-    N8N-->>API: Success
-    API-->>PhotoGrid: Done
+    Server->>GDrive: uploadOrUpdateFile(input.json) via Drive API
+    GDrive-->>Server: OK
+    API-->>PhotoGrid: {success}
 ```
 
 **Purpose:** The `input.json` file in Google Drive is consumed by Google Apps Script to insert images into the final Google Doc report.
+
+**n8n dependency:** None — export is fully server-side with the user’s Drive token.
 
 ---
 
@@ -272,7 +277,7 @@ sequenceDiagram
     participant GSheet as Google Spreadsheet
     participant Supabase
 
-    User->>CompsPage: Click "Refresh"
+    User->>CompsPage: (Legacy) refresh from sheet — if invoked
     CompsPage->>API: POST {projectFolderId, type}
     API->>N8N: POST /comps-data
     N8N->>GSheet: Read comp data + images
@@ -283,17 +288,17 @@ sequenceDiagram
     CompsPage->>Supabase: upsertComparable() for each comp
 ```
 
-**n8n dependency:** Required for reading comp data from Google Spreadsheet.
+**n8n dependency:** Only this spreadsheet read path. The main comp UX is Supabase-backed (`comparables` + `comp_parsed_data`).
 
-### Comp Parser
+### Comp Parser (in-app)
 
-The `/parser/[type]` page uses n8n to:
-1. List comp folders in Drive (`/comps-folder-list`)
-2. Get folder details (`/comps-folder-details`)
-3. Parse folder contents with AI (`/comps-parser`)
-4. Check for duplicates (`/comps-exists`)
+Adding or re-parsing a comp uses the **webapp**, not n8n:
 
-All parser interactions go through n8n webhooks.
+1. **Folder listing / metadata:** `POST /api/comps-folder-list` and `POST /api/comps-folder-details` → `drive-api.ts`.
+2. **AI extraction:** `POST /api/comps/parse` → `comp-parser.ts` (Drive download + Gemini) → persists to `comp_parsed_data`.
+3. **Duplicate check (optional):** `POST /api/comps-exists` → n8n (Spreadsheet query) — still n8n today.
+
+UI entry points include `CompAddFlow`, comp detail routes under `land-sales/comps/[compId]`, `sales/comps/[compId]`, and `rentals/comps/[compId]`, plus `CompUITemplate` for template-style comp pages.
 
 ---
 
@@ -332,15 +337,16 @@ flowchart TB
 
 ## Summary: n8n vs Direct
 
-| Feature | n8n | Direct (Supabase/Gemini) |
-|---------|-----|--------------------------|
-| Project creation | **Yes** (reads Drive/Spreadsheet) | |
-| Cover photo data | **Yes** (reads Drive) | |
-| Photo analysis | **Yes** (Drive → Gemini → Supabase) | |
-| Photo export (input.json) | **Yes** (writes to Drive) | |
-| Comp data refresh | **Yes** (reads Spreadsheet) | |
-| Comp parser | **Yes** (Drive → AI) | |
-| Comp duplicate check | **Yes** (queries Spreadsheet) | |
+| Feature | n8n | Direct (Supabase/Gemini/Drive) |
+|---------|-----|----------------------------------|
+| Project creation | **Picker list only** (`/projects-new`) | **Direct** after selection (discover + Drive list + engagement parse) |
+| Cover photo data | | **Direct** (`POST /api/cover-data`) |
+| Photo analysis | **Yes** (`/subject-photos-analyze`) | |
+| Photo export (input.json) | | **Direct** (`exportInputJson` → Drive API) |
+| Comp data refresh | **Yes** (`/comps-data`) | |
+| Comp parser | | **Direct** (`POST /api/comps/parse`) |
+| Comp folder list/details | | **Direct** (Drive API) |
+| Comp duplicate check | **Yes** (`/comps-exists`) | |
 | Report generation | | **Direct** (Gemini + Supabase) |
 | Document processing | | **Direct** (upload/Drive → Gemini → Supabase) |
 | Seed/backfill | | **Direct** (local files → Gemini → Supabase) |
