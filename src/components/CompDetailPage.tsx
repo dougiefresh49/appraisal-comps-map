@@ -266,6 +266,20 @@ function sectionsForType(compType: ComparableType): SectionDef[] {
   }
 }
 
+/** Section tag for project_documents (e.g. sales-comp-1). */
+function compSectionTag(
+  compType: ComparableType,
+  displayNumber: string,
+): string {
+  const typeSlug =
+    compType === "Land"
+      ? "land"
+      : compType === "Sales"
+        ? "sales"
+        : "rentals";
+  return `${typeSlug}-comp-${displayNumber}`;
+}
+
 function fieldToInputString(
   data: Record<string, unknown>,
   key: string,
@@ -637,6 +651,8 @@ export function CompDetailPage({
         sectionKey="comp-detail"
         isOpen={isDocPanelOpen}
         onClose={() => setIsDocPanelOpen(false)}
+        compFolderId={compFolderId}
+        sectionTag={compSectionTag(compType, displayNumber)}
       />
 
       {showParseFlow && (
