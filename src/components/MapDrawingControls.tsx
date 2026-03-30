@@ -13,6 +13,7 @@ interface MapDrawingControlsProps {
   circles: Circle[];
   onClearCircles: () => void;
   hideUI: boolean;
+  readOnly?: boolean;
 }
 
 export function MapDrawingControls({
@@ -27,9 +28,10 @@ export function MapDrawingControls({
   circles,
   onClearCircles,
   hideUI,
+  readOnly = false,
   isGisOverlayActive = false,
 }: MapDrawingControlsProps & { isGisOverlayActive?: boolean }) {
-  if (hideUI) return null;
+  if (hideUI || readOnly) return null;
 
   return (
     <div className={`absolute left-1/2 z-10 flex -translate-x-1/2 flex-col gap-2 ${isGisOverlayActive ? "bottom-8" : "top-4"}`}>

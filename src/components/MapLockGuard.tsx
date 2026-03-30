@@ -20,12 +20,22 @@ function formatLockerLabel(userId: string): string {
 export interface MapLockGuardProps {
   projectId: string;
   pageKey: string;
-  children: React.ReactNode;
+  /** Fires when map edit lock state changes (view-only vs editing). */
+  onReadOnlyChange?: (readOnly: boolean) => void;
+  className?: string;
+  /** Applied to the wrapper around `children` (default: min-h-0 flex-1). */
+  bodyClassName?: string;
+  children:
+    | React.ReactNode
+    | ((ctx: { readOnly: boolean }) => React.ReactNode);
 }
 
 export function MapLockGuard({
   projectId,
   pageKey,
+  onReadOnlyChange,
+  className,
+  bodyClassName,
   children,
 }: MapLockGuardProps) {
   const [lock, setLock] = useState<PageLockRow | null>(null);
@@ -190,13 +200,23 @@ export function MapLockGuard({
   }, [projectId, pageKey]);
 
   const blockInteraction = !isEditing || lockedByOther;
+  const readOnly = blockInteraction;
+
+  useEffect(() => {
+    onReadOnlyChange?.(readOnly);
+  }, [readOnly, onReadOnlyChange]);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div
+      className={
+        className ??
+        "relative flex min-h-0 flex-1 flex-col"
+      }
+    >
       {lockedByOther && lock ? (
         <div
           role="status"
-          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
         >
           Map is being edited by {formatLockerLabel(lock.locked_by)}. Waiting
           for them to finish…
@@ -204,8 +224,8 @@ export function MapLockGuard({
       ) : null}
 
       {!lockedByOther && !isEditing ? (
-        <div className="flex items-center justify-end gap-2 border-b border-gray-200 bg-gray-50 px-4 py-2">
-          <span className="text-xs text-gray-500">View only</span>
+        <div className="flex items-center justify-end gap-2 border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+          <span className="text-xs text-gray-500 dark:text-gray-400">View only</span>
           <button
             type="button"
             disabled={busy || !currentUserId}
@@ -218,8 +238,8 @@ export function MapLockGuard({
       ) : null}
 
       {isEditing && !lockedByOther ? (
-        <div className="flex items-center justify-end gap-2 border-b border-gray-200 bg-green-50 px-4 py-2">
-          <span className="text-xs font-medium text-green-900">Editing</span>
+        <div className="flex items-center justify-end gap-2 border-b border-gray-200 bg-green-50 px-4 py-2 dark:border-green-900/40 dark:bg-green-950/30">
+          <span className="text-xs font-medium text-green-900 dark:text-green-100">Editing</span>
           <button
             type="button"
             disabled={busy}
@@ -238,10 +258,9 @@ export function MapLockGuard({
       ) : null}
 
       <div
-        className={`min-h-0 flex-1 ${blockInteraction ? "opacity-95" : ""}`}
-        inert={blockInteraction ? true : undefined}
+        className={`${bodyClassName ?? "min-h-0 flex-1"} ${blockInteraction ? "opacity-95" : ""}`}
       >
-        {children}
+        {typeof children === "function" ? children({ readOnly }) : children}
       </div>
     </div>
   );

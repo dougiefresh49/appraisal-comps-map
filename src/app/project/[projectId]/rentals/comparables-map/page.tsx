@@ -9,6 +9,7 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
 import {
   normalizeProjectData,
@@ -125,6 +126,7 @@ export default function RentalsComparablesMapPage({
     lng: number;
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
 
   const applyProjectState = useCallback(
     (projectData?: ProjectData, typeOverride?: ComparableType) => {
@@ -453,7 +455,15 @@ export default function RentalsComparablesMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full flex-col">
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="comparables-map-rentals"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
       <ComparablesPanel
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
@@ -490,9 +500,10 @@ export default function RentalsComparablesMapPage({
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
         // No Land Map link
         onOpenLandMap={undefined}
+        readOnly={mapReadOnly}
       />
 
-      <div className="relative flex-1">
+      <div className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -502,19 +513,23 @@ export default function RentalsComparablesMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
+            gestureHandling={readOnly ? "none" : "auto"}
             onCenterChanged={(e) => {
+              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
             }}
             onZoomChanged={(e) => {
+              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
               }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -559,8 +574,9 @@ export default function RentalsComparablesMapPage({
             {subjectMarkerPosition && !hideUI && (
               <AdvancedMarker
                 position={subjectMarkerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -584,7 +600,9 @@ export default function RentalsComparablesMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -612,6 +630,7 @@ export default function RentalsComparablesMapPage({
                 tailDirection="right"
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -635,6 +654,7 @@ export default function RentalsComparablesMapPage({
                 isTailPinned={comp.isTailPinned}
                 pinnedTailTipPosition={comp.pinnedTailTipPosition}
                 color="#9333ea"
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -644,6 +664,9 @@ export default function RentalsComparablesMapPage({
           size={documentFrameSize}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }
