@@ -453,7 +453,7 @@ export function ImprovementAnalysisEditor({
 
   return (
     <div className="space-y-5">
-      {/* Sticky toolbar — frosted card stays visible while scrolling long forms */}
+      {/* Sticky toolbar — scrollport is project main (see layout min-h-0 + overflow-y-auto) */}
       <div className="sticky top-14 z-30 md:top-0">
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200/90 bg-white/85 px-3 py-2.5 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90 dark:ring-white/5 sm:px-4 sm:py-3">
           <CategoryFilterDropdown
@@ -502,8 +502,11 @@ export function ImprovementAnalysisEditor({
         </div>
       </div>
 
-      {/* Grouped sections — two columns on large screens */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 lg:items-start">
+      {/* Masonry-style columns: balances short cards under tall ones; xl = up to 4 columns */}
+      <div
+        className="columns-1 [column-gap:theme(spacing.5)] lg:columns-2 xl:columns-4"
+        aria-label="Improvement categories"
+      >
         {visibleCategories.map((category) => {
           const inCategory = rows.filter((r) => r.category === category);
           const panel = CATEGORY_PANEL[category];
@@ -513,7 +516,7 @@ export function ImprovementAnalysisEditor({
           return (
             <section
               key={category}
-              className={`overflow-hidden ${panel}`}
+              className={`mb-5 break-inside-avoid overflow-hidden ${panel}`}
             >
               <div className="border-b border-gray-200/80 px-4 py-3 dark:border-white/10">
                 <h2
