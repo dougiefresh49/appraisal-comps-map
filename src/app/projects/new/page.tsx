@@ -1,5 +1,6 @@
 "use client";
 
+import { addDays, format, isValid, parse, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 import {
@@ -271,7 +272,7 @@ export default function NewProjectPage() {
         merged = mergeEngagementData(merged, result.data);
       }
 
-      setEngagementData(merged);
+      setEngagementData(maybeFillReportDueDate(merged));
     } catch (err) {
       console.error("Engagement parse error:", err);
       setError(err instanceof Error ? err.message : "Failed to parse engagement document");
@@ -754,30 +755,46 @@ export default function NewProjectPage() {
                       />
                     </div>
                   ))}
-                  {(
-                    [
-                      ["Effective Date", "effectiveDate"],
-                      ["Due Date", "reportDueDate"],
-                    ] as [string, "effectiveDate" | "reportDueDate"][]
-                  ).map(([label, key]) => (
-                    <div key={key}>
-                      <label className="mb-1 block text-xs text-gray-500">
-                        {label}
-                      </label>
-                      <input
-                        type="date"
-                        value={toDateInputValue(engagementData[key])}
-                        onChange={(e) =>
-                          setEngagementData((prev) =>
-                            prev
-                              ? { ...prev, [key]: fromDateInputValue(e.target.value) }
-                              : prev,
-                          )
-                        }
-                        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  ))}
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">
+                      Effective Date
+                    </label>
+                    <input
+                      type="date"
+                      value={toDateInputValue(engagementData.effectiveDate)}
+                      onChange={(e) => {
+                        const nextEffective = fromDateInputValue(e.target.value);
+                        setEngagementData((prev) => {
+                          if (!prev) return prev;
+                          return maybeFillReportDueDate({
+                            ...prev,
+                            effectiveDate: nextEffective,
+                          });
+                        });
+                      }}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={toDateInputValue(engagementData.reportDueDate)}
+                      onChange={(e) =>
+                        setEngagementData((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                reportDueDate: fromDateInputValue(e.target.value),
+                              }
+                            : prev,
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1178,31 +1195,69 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
   return "other";
 }
 
-/** Convert a stored MM/DD/YYYY string to the YYYY-MM-DD format required by <input type="date">. */
+const DATE_PARSE_REF = new Date(2000, 0, 1);
+
+/**
+ * Parse engagement effective/due strings (ISO, MM/DD/YYYY, long-form English) to a local calendar Date.
+ * Returns null if the value is empty or not a real calendar date (e.g. Gemini "TBD" prose).
+ */
+function parseEngagementDateToDate(value: string): Date | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const d = parse(trimmed, "yyyy-MM-dd", DATE_PARSE_REF);
+    return isValid(d) ? d : null;
+  }
+
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+    const d = parse(trimmed, "M/d/yyyy", DATE_PARSE_REF);
+    return isValid(d) ? d : null;
+  }
+
+  const iso = parseISO(trimmed);
+  if (isValid(iso)) return iso;
+
+  for (const fmt of ["MMMM d, yyyy", "MMM d, yyyy"] as const) {
+    const d = parse(trimmed, fmt, DATE_PARSE_REF);
+    if (isValid(d)) return d;
+  }
+
+  return null;
+}
+
+function reportDueDateIsUnset(raw: string): boolean {
+  const d = parseEngagementDateToDate(raw);
+  return d === null;
+}
+
+/** Convert a stored date string to the YYYY-MM-DD format required by <input type="date">. */
 function toDateInputValue(value: string | undefined): string {
-  if (!value) return "";
-  // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  // MM/DD/YYYY → YYYY-MM-DD
-  const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
-  if (mmddyyyy) {
-    const [, mm, dd, yyyy] = mmddyyyy;
-    return `${yyyy}-${mm!.padStart(2, "0")}-${dd!.padStart(2, "0")}`;
-  }
-  // Attempt generic parse as a last resort
-  const parsed = new Date(value);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-  return "";
+  if (!value?.trim()) return "";
+  const d = parseEngagementDateToDate(value);
+  return d ? format(d, "yyyy-MM-dd") : "";
 }
 
 /** Convert the YYYY-MM-DD value from <input type="date"> to MM/DD/YYYY for storage. */
 function fromDateInputValue(value: string): string {
   if (!value) return "";
-  const [yyyy, mm, dd] = value.split("-");
-  if (!yyyy || !mm || !dd) return value;
-  return `${mm}/${dd}/${yyyy}`;
+  const d = parse(value, "yyyy-MM-dd", DATE_PARSE_REF);
+  return isValid(d) ? format(d, "MM/dd/yyyy") : "";
+}
+
+const REPORT_DUE_DAYS_AFTER_EFFECTIVE = 21;
+
+/** When due date is empty or not parseable, and effective date parses, set due date to effective + 21 local calendar days. */
+function maybeFillReportDueDate(data: EngagementData): EngagementData {
+  const effective = parseEngagementDateToDate(data.effectiveDate);
+  if (!effective) return data;
+  if (!reportDueDateIsUnset(data.reportDueDate)) return data;
+
+  const due = addDays(effective, REPORT_DUE_DAYS_AFTER_EFFECTIVE);
+  return {
+    ...data,
+    reportDueDate: format(due, "MM/dd/yyyy"),
+  };
 }
 
 /** Best-effort extraction of city, state, zip from a freeform US address string. */
