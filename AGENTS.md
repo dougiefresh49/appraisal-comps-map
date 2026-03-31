@@ -81,7 +81,7 @@ supabase/
   migrations/             # SQL migration files (001-016)
 
 docs/
-  issues/                 # Open issue tracker (016-018)
+  issues/                 # Open issue tracker (017-034)
   product/                # Architecture docs, API reference, n8n deps
   report-data-spreadsheet/
     parser-type-defs.md   # TypeScript interfaces for Gemini parsing + Apps Script importer
@@ -178,20 +178,21 @@ See `.cursor/skills/n8n-appraisal-sheet-formulas/reference.md` for the full shee
 | `docs/report-data-spreadsheet/sheets-exported--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
 | `docs/cost-report-examples/` | SwiftEstimator cost report HTML | Building the cost report viewer page |
 | `docs/n8n/workflows/` | Exported n8n workflow JSON files | Understanding legacy n8n flows being replaced |
-| `docs/issues/` | Open issue tracker (016-018) with priorities, complexity, dependencies | Picking work items |
+| `docs/issues/` | Open issue tracker (017-034) with priorities, complexity, dependencies | Picking work items |
 | `docs/product/` | Architecture overview, data flow, API reference, n8n dependencies | Understanding system architecture |
 | [appraisal-bot Apps Scripts](https://github.com/dougiefresh49/appraisal-bot/tree/main/app-scripts/apbot-report-data) | Google Sheets automation: JSON importer, UI templates, comp editor, adjustments, reconciliation | Understanding how parsed data flows into the spreadsheet, template logic, named range handling |
 
 ## Open Issues
 
-See `docs/issues/000-index.md` for the full list (3 remaining):
+See `docs/issues/000-index.md` for the full list, parallelization guide, and wave groupings.
 
-**Medium tasks:**
-- 016: Comp UI templates -- sales variants, persistence, label sources
-- 017: Analysis pages -- generation context controls + visual polish
+**Wave 1 -- Critical / onboarding:** 022 (comp_parsed_data UNIQUE + upsert), 023 (onboarding `section_tag`), 024 (subject merge from notes/CAD/address), 025 (sketches in onboarding)
 
-**High complexity:**
-- 018: Photo analysis -- move from n8n to webapp
+**Wave 2 -- Data quality:** 026 (parsing prompts + gemini-3.1-pro-preview), 027 (`comp_parcels` / `comp_parcel_improvements`), 028 (calculated fields), 029 (parser type defs vs gem prompt sync), 034 (update all Gemini models to 3.x)
+
+**Wave 3 -- Features:** 030 (comp summary tables w/ dropdown labels + add/remove rows), 031 (comp UI redesign; absorbs former 016), 032 (past report vectorization: narratives + comp data + spreadsheet import), 033 (per-section push to spreadsheet via Sheets API)
+
+**Ongoing (pre-roadmap track):** 017 (analysis pages -- context + polish), 018 (photo analysis -- remove n8n)
 
 ## n8n Status
 
