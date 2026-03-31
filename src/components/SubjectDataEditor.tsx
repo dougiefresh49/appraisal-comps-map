@@ -7,6 +7,7 @@ import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
+import { acToSf, sfToAc } from "~/lib/calculated-fields";
 
 interface SubjectDataEditorProps {
   projectId: string;
@@ -290,17 +291,27 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               label="Land Size (AC)"
               type="number"
               value={core["Land Size (AC)"]}
-              onChange={(v) =>
-                updateCore("Land Size (AC)", v ? Number(v) : null)
-              }
+              onChange={(v) => {
+                const ac = v ? Number(v) : null;
+                updateCore("Land Size (AC)", ac);
+                const computedSf = acToSf(ac);
+                if (computedSf != null) {
+                  updateCore("Land Size (SF)", computedSf);
+                }
+              }}
             />
             <FormField
               label="Land Size (SF)"
               type="number"
               value={core["Land Size (SF)"]}
-              onChange={(v) =>
-                updateCore("Land Size (SF)", v ? Number(v) : null)
-              }
+              onChange={(v) => {
+                const sf = v ? Number(v) : null;
+                updateCore("Land Size (SF)", sf);
+                const computedAc = sfToAc(sf);
+                if (computedAc != null) {
+                  updateCore("Land Size (AC)", Math.round(computedAc * 1000) / 1000);
+                }
+              }}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">

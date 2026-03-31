@@ -154,12 +154,16 @@ export function ReportSectionContent({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            {title}
+          </h1>
           {description ? (
-            <p className="text-sm text-gray-500">{description}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {description}
+            </p>
           ) : null}
         </div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 dark:text-gray-400">
           {isLoading
             ? "Loading..."
             : isSaving
@@ -190,12 +194,14 @@ export function ReportSectionContent({
       ) : null}
 
       {!isBusy && !hasContent ? (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
-          <p className="mb-3 text-sm text-gray-600">
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center dark:border-gray-600 dark:bg-gray-900/80">
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
             No content found for this section.
           </p>
           {emptyStateNote ? (
-            <p className="mb-3 text-xs text-gray-500">{emptyStateNote}</p>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              {emptyStateNote}
+            </p>
           ) : null}
           <button
             type="button"

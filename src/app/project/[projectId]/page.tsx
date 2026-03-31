@@ -210,7 +210,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                     ["Zoning", subjectCore.Zoning],
                     ["Year Built", subjectCore["Year Built"]],
                     ["Land Size (AC)", subjectCore["Land Size (AC)"]],
-                    ["Land Size (SF)", subjectCore["Land Size (SF)"]],
+                    ["Land Size (SF)", subjectCore["Land Size (SF)"] ?? (typeof subjectCore["Land Size (AC)"] === "number" ? subjectCore["Land Size (AC)"] * 43560 : null)],
                     ["Building Size (SF)", subjectCore["Building Size (SF)"]],
                     ["Condition", subjectCore.Condition],
                     ["Construction", subjectCore.Construction],

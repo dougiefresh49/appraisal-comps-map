@@ -1,6 +1,6 @@
 import { GoogleGenAI, type Part } from "@google/genai";
 
-const GENERATION_MODEL = "gemini-2.5-flash-lite";
+const GENERATION_MODEL = "gemini-3.1-flash-lite-preview";
 
 let ai: GoogleGenAI | null = null;
 

@@ -2,7 +2,7 @@ import "server-only";
 
 import { GoogleGenAI } from "@google/genai";
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.1-flash-lite-preview";
 
 export interface EngagementData {
   clientName: string;
