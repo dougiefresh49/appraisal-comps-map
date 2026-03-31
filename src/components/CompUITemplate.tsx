@@ -20,6 +20,7 @@ import type { Comparable } from "~/utils/projectStore";
 export type CompUITemplateType = "Land" | "Sales" | "Rentals";
 export type SalesVariant = "default" | "income";
 type TemplateKey = "land" | "sales" | "salesIncome" | "rentals";
+type DbTemplateType = "DEFAULT" | "INCOME";
 
 export interface CompTemplateRow {
   label: string;
@@ -32,8 +33,6 @@ export interface CompTemplateSection {
   rows: CompTemplateRow[];
 }
 
-type TemplateStore = Partial<Record<TemplateKey, CompTemplateSection[]>>;
-
 // ============================================================
 // Helpers
 // ============================================================
@@ -45,6 +44,10 @@ function templateKeyForType(
   if (compType === "Land") return "land";
   if (compType === "Rentals") return "rentals";
   return variant === "income" ? "salesIncome" : "sales";
+}
+
+function variantToDbType(variant: SalesVariant): DbTemplateType {
+  return variant === "income" ? "INCOME" : "DEFAULT";
 }
 
 function titleForCompType(compType: CompUITemplateType): string {
@@ -322,35 +325,63 @@ function useCompsParsedDataBatch(compIds: string[]) {
 }
 
 // ============================================================
-// Hook: load/save comp UI templates from projects table
+// Hook: load/save comp UI templates from comp_ui_templates table
 // ============================================================
 
-function useCompTemplates(projectId: string) {
-  const [store, setStore] = useState<TemplateStore>({});
+function useCompTemplates(
+  projectId: string,
+  compType: CompUITemplateType,
+  templateType: DbTemplateType,
+) {
+  const [sections, setSections] = useState<CompTemplateSection[] | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoaded(false);
+    setSections(null);
 
     async function load() {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("projects")
-        .select("comp_ui_templates")
-        .eq("id", projectId)
-        .single();
+
+      // 1. Try project-specific row first
+      const { data: projectRow, error: projectError } = await supabase
+        .from("comp_ui_templates")
+        .select("content")
+        .eq("project_id", projectId)
+        .eq("comp_type", compType)
+        .eq("template_type", templateType)
+        .maybeSingle();
 
       if (cancelled) return;
-      if (error) {
-        console.error("Failed to load comp_ui_templates", error);
+
+      if (projectError) {
+        console.error("Failed to load project comp_ui_template", projectError);
+      }
+
+      if (projectRow?.content) {
+        setSections(projectRow.content as CompTemplateSection[]);
         setIsLoaded(true);
         return;
       }
 
-      const raw = (data as Record<string, unknown> | null)
-        ?.comp_ui_templates;
-      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-        setStore(raw as TemplateStore);
+      // 2. Fall back to global default (project_id IS NULL)
+      const { data: defaultRow, error: defaultError } = await supabase
+        .from("comp_ui_templates")
+        .select("content")
+        .is("project_id", null)
+        .eq("comp_type", compType)
+        .eq("template_type", templateType)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (defaultError) {
+        console.error("Failed to load default comp_ui_template", defaultError);
+      }
+
+      if (defaultRow?.content) {
+        setSections(defaultRow.content as CompTemplateSection[]);
       }
       setIsLoaded(true);
     }
@@ -359,28 +390,33 @@ function useCompTemplates(projectId: string) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, compType, templateType]);
 
   const saveTemplate = useCallback(
-    async (key: TemplateKey, sections: CompTemplateSection[]) => {
-      setStore((prev) => {
-        const updated = { ...prev, [key]: sections };
+    async (newSections: CompTemplateSection[]) => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("comp_ui_templates")
+        .upsert(
+          {
+            project_id: projectId,
+            comp_type: compType,
+            template_type: templateType,
+            content: newSections,
+          },
+          { onConflict: "project_id,comp_type,template_type" },
+        );
 
-        void (async () => {
-          const supabase = createClient();
-          await supabase
-            .from("projects")
-            .update({ comp_ui_templates: updated })
-            .eq("id", projectId);
-        })();
-
-        return updated;
-      });
+      if (error) {
+        console.error("Failed to upsert comp_ui_template", error);
+        throw error;
+      }
+      setSections(newSections);
     },
-    [projectId],
+    [projectId, compType, templateType],
   );
 
-  return { store, isLoaded, saveTemplate };
+  return { sections, isLoaded, saveTemplate };
 }
 
 // ============================================================
@@ -744,8 +780,10 @@ export function CompUITemplate({
   const printRef = useRef<HTMLDivElement>(null);
 
   const templateKey = templateKeyForType(compType, salesVariant);
-  const { store, isLoaded: templatesLoaded, saveTemplate } =
-    useCompTemplates(projectId);
+  const dbTemplateType = variantToDbType(salesVariant);
+
+  const { sections: loadedSections, isLoaded: templatesLoaded, saveTemplate } =
+    useCompTemplates(projectId, compType, dbTemplateType);
 
   const comparables = useMemo(() => {
     if (!project) return [];
@@ -759,8 +797,8 @@ export function CompUITemplate({
 
   const sections = useMemo(() => {
     if (!templatesLoaded) return getDefaultSections(templateKey);
-    return store[templateKey] ?? getDefaultSections(templateKey);
-  }, [templatesLoaded, store, templateKey]);
+    return loadedSections ?? getDefaultSections(templateKey);
+  }, [templatesLoaded, loadedSections, templateKey]);
 
   const availableKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -801,14 +839,14 @@ export function CompUITemplate({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await saveTemplate(templateKey, editSections);
+      await saveTemplate(editSections);
       setEditMode(false);
     } catch (err) {
       console.error("Failed to save template", err);
     } finally {
       setSaving(false);
     }
-  }, [saveTemplate, templateKey, editSections]);
+  }, [saveTemplate, editSections]);
 
   const handleCopy = useCallback(async () => {
     const el = printRef.current;
