@@ -271,7 +271,7 @@ export default function NewProjectPage() {
         merged = mergeEngagementData(merged, result.data);
       }
 
-      setEngagementData(merged);
+      setEngagementData(maybeFillReportDueDate(merged));
     } catch (err) {
       console.error("Engagement parse error:", err);
       setError(err instanceof Error ? err.message : "Failed to parse engagement document");
@@ -754,30 +754,46 @@ export default function NewProjectPage() {
                       />
                     </div>
                   ))}
-                  {(
-                    [
-                      ["Effective Date", "effectiveDate"],
-                      ["Due Date", "reportDueDate"],
-                    ] as [string, "effectiveDate" | "reportDueDate"][]
-                  ).map(([label, key]) => (
-                    <div key={key}>
-                      <label className="mb-1 block text-xs text-gray-500">
-                        {label}
-                      </label>
-                      <input
-                        type="date"
-                        value={toDateInputValue(engagementData[key])}
-                        onChange={(e) =>
-                          setEngagementData((prev) =>
-                            prev
-                              ? { ...prev, [key]: fromDateInputValue(e.target.value) }
-                              : prev,
-                          )
-                        }
-                        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  ))}
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">
+                      Effective Date
+                    </label>
+                    <input
+                      type="date"
+                      value={toDateInputValue(engagementData.effectiveDate)}
+                      onChange={(e) => {
+                        const nextEffective = fromDateInputValue(e.target.value);
+                        setEngagementData((prev) => {
+                          if (!prev) return prev;
+                          return maybeFillReportDueDate({
+                            ...prev,
+                            effectiveDate: nextEffective,
+                          });
+                        });
+                      }}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={toDateInputValue(engagementData.reportDueDate)}
+                      onChange={(e) =>
+                        setEngagementData((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                reportDueDate: fromDateInputValue(e.target.value),
+                              }
+                            : prev,
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1203,6 +1219,36 @@ function fromDateInputValue(value: string): string {
   const [yyyy, mm, dd] = value.split("-");
   if (!yyyy || !mm || !dd) return value;
   return `${mm}/${dd}/${yyyy}`;
+}
+
+const REPORT_DUE_DAYS_AFTER_EFFECTIVE = 21;
+
+/** When due date is empty and effective date parses, set due date to effective + 21 days (calendar days, local). */
+function maybeFillReportDueDate(data: EngagementData): EngagementData {
+  const effectiveTrimmed = data.effectiveDate.trim();
+  const dueEmpty = !data.reportDueDate.trim();
+  if (!effectiveTrimmed || !dueEmpty) return data;
+
+  const iso = toDateInputValue(effectiveTrimmed);
+  if (!iso) return data;
+
+  const parts = iso.split("-").map((s) => Number(s));
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (y === undefined || m === undefined || d === undefined) return data;
+
+  const base = new Date(y, m - 1, d);
+  if (isNaN(base.getTime())) return data;
+
+  base.setDate(base.getDate() + REPORT_DUE_DAYS_AFTER_EFFECTIVE);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, "0");
+  const dd = String(base.getDate()).padStart(2, "0");
+  return {
+    ...data,
+    reportDueDate: fromDateInputValue(`${yyyy}-${mm}-${dd}`),
+  };
 }
 
 /** Best-effort extraction of city, state, zip from a freeform US address string. */
