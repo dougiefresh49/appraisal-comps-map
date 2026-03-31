@@ -23,6 +23,8 @@ Issues **001--021** have been resolved and their documents deleted.
 | 029 | Type definition sync (gem prompt vs `parser-type-defs.md`) | Medium | Low | None |
 | 034 | Update Gemini models across codebase | High | Low | None |
 | 035 | Auto-populate due date (effective date + 21 days) | Low | Low | None |
+| 036 | Move comp UI templates to dedicated table | High | Medium | None |
+| 037 | Persist comp summary table config to DB | High | Low | 036 |
 | 030 | Comp summary tables (land/sales summary charts) | Medium | Medium | 027, 028 |
 | 031 | Comp UI page redesign (absorbs 016) | Medium | Medium | 028 |
 | 032 | Past report vectorization and comp reuse | Medium | Medium | None |
