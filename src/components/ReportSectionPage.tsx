@@ -39,21 +39,24 @@ export function ReportSectionPage({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           {projectName ? (
             <>
-              Project: <span className="font-semibold">{projectName}</span>
+              Project:{" "}
+              <span className="font-semibold text-gray-800 dark:text-gray-200">
+                {projectName}
+              </span>
             </>
           ) : (
             "Project not selected"
           )}
         </div>
         {projectFolderId ? (
-          <span className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+          <span className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">
             Folder ID linked
           </span>
         ) : (
-          <span className="rounded-md bg-amber-100 px-2 py-1 text-xs text-amber-800">
+          <span className="rounded-md bg-amber-100 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
             Folder ID missing
           </span>
         )}

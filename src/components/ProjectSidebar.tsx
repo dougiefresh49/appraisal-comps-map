@@ -174,6 +174,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             <Link href={`${p}/land-sales/comparables`} className={linkClass(`${p}/land-sales/comparables`)}>Comps</Link>
             {renderCompSublinks(landComps, "land-sales")}
             <Link href={`${p}/land-sales/comparables-map`} className={linkClass(`${p}/land-sales/comparables-map`)}>Map</Link>
+            <Link href={`${p}/land-sales/summary`} className={linkClass(`${p}/land-sales/summary`)}>Summary</Link>
             <Link href={`${p}/land-sales/ui`} className={linkClass(`${p}/land-sales/ui`)}>Comp UI</Link>
           </div>
         )}
@@ -190,6 +191,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             <Link href={`${p}/sales/comparables`} className={linkClass(`${p}/sales/comparables`)}>Comps</Link>
             {renderCompSublinks(salesComps, "sales")}
             <Link href={`${p}/sales/comparables-map`} className={linkClass(`${p}/sales/comparables-map`)}>Map</Link>
+            <Link href={`${p}/sales/summary`} className={linkClass(`${p}/sales/summary`)}>Summary</Link>
             <Link href={`${p}/sales/ui`} className={linkClass(`${p}/sales/ui`)}>Comp UI</Link>
           </div>
         )}
@@ -206,6 +208,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             <Link href={`${p}/rentals/comparables`} className={linkClass(`${p}/rentals/comparables`)}>Comps</Link>
             {renderCompSublinks(rentalComps, "rentals")}
             <Link href={`${p}/rentals/comparables-map`} className={linkClass(`${p}/rentals/comparables-map`)}>Map</Link>
+            <Link href={`${p}/rentals/summary`} className={linkClass(`${p}/rentals/summary`)}>Summary</Link>
             <Link href={`${p}/rentals/ui`} className={linkClass(`${p}/rentals/ui`)}>Comp UI</Link>
           </div>
         )}

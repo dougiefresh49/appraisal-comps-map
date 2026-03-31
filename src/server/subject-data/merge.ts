@@ -61,6 +61,11 @@ export async function mergeDocumentIntoSubjectData(
     p_patch: cleanPatch,
   });
 
+  if (!error) {
+    await backfillAddressParts(projectId, supabase);
+    return;
+  }
+
   if (error) {
     console.error("[mergeDocumentIntoSubjectData] rpc merge_subject_core failed:", error);
 
@@ -94,6 +99,77 @@ export async function mergeDocumentIntoSubjectData(
       console.error("[mergeDocumentIntoSubjectData] fallback upsert failed:", upsertError);
     }
   }
+
+  await backfillAddressParts(projectId, supabase);
+}
+
+/**
+ * If Address is set but City/State/Zip are empty, attempt to parse them out.
+ */
+async function backfillAddressParts(
+  projectId: string,
+  supabase: SupabaseClient,
+): Promise<void> {
+  const { data } = await supabase
+    .from("subject_data")
+    .select("core")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  const core = (data?.core ?? {}) as Record<string, unknown>;
+  const address = typeof core.Address === "string" ? core.Address : "";
+  if (!address) return;
+
+  const hasCity = core.City != null && core.City !== "";
+  const hasState = core.State != null && core.State !== "";
+  const hasZip = core.Zip != null && core.Zip !== "";
+
+  if (hasCity && hasState && hasZip) return;
+
+  const parts = parseAddressComponents(address);
+  const backfill: Record<string, unknown> = {};
+  if (!hasCity && parts.city) backfill.City = parts.city;
+  if (!hasState && parts.state) backfill.State = parts.state;
+  if (!hasZip && parts.zip) backfill.Zip = parts.zip;
+
+  if (Object.keys(backfill).length === 0) return;
+
+  const { error: rpcErr } = await supabase.rpc("merge_subject_core", {
+    p_project_id: projectId,
+    p_patch: backfill,
+  });
+
+  if (rpcErr) {
+    const merged = { ...core, ...backfill };
+    await supabase
+      .from("subject_data")
+      .upsert(
+        { project_id: projectId, core: merged, updated_at: new Date().toISOString() },
+        { onConflict: "project_id" },
+      );
+  }
+}
+
+function parseAddressComponents(address: string): {
+  city?: string;
+  state?: string;
+  zip?: string;
+} {
+  if (!address) return {};
+
+  const p1 = /,\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p1) return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
+
+  const p2 = /\s+(\w[\w\s]*?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p2) return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
+
+  const p3 = /,\s*([^,]+),\s*([A-Z]{2})\s*$/i.exec(address);
+  if (p3) return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
+
+  const p4 = /\s+(\w[\w\s]*?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p4) return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
+
+  return {};
 }
 
 /**
@@ -168,9 +244,16 @@ type CorePatch = Record<string, unknown>;
 
 const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
   deed: (d) => ({
-    Legal: str(d.legal_description),
     Address: str(d.property_address),
     instrumentNumber: str(d.instrument_number),
+    County: str(d.county),
+    purchasePrice: str(d.consideration),
+    purchaseDate: str(d.recording_date),
+    loanAmount: str(d.loan_amount),
+    deedType: str(d.deed_type),
+    grantor: str(d.grantor),
+    grantee: str(d.grantee),
+    ownershipSummary: str(d.ownership_summary),
   }),
 
   cad: (d) => ({
@@ -179,11 +262,56 @@ const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
     "Land Size (AC)": num(d.lot_area_acres),
     "Land Size (SF)": num(d.lot_area_sqft),
     "Year Built": num(d.year_built),
+    City: str(d.city),
+    County: str(d.county),
+    Zoning: str(d.zoning),
+    "Building Size (SF)": num(d.building_size_sf ?? d.total_building_sf),
+    Construction: str(d.construction_type ?? d.construction),
+    Condition: str(d.condition),
   }),
 
   engagement: (d) => ({
     Address: str(d.property_address),
   }),
+
+  notes: (d) => {
+    const patch: CorePatch = {};
+    if (str(d.property_address)) patch.Address = str(d.property_address);
+    if (str(d.city)) patch.City = str(d.city);
+    if (str(d.state)) patch.State = str(d.state);
+    if (str(d.zip)) patch.Zip = str(d.zip);
+    if (str(d.county)) patch.County = str(d.county);
+    if (str(d.client_name)) patch.clientName = str(d.client_name);
+    if (str(d.client_company)) patch.clientCompany = str(d.client_company);
+    if (num(d.purchase_price)) patch.purchasePrice = num(d.purchase_price);
+    if (str(d.purchase_date)) patch.purchaseDate = str(d.purchase_date);
+    if (str(d.deed_number)) patch.instrumentNumber = str(d.deed_number);
+    if (num(d.land_size_ac)) patch["Land Size (AC)"] = num(d.land_size_ac);
+    if (num(d.land_size_sf)) patch["Land Size (SF)"] = num(d.land_size_sf);
+    if (str(d.zoning)) patch.Zoning = str(d.zoning);
+    if (str(d.zoning_area)) patch["Zoning Area"] = str(d.zoning_area);
+    if (num(d.year_built)) patch["Year Built"] = num(d.year_built);
+    if (num(d.building_size_sf)) patch["Building Size (SF)"] = num(d.building_size_sf);
+    if (str(d.construction)) patch.Construction = str(d.construction);
+    if (str(d.condition)) patch.Condition = str(d.condition);
+    if (str(d.site_improvements)) patch["Other Features"] = str(d.site_improvements);
+    if (str(d.utilities_electricity)) patch["Utils - Electricity"] = str(d.utilities_electricity);
+    if (str(d.utilities_water)) patch["Utils - Water"] = str(d.utilities_water);
+    if (str(d.utilities_sewer)) patch["Utils - Sewer"] = str(d.utilities_sewer);
+    if (str(d.overhead_doors)) patch["Overhead Doors"] = str(d.overhead_doors);
+    if (str(d.hoisting)) patch.Hoisting = str(d.hoisting);
+    if (d.corner_lot === true) patch.Corner = true;
+    else if (d.corner_lot === false) patch.Corner = false;
+    if (d.highway_frontage === true) patch["Highway Frontage"] = true;
+    else if (d.highway_frontage === false) patch["Highway Frontage"] = false;
+    return patch;
+  },
+
+  sketch: (d) => {
+    const patch: CorePatch = {};
+    if (num(d.total_living_area_sf)) patch["Building Size (SF)"] = num(d.total_living_area_sf);
+    return patch;
+  },
 };
 
 // ------------------------------------------------------------------

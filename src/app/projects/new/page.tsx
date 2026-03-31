@@ -93,7 +93,9 @@ export default function NewProjectPage() {
   const [isParsingEngagement, setIsParsingEngagement] = useState(false);
 
   const [subjectFiles, setSubjectFiles] = useState<DriveFileItem[]>([]);
+  const [sketchFiles, setSketchFiles] = useState<DriveFileItem[]>([]);
   const [selectedSubjectFileIds, setSelectedSubjectFileIds] = useState<Set<string>>(new Set());
+  const [selectedSketchFileIds, setSelectedSketchFileIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [floodMapFile, setFloodMapFile] = useState<DriveFileItem | null>(null);
@@ -182,6 +184,21 @@ export default function NewProjectPage() {
             setDriveHealthMessage(
               errBody.error ?? "Could not load subject folder from Drive.",
             );
+          }
+        }
+
+        if (discoverData.folderStructure.subjectSketchesFolderId) {
+          const listRes = await fetch("/api/drive/list", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              folderId: discoverData.folderStructure.subjectSketchesFolderId,
+              filesOnly: true,
+            }),
+          });
+          if (listRes.ok) {
+            const listData = (await listRes.json()) as { files: DriveFileItem[] };
+            setSketchFiles(listData.files);
           }
         }
 
@@ -282,6 +299,15 @@ export default function NewProjectPage() {
 
   const toggleSubjectFile = useCallback((fileId: string) => {
     setSelectedSubjectFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }, []);
+
+  const toggleSketchFile = useCallback((fileId: string) => {
+    setSelectedSketchFileIds((prev) => {
       const next = new Set(prev);
       if (next.has(fileId)) next.delete(fileId);
       else next.add(fileId);
@@ -399,6 +425,28 @@ export default function NewProjectPage() {
               fileId: file.id,
               fileName: file.name,
               mimeType: file.mimeType,
+              sectionTag: "subject",
+            }),
+          });
+        }
+      }
+
+      if (selectedSketchFileIds.size > 0) {
+        for (const fileId of selectedSketchFileIds) {
+          const file = sketchFiles.find((f) => f.id === fileId);
+          if (!file) continue;
+
+          await fetch("/api/documents", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              documentType: "sketch",
+              documentLabel: file.name,
+              fileId: file.id,
+              fileName: file.name,
+              mimeType: file.mimeType,
+              sectionTag: "subject",
             }),
           });
         }
@@ -415,6 +463,7 @@ export default function NewProjectPage() {
             fileId: floodMapFile.id,
             fileName: floodMapFile.name,
             mimeType: floodMapFile.mimeType,
+            sectionTag: "subject",
           }),
         });
       }
@@ -426,7 +475,7 @@ export default function NewProjectPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [projectId, engagementData, selectedSubjectFileIds, subjectFiles, floodData, floodMapFile, router]);
+  }, [projectId, engagementData, selectedSubjectFileIds, subjectFiles, selectedSketchFileIds, sketchFiles, floodData, floodMapFile, router]);
 
   const activeStyle =
     "border-blue-500 bg-blue-600 text-white hover:bg-blue-700";
@@ -802,6 +851,50 @@ export default function NewProjectPage() {
                 </p>
               )}
 
+              {sketchFiles.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-300">
+                    Building Sketches
+                  </h3>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Select sketch files to extract building dimensions and area calculations.
+                  </p>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700">
+                    {sketchFiles.map((f) => {
+                      const isSelected = selectedSketchFileIds.has(f.id);
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => toggleSketchFile(f.id)}
+                          className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${
+                            isSelected
+                              ? "bg-blue-900/20 text-blue-300"
+                              : "text-gray-300 hover:bg-gray-800"
+                          }`}
+                        >
+                          <div
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-600"
+                                : "border-gray-600 bg-gray-800"
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-gray-500">📐</span>
+                          <span>{f.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-6 flex justify-between">
                 <button
                   type="button"
@@ -1079,6 +1172,8 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
   if (lower.includes("zoning")) return "zoning_map";
   if (lower.includes("engagement") || lower.includes("proposal"))
     return "engagement";
+  if (lower.includes("notes")) return "notes";
+  if (lower.includes("sketch")) return "sketch";
   if (lower.includes("survey") || lower.includes("plat")) return "other";
   return "other";
 }
@@ -1115,23 +1210,33 @@ function parseAddressParts(address: string): {
   city?: string;
   state?: string;
   zip?: string;
+  county?: string;
 } {
   if (!address) return {};
-  // Try "..., City, ST ZIP" pattern
-  const match = /,\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(
-    address,
-  );
-  if (match) {
-    return {
-      city: match[1]?.trim(),
-      state: match[2]?.toUpperCase(),
-      zip: match[3],
-    };
+
+  // Pattern 1: "..., City, ST ZIP" (standard)
+  const p1 = /,\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p1) {
+    return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
   }
-  // Try "..., City, ST" without zip
-  const noZip = /,\s*([^,]+),\s*([A-Z]{2})\s*$/i.exec(address);
-  if (noZip) {
-    return { city: noZip[1]?.trim(), state: noZip[2]?.toUpperCase() };
+
+  // Pattern 2: "... City, ST ZIP" (no comma before city, e.g. "331 Angel Trail Odessa, TX 79766")
+  const p2 = /\s+(\w[\w\s]*?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p2) {
+    return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
   }
+
+  // Pattern 3: "..., City, ST" without zip
+  const p3 = /,\s*([^,]+),\s*([A-Z]{2})\s*$/i.exec(address);
+  if (p3) {
+    return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
+  }
+
+  // Pattern 4: "... City ST ZIP" (no commas at all)
+  const p4 = /\s+(\w[\w\s]*?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  if (p4) {
+    return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
+  }
+
   return {};
 }

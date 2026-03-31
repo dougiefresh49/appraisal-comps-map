@@ -96,9 +96,7 @@ export function MapBanner(props: MapBannerProps) {
           setImageUrl(
             `https://drive.google.com/thumbnail?id=${match.id}&sz=w1200`,
           );
-          setFullImageUrl(
-            `https://drive.google.com/uc?export=view&id=${match.id}`,
-          );
+          setFullImageUrl(`/api/drive/file/${match.id}`);
         }
       } catch {
         // Silently fail -- show placeholder

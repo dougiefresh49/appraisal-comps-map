@@ -138,6 +138,10 @@ async function processDocument(
         console.error("Failed to merge document data into subject_data", mergeErr);
       }
     }
+
+    if (documentType === "deed") {
+      void autoGenerateOwnership(projectId);
+    }
   } catch (err) {
     console.error("Document processing failed", err);
 
@@ -220,4 +224,33 @@ export async function listProjectDocuments(
 
   if (listResult.error) throw listResult.error;
   return listResult.data ?? [];
+}
+
+/**
+ * After a deed document is processed, auto-generate the ownership
+ * analysis section if it doesn't already exist. Fire-and-forget.
+ */
+async function autoGenerateOwnership(projectId: string): Promise<void> {
+  try {
+    const { runReportAction } = await import("~/server/reports/actions");
+
+    const existing = await runReportAction({
+      projectId,
+      action: "get",
+      section: "ownership",
+    });
+
+    if (existing.ok && existing.content && existing.content.trim().length > 0) {
+      return;
+    }
+
+    await runReportAction({
+      projectId,
+      action: "generate",
+      section: "ownership",
+    });
+    console.log(`[autoGenerateOwnership] Generated ownership for project ${projectId}`);
+  } catch (err) {
+    console.error("[autoGenerateOwnership] Failed:", err);
+  }
 }
