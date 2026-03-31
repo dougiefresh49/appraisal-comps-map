@@ -1,5 +1,6 @@
 "use client";
 
+import { addDays, format, isValid, parse, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 import {
@@ -1194,60 +1195,68 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
   return "other";
 }
 
-/** Convert a stored MM/DD/YYYY string to the YYYY-MM-DD format required by <input type="date">. */
+const DATE_PARSE_REF = new Date(2000, 0, 1);
+
+/**
+ * Parse engagement effective/due strings (ISO, MM/DD/YYYY, long-form English) to a local calendar Date.
+ * Returns null if the value is empty or not a real calendar date (e.g. Gemini "TBD" prose).
+ */
+function parseEngagementDateToDate(value: string): Date | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const d = parse(trimmed, "yyyy-MM-dd", DATE_PARSE_REF);
+    return isValid(d) ? d : null;
+  }
+
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+    const d = parse(trimmed, "M/d/yyyy", DATE_PARSE_REF);
+    return isValid(d) ? d : null;
+  }
+
+  const iso = parseISO(trimmed);
+  if (isValid(iso)) return iso;
+
+  for (const fmt of ["MMMM d, yyyy", "MMM d, yyyy"] as const) {
+    const d = parse(trimmed, fmt, DATE_PARSE_REF);
+    if (isValid(d)) return d;
+  }
+
+  return null;
+}
+
+function reportDueDateIsUnset(raw: string): boolean {
+  const d = parseEngagementDateToDate(raw);
+  return d === null;
+}
+
+/** Convert a stored date string to the YYYY-MM-DD format required by <input type="date">. */
 function toDateInputValue(value: string | undefined): string {
-  if (!value) return "";
-  // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  // MM/DD/YYYY → YYYY-MM-DD
-  const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
-  if (mmddyyyy) {
-    const [, mm, dd, yyyy] = mmddyyyy;
-    return `${yyyy}-${mm!.padStart(2, "0")}-${dd!.padStart(2, "0")}`;
-  }
-  // Attempt generic parse as a last resort
-  const parsed = new Date(value);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-  return "";
+  if (!value?.trim()) return "";
+  const d = parseEngagementDateToDate(value);
+  return d ? format(d, "yyyy-MM-dd") : "";
 }
 
 /** Convert the YYYY-MM-DD value from <input type="date"> to MM/DD/YYYY for storage. */
 function fromDateInputValue(value: string): string {
   if (!value) return "";
-  const [yyyy, mm, dd] = value.split("-");
-  if (!yyyy || !mm || !dd) return value;
-  return `${mm}/${dd}/${yyyy}`;
+  const d = parse(value, "yyyy-MM-dd", DATE_PARSE_REF);
+  return isValid(d) ? format(d, "MM/dd/yyyy") : "";
 }
 
 const REPORT_DUE_DAYS_AFTER_EFFECTIVE = 21;
 
-/** When due date is empty and effective date parses, set due date to effective + 21 days (calendar days, local). */
+/** When due date is empty or not parseable, and effective date parses, set due date to effective + 21 local calendar days. */
 function maybeFillReportDueDate(data: EngagementData): EngagementData {
-  const effectiveTrimmed = data.effectiveDate.trim();
-  const dueEmpty = !data.reportDueDate.trim();
-  if (!effectiveTrimmed || !dueEmpty) return data;
+  const effective = parseEngagementDateToDate(data.effectiveDate);
+  if (!effective) return data;
+  if (!reportDueDateIsUnset(data.reportDueDate)) return data;
 
-  const iso = toDateInputValue(effectiveTrimmed);
-  if (!iso) return data;
-
-  const parts = iso.split("-").map((s) => Number(s));
-  const y = parts[0];
-  const m = parts[1];
-  const d = parts[2];
-  if (y === undefined || m === undefined || d === undefined) return data;
-
-  const base = new Date(y, m - 1, d);
-  if (isNaN(base.getTime())) return data;
-
-  base.setDate(base.getDate() + REPORT_DUE_DAYS_AFTER_EFFECTIVE);
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, "0");
-  const dd = String(base.getDate()).padStart(2, "0");
+  const due = addDays(effective, REPORT_DUE_DAYS_AFTER_EFFECTIVE);
   return {
     ...data,
-    reportDueDate: fromDateInputValue(`${yyyy}-${mm}-${dd}`),
+    reportDueDate: format(due, "MM/dd/yyyy"),
   };
 }
 
