@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { PlusIcon, MinusIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { getComparablesByType, type ComparableType, type Comparable } from "~/utils/projectStore";
@@ -143,34 +143,27 @@ function getAvailableFields(compType: ComparableType): string[] {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Storage key for persisting row config
-// ---------------------------------------------------------------------------
+const SUMMARY_PERSIST_DEBOUNCE_MS = 400;
 
-function storageKey(projectId: string, compType: ComparableType): string {
-  return `comp-summary-rows:${projectId}:${compType}`;
-}
-
-function loadSavedRows(projectId: string, compType: ComparableType): SummaryRow[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(storageKey(projectId, compType));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SummaryRow[];
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    // ignore
+function parseSummaryContent(raw: unknown): SummaryRow[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: SummaryRow[] = [];
+  for (const item of raw) {
+    if (
+      item !== null &&
+      typeof item === "object" &&
+      "label" in item &&
+      typeof (item as { label: unknown }).label === "string"
+    ) {
+      const label = (item as { label: string }).label;
+      const id =
+        "id" in item && typeof (item as { id: unknown }).id === "string"
+          ? (item as { id: string }).id
+          : nextRowId();
+      out.push({ id, label });
+    }
   }
-  return null;
-}
-
-function saveRows(projectId: string, compType: ComparableType, rows: SummaryRow[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(storageKey(projectId, compType), JSON.stringify(rows));
-  } catch {
-    // ignore
-  }
+  return out.length > 0 ? out : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +307,9 @@ function RowLabelSelect({
 
 let rowIdCounter = 0;
 function nextRowId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
   return `row-${++rowIdCounter}-${Date.now()}`;
 }
 
@@ -334,15 +330,92 @@ export function CompSummaryTable({ projectId, compType }: CompSummaryTableProps)
 
   const availableFields = useMemo(() => getAvailableFields(compType), [compType]);
 
-  const [rows, setRows] = useState<SummaryRow[]>(() => {
-    const saved = loadSavedRows(projectId, compType);
-    return saved ?? buildInitialRows(getDefaultRows(compType));
-  });
+  const [rows, setRows] = useState<SummaryRow[]>([]);
+  const [rowsReady, setRowsReady] = useState(false);
+  const skipNextSummaryPersistRef = useRef(true);
 
-  // Persist rows on change
   useEffect(() => {
-    saveRows(projectId, compType, rows);
-  }, [rows, projectId, compType]);
+    let cancelled = false;
+    setRowsReady(false);
+    skipNextSummaryPersistRef.current = true;
+
+    async function loadSummaryTemplate() {
+      const supabase = createClient();
+
+      const { data: projectRow, error: projectError } = await supabase
+        .from("comp_ui_templates")
+        .select("content")
+        .eq("project_id", projectId)
+        .eq("comp_type", compType)
+        .eq("template_type", "SUMMARY")
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (projectError) {
+        console.error("Failed to load project summary template", projectError);
+      }
+
+      const fromProject = projectRow?.content ? parseSummaryContent(projectRow.content) : null;
+      if (fromProject) {
+        setRows(fromProject);
+        setRowsReady(true);
+        return;
+      }
+
+      const { data: defaultRow, error: defaultError } = await supabase
+        .from("comp_ui_templates")
+        .select("content")
+        .is("project_id", null)
+        .eq("comp_type", compType)
+        .eq("template_type", "SUMMARY")
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (defaultError) {
+        console.error("Failed to load default summary template", defaultError);
+      }
+
+      const fromDefault = defaultRow?.content ? parseSummaryContent(defaultRow.content) : null;
+      setRows(fromDefault ?? buildInitialRows(getDefaultRows(compType)));
+      setRowsReady(true);
+    }
+
+    void loadSummaryTemplate();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, compType]);
+
+  useEffect(() => {
+    if (!rowsReady) return;
+
+    if (skipNextSummaryPersistRef.current) {
+      skipNextSummaryPersistRef.current = false;
+      return;
+    }
+
+    const supabase = createClient();
+    const handle = window.setTimeout(() => {
+      void (async () => {
+        const { error } = await supabase.from("comp_ui_templates").upsert(
+          {
+            project_id: projectId,
+            comp_type: compType,
+            template_type: "SUMMARY",
+            content: rows,
+          },
+          { onConflict: "project_id,comp_type,template_type" },
+        );
+        if (error) {
+          console.error("Failed to persist summary table config", error);
+        }
+      })();
+    }, SUMMARY_PERSIST_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(handle);
+  }, [rows, rowsReady, projectId, compType]);
 
   const updateRowLabel = useCallback((rowId: string, newLabel: string) => {
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, label: newLabel } : r)));
@@ -362,7 +435,7 @@ export function CompSummaryTable({ projectId, compType }: CompSummaryTableProps)
     setRows(buildInitialRows(getDefaultRows(compType)));
   }, [compType]);
 
-  const isLoading = projectLoading || dataLoading;
+  const isLoading = projectLoading || dataLoading || !rowsReady;
 
   if (isLoading) {
     return (
