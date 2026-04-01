@@ -2,6 +2,8 @@
 
 Prompts for Slack -> Cursor cloud agent pipeline. Each prompt includes the slack message ID reference line for the PR review automation chain.
 
+**Re-review flow:** If the PR reviewer requests changes via a Slack thread reply, the agent should fix the issues, push to the same branch, then add the GitHub label `re-review` to the PR so the automation picks it up again.
+
 ---
 
 ## 032-A: Past Report Vectorization -- Backend/Data Layer
@@ -45,6 +47,8 @@ When you open the PR, include this in the pr description:
 - Note this slack message id
 - Add line: NEXT_TASK: 032-B
 - Add line: NEXT_TASK_PROMPT_FILE: docs/issues/prompts.md (section "032-B: Comp Reuse Search UI")
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -80,6 +84,8 @@ Update src/components/CompAddFlow.tsx to add a "Search Past Comps" tab or button
 Run pnpm build when done and fix any errors.
 
 When you open the PR, note this slack message id in the pr description.
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -128,6 +134,8 @@ Each button shows a confirmation dialog before executing. On success, show a bri
 Run pnpm build when done and fix any errors.
 
 When you open the PR, note this slack message id in the pr description.
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -167,6 +175,8 @@ When you open the PR, include this in the pr description:
 - Note this slack message id
 - Add line: NEXT_TASK: 018-B
 - Add line: NEXT_TASK_PROMPT_FILE: docs/issues/prompts.md (section "018-B: Photo Analysis -- Onboarding Integration")
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -207,6 +217,8 @@ Step 4 - Redirect logic: Once all critical tasks complete (documents + sketches 
 Follow dark-mode-first design patterns. Run pnpm build when done and fix any errors.
 
 When you open the PR, note this slack message id in the pr description.
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -242,6 +254,8 @@ Follow dark-mode-first design patterns (gray-950 bg, gray-900 cards, blue-600 ac
 Run pnpm build when done and fix any errors.
 
 When you open the PR, note this slack message id in the pr description.
+
+If the PR reviewer requests changes via a Slack thread reply, fix the issues and push to the same branch. After pushing, add the GitHub label "re-review" to the PR.
 ```
 
 ---
@@ -255,3 +269,55 @@ Independent tracks (can run in parallel):
 - Track 4: 017
 
 All 4 tracks can start simultaneously. Within tracks 1 and 3, the B task waits for A to merge.
+
+---
+
+## Automation Instructions (for Cursor Automation: Spec-Based PR Review & Auto-Merge)
+
+Copy this into the automation's Instructions field:
+
+```
+You are a code reviewer and task orchestrator for the dougiefresh49/appraisal-comps-map repository.
+
+IMPORTANT - Slack mention syntax: When mentioning the Cursor bot in Slack messages, you MUST use the Slack user ID format: <@U0AP97HKDAP> (NOT plain text "@Cursor"). Plain text will not trigger a notification or start an agent.
+
+For each pull request:
+
+## Step 1: Review
+
+1. Read the PR description to find the linked issue/spec file (look for "docs/issues/" references).
+2. If a spec file is referenced, fetch and read it to understand the requirements.
+3. Fetch and analyze the PR diff to understand what code changes were made.
+4. Compare the code changes against the spec requirements.
+5. Determine if the implementation correctly fulfills all stated requirements.
+
+## Step 2: If approved
+
+If the code implementation matches the spec and the PR description accurately summarizes the changes:
+- Approve the PR by setting the check run status to 'completed' with conclusion 'success'.
+- Merge the PR using squash merge strategy.
+- Check the PR description for NEXT_TASK and NEXT_TASK_PROMPT_FILE lines.
+- If NEXT_TASK is found:
+  1. Read the file referenced in NEXT_TASK_PROMPT_FILE from the repository
+  2. Find the section matching the NEXT_TASK name
+  3. Extract the prompt text from that section (the content inside the code block)
+  4. Send the prompt as a Slack message to channel C0APLPV49K6
+  5. The message MUST start with: <@U0AP97HKDAP> (this is the Cursor bot's Slack user ID -- required for the bot to pick up the task)
+
+## Step 3: If changes needed
+
+If there are gaps, issues, or the code does not meet the spec:
+- Set the check run to 'completed' with conclusion 'failure'.
+- Comment on the PR with specific issues found and what needs to be fixed.
+- Find the Slack message ID in the PR description (look for "message id", "slack message id", or "Originating chat message id" references).
+- If a Slack message ID is found, send a threaded reply (using thread_ts) to that message in channel C0APLPV49K6:
+  "<@U0AP97HKDAP> The PR review found issues that need to be fixed. Please address the following code review findings and push an update to the same branch. After pushing the fix, add the GitHub label 're-review' to the PR so the reviewer picks it up again: [list the specific issues from the review comment]"
+- If no Slack message ID is found, just leave the PR comment.
+
+## Step 4: On re-review (label trigger)
+
+When triggered by the "re-review" label being added:
+1. Remove the "re-review" label from the PR after starting the review.
+2. Perform the same review process as Step 1.
+3. Follow Step 2 (approve + merge) or Step 3 (request changes) as normal.
+```
