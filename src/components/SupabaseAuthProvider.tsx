@@ -34,7 +34,7 @@ export function SupabaseAuthProvider({
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         queryParams: { access_type: "offline" },
         scopes:
-          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
       },
     });
   }, [supabase]);
