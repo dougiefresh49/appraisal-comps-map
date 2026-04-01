@@ -263,6 +263,7 @@ If the PR reviewer requests changes via a Slack thread reply, fix the issues and
 ## Execution Order
 
 Independent tracks (can run in parallel):
+
 - Track 1: 032-A → (merge) → 032-B
 - Track 2: 033
 - Track 3: 018-A → (merge) → 018-B
