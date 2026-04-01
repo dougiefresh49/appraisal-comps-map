@@ -5,7 +5,7 @@ import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { downloadFile, listFolderChildren } from "~/lib/drive-api";
 
-const PHOTO_MODEL = "gemini-2.0-flash-lite";
+const PHOTO_MODEL = "gemini-3.1-flash-lite-preview";
 
 const VALID_CATEGORIES = [
   "Site & Grounds",
