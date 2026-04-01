@@ -9,6 +9,7 @@ import {
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { CompAddFlow } from "~/components/CompAddFlow";
+import { PushToSheetButton } from "~/components/PushToSheetButton";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
 import { useProject } from "~/hooks/useProject";
 import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
@@ -540,6 +541,28 @@ export function CompDetailPage({
           )}
           {saveStatus === "error" && (
             <span className="text-xs text-red-400">Save failed</span>
+          )}
+          {parsedData && (
+            <PushToSheetButton
+              confirmDescription={`${compType.toLowerCase()} comp #${displayNumber} data to the spreadsheet`}
+              confirmDetail="All non-formula fields will be written. If the comp is found by Use Type + Recording, its existing row is updated. Otherwise a new row is appended."
+              onPush={async () => {
+                const res = await fetch("/api/spreadsheet/push-comp", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    projectId,
+                    compId,
+                    compType,
+                  }),
+                });
+                if (!res.ok) {
+                  const data = (await res.json()) as { error?: string };
+                  throw new Error(data.error ?? "Push failed");
+                }
+              }}
+              disabled={!parsedData}
+            />
           )}
         </div>
       </div>
