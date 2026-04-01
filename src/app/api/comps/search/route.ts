@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       `,
       )
       .or(
-        `raw_data->>'Address'.ilike.${q},raw_data->>'APN'.ilike.${q}`,
+        `raw_data->>Address.ilike.${q},raw_data->>APN.ilike.${q}`,
       )
       .limit(limit);
 

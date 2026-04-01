@@ -52,9 +52,11 @@ export async function POST(request: Request) {
     const entries = parseProjectFolderIds();
     const pastReportsDir = path.join(process.cwd(), "docs", "past-reports");
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
 
     const n8nWebhookBase = process.env.N8N_WEBHOOK_BASE_URL ?? "";
 
