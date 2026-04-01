@@ -31,6 +31,13 @@ interface ProjectDocument {
   created_at: string;
 }
 
+interface PhotoEntry {
+  id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+}
+
 type DocStatus = "processed" | "stale" | "unprocessed" | "processing";
 
 function getDocStatus(doc: ProjectDocument): DocStatus {
@@ -149,6 +156,12 @@ interface DocumentContextPanelProps {
   compFolderId?: string;
   /** Explicit section_tag override (e.g. "sales-comp-1"). */
   sectionTag?: string;
+  /** Called whenever the set of excluded document IDs changes. */
+  onExcludedIdsChange?: (excludedIds: Set<string>) => void;
+  /** When true, show a "Photo Context" section listing subject photos with a toggle. */
+  showPhotoContext?: boolean;
+  /** Called whenever the user toggles photo context inclusion. */
+  onPhotoContextChange?: (includePhotos: boolean) => void;
 }
 
 export function DocumentContextPanel({
@@ -158,15 +171,24 @@ export function DocumentContextPanel({
   onClose,
   compFolderId,
   sectionTag: sectionTagProp,
+  onExcludedIdsChange,
+  showPhotoContext,
+  onPhotoContextChange,
 }: DocumentContextPanelProps) {
   const { project } = useProject(projectId);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [showAddBrowser, setShowAddBrowser] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Photo context state (only used when showPhotoContext=true)
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [includePhotos, setIncludePhotos] = useState(true);
 
   const folderStructure = useMemo(
     () => getFolderStructure(project),
@@ -227,8 +249,32 @@ export function DocumentContextPanel({
     return () => void supabase.removeChannel(channel);
   }, [isOpen, projectId, fetchDocuments]);
 
-  const handleReprocess = useCallback(
-    async (docId: string) => {
+  // Fetch photos when the panel opens and showPhotoContext is enabled
+  useEffect(() => {
+    if (!isOpen || !showPhotoContext) return;
+    setIsLoadingPhotos(true);
+    const supabase = createClient();
+    void supabase
+      .from("photo_analyses")
+      .select("id, label, description, sort_order")
+      .eq("project_id", projectId)
+      .eq("is_included", true)
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => {
+        setPhotos((data ?? []) as PhotoEntry[]);
+        setIsLoadingPhotos(false);
+      });
+  }, [isOpen, showPhotoContext, projectId]);
+
+  const handleToggleIncludePhotos = useCallback(() => {
+    setIncludePhotos((prev) => {
+      const next = !prev;
+      onPhotoContextChange?.(next);
+      return next;
+    });
+  }, [onPhotoContextChange]);
+
+  const handleReprocess = useCallback(    async (docId: string) => {
       setReprocessingIds((prev) => new Set(prev).add(docId));
       try {
         await fetch("/api/documents", {
@@ -257,6 +303,19 @@ export function DocumentContextPanel({
       return next;
     });
   }, []);
+
+  const toggleExcluded = useCallback(
+    (id: string) => {
+      setExcludedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        onExcludedIdsChange?.(next);
+        return next;
+      });
+    },
+    [onExcludedIdsChange],
+  );
 
   const handleFileSelect = useCallback(
     async (file: { id: string; name: string; mimeType: string }) => {
@@ -416,11 +475,18 @@ export function DocumentContextPanel({
                 <>
                   {scopedDocs.length > 0 && (
                     <div className="mb-6">
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                        {effectiveSectionTag
-                          ? `${sectionKey.replace(/-/g, " ")} documents`
-                          : "Relevant Documents"}
-                      </h3>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          {effectiveSectionTag
+                            ? `${sectionKey.replace(/-/g, " ")} documents`
+                            : "Relevant Documents"}
+                        </h3>
+                        {excludedIds.size > 0 && (
+                          <span className="text-[10px] text-amber-500/80">
+                            {excludedIds.size} excluded
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         {scopedDocs.map((doc) => (
                           <DocumentRow
@@ -428,8 +494,10 @@ export function DocumentContextPanel({
                             doc={doc}
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
+                            isExcluded={excludedIds.has(doc.id)}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
+                            onToggleExclude={() => toggleExcluded(doc.id)}
                           />
                         ))}
                       </div>
@@ -448,8 +516,10 @@ export function DocumentContextPanel({
                             doc={doc}
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
+                            isExcluded={excludedIds.has(doc.id)}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
+                            onToggleExclude={() => toggleExcluded(doc.id)}
                           />
                         ))}
                       </div>
@@ -471,6 +541,68 @@ export function DocumentContextPanel({
                           ? "Add a document from this comp's folder to tag and attach it here."
                           : 'Click "Add Document" to browse your Drive.'}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Photo Context Section */}
+                  {showPhotoContext && (
+                    <div className="mb-6">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          Photo Context
+                        </h3>
+                        {/* Global include/exclude toggle */}
+                        <button
+                          type="button"
+                          onClick={handleToggleIncludePhotos}
+                          className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+                            includePhotos
+                              ? "bg-blue-900/40 text-blue-300 hover:bg-blue-900/60"
+                              : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                          }`}
+                          title={includePhotos ? "Exclude photos from AI context" : "Include photos in AI context"}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              includePhotos ? "bg-blue-400" : "bg-gray-600"
+                            }`}
+                          />
+                          {includePhotos ? "Photos included" : "Photos excluded"}
+                        </button>
+                      </div>
+
+                      {isLoadingPhotos ? (
+                        <div className="flex items-center gap-2 py-3">
+                          <div className="h-3 w-3 animate-spin rounded-full border border-gray-600 border-t-blue-500" />
+                          <span className="text-xs text-gray-500">Loading photos…</span>
+                        </div>
+                      ) : photos.length === 0 ? (
+                        <p className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-3 text-xs text-gray-500">
+                          No analyzed photos found. Run photo analysis from the Subject Photos page first.
+                        </p>
+                      ) : (
+                        <div
+                          className={`space-y-1.5 transition-opacity ${
+                            includePhotos ? "opacity-100" : "opacity-40"
+                          }`}
+                        >
+                          {photos.map((photo) => (
+                            <div
+                              key={photo.id}
+                              className="rounded-lg border border-gray-800 bg-gray-900/50 px-3 py-2"
+                            >
+                              <p className="truncate text-xs font-medium text-gray-200">
+                                {photo.label}
+                              </p>
+                              {photo.description && (
+                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-gray-500">
+                                  {photo.description}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -508,22 +640,50 @@ function DocumentRow({
   doc,
   isExpanded,
   isReprocessing,
+  isExcluded,
   onToggleExpand,
   onReprocess,
+  onToggleExclude,
 }: {
   doc: ProjectDocument;
   isExpanded: boolean;
   isReprocessing: boolean;
+  isExcluded: boolean;
   onToggleExpand: () => void;
   onReprocess: () => void;
+  onToggleExclude: () => void;
 }) {
   const status = isReprocessing ? "processing" : getDocStatus(doc);
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/50">
+    <div
+      className={`rounded-lg border bg-gray-900/50 transition-opacity ${
+        isExcluded
+          ? "border-gray-800/40 opacity-40"
+          : "border-gray-800"
+      }`}
+    >
       <div className="flex items-center gap-3 px-3 py-2.5">
+        {/* Include/exclude checkbox */}
+        <button
+          type="button"
+          onClick={onToggleExclude}
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+            isExcluded
+              ? "border-gray-600 bg-transparent text-transparent"
+              : "border-blue-500 bg-blue-500/20 text-blue-400"
+          }`}
+          title={isExcluded ? "Excluded from context — click to include" : "Included in context — click to exclude"}
+          aria-label={isExcluded ? "Include document" : "Exclude document"}
+        >
+          {!isExcluded && (
+            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" />
+            </svg>
+          )}
+        </button>
         <StatusIcon className={`h-4 w-4 shrink-0 ${config.colorClass}`} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-gray-200">

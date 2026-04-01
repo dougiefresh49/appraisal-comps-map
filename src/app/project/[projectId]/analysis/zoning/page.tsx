@@ -15,6 +15,7 @@ export default function ZoningAnalysisPage({
 }) {
   const { projectId } = use(params);
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
 
   return (
     <div className="mx-auto max-w-5xl p-8">
@@ -31,12 +32,14 @@ export default function ZoningAnalysisPage({
         section="zoning"
         title="Zoning"
         description="Generate, view, and edit the zoning analysis section."
+        excludedDocIds={excludedDocIds}
       />
       <DocumentContextPanel
         projectId={projectId}
         sectionKey="zoning"
         isOpen={isDocPanelOpen}
         onClose={() => setIsDocPanelOpen(false)}
+        onExcludedIdsChange={setExcludedDocIds}
       />
     </div>
   );
