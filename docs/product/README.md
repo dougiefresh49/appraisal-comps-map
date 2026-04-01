@@ -39,8 +39,8 @@ Documentation mapping how the Appraisal Comps Maps webapp works — data flows, 
 | Direct (no n8n) | Still uses n8n |
 |-----------------|---------------|
 | Auth (Supabase) | Photo analysis (`/subject-photos-analyze`) |
-| New project wizard after you pick a folder — discovery, Drive listing, engagement/flood parse, Supabase (`/api/projects/*`, `/api/drive/list`, `project-discovery.ts`) | Drive **project root** list for the `/projects/new` picker (`useProjectsList` → `/projects-new`) |
-| Photo export / `input.json` (Drive API) | Comp data refresh (`POST /api/comps-data` → `/comps-data`) |
+| New project wizard — project root picker (`GET /api/projects/list-drive-roots`), discovery, Drive listing, engagement/flood parse, Supabase (`/api/projects/*`, `/api/drive/list`, `project-discovery.ts`) | Comp data refresh (`POST /api/comps-data` → `/comps-data`) |
+| Photo export / `input.json` (Drive API) | |
 | Comp parsing (`POST /api/comps/parse`, Gemini + Drive) | Comp exists check (`POST /api/comps-exists` → `/comps-exists`) |
 | Comp folder list & details (Drive API) | |
 | Cover photo data (`POST /api/cover-data`, Drive + sharp) | |
@@ -50,4 +50,4 @@ Documentation mapping how the Appraisal Comps Maps webapp works — data flows, 
 | Realtime collaboration (Supabase) | |
 | Seed/backfill tools (local + Gemini) | |
 
-_Last updated: March 2026_
+_Last updated: April 2026_

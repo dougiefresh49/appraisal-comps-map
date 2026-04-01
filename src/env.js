@@ -12,6 +12,8 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     N8N_WEBHOOK_BASE_URL: z.string().optional(),
+    /** Parent Drive folder whose immediate children are appraisal project root folders (replaces n8n `/projects-new`). */
+    GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID: z.string().optional(),
     GOOGLE_GEMINI_API_KEY: z.string().optional(),
     SUPABASE_SECRET_KEY: z.string().optional(),
   },
@@ -39,6 +41,8 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     N8N_WEBHOOK_BASE_URL: process.env.N8N_WEBHOOK_BASE_URL,
+    GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID:
+      process.env.GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID,
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:

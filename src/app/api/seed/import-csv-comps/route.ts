@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
-import { createClient } from "~/utils/supabase/server";
+import { createClient, createServiceClient } from "~/utils/supabase/server";
 import { randomUUID } from "crypto";
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,10 @@ function parseBoolean(val: string | undefined): boolean {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
+    const supabase =
+      process.env.NODE_ENV === "development"
+        ? createServiceClient()
+        : await createClient();
 
     // Optional: accept an existing project_id instead of creating a new one
     let body: { project_id?: string; force?: boolean } = {};

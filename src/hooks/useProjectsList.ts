@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { env } from "~/env";
 
 export interface DriveProject {
   id: string;
@@ -18,18 +17,18 @@ export function useProjectsList() {
   useEffect(() => {
     async function fetchProjects() {
       try {
-        const response = await fetch(
-          env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL + "/projects-new",
-          {
-            method: "POST",
-          },
-        );
+        const response = await fetch("/api/projects/list-drive-roots");
+
+        const data = (await response.json()) as ProjectsResponse & {
+          error?: string;
+        };
 
         if (!response.ok) {
-          throw new Error("Failed to fetch projects list");
+          throw new Error(
+            data.error ?? "Failed to fetch projects list from Drive",
+          );
         }
 
-        const data = (await response.json()) as ProjectsResponse;
         if (data.projects) {
           setProjects(data.projects);
         }

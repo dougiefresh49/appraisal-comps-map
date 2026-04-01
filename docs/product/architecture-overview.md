@@ -92,6 +92,7 @@ All persistent project data lives in Supabase PostgreSQL. See [database-schema.m
 
 | Data | Format | Access Pattern |
 |------|--------|---------------|
+| Project root folders (picker) | Folder IDs under configured parent | `GET /api/projects/list-drive-roots` → `listFolderChildren` (user OAuth); parent from `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` |
 | Subject photos | Image files in Drive folder | **Analysis:** n8n reads/processes → Supabase `photo_analyses`. **Previews / cover:** Next.js server uses Drive API with user OAuth |
 | `input.json` | JSON in subject photos folder | `exportInputJson` writes via Drive API (`uploadOrUpdateFile`) for Google Apps Script |
 | Comp folders | PDFs, images | List/metadata/download via `drive-api.ts`; parsing via `POST /api/comps/parse` (Gemini) |
@@ -170,7 +171,6 @@ Server Supabase client (`src/utils/supabase/server.ts`) is used by:
 
 | Entry point | n8n Endpoint | Purpose |
 |-------------|-------------|---------|
-| `/projects/new` (`useProjectsList`) | `/projects-new` | Client-side list of Drive project folders for the picker |
 | `POST /api/photos/process` | `/subject-photos-analyze` | Trigger photo analysis workflow |
 | `POST /api/comps-data` | `/comps-data` | Load comps + image map from Spreadsheet (legacy) |
 | `POST /api/comps-exists` | `/comps-exists` | Check if comp exists in Spreadsheet |
@@ -190,6 +190,7 @@ Server Supabase client (`src/utils/supabase/server.ts`) is used by:
 | `src/lib/drive-api.ts` | List folders, download/upload, metadata (user OAuth) |
 | `src/lib/drive-download.ts` | Download files by ID for document processing |
 | `src/lib/project-discovery.ts` | Discover project folder structure + spreadsheet candidates |
+| `src/app/api/projects/list-drive-roots/route.ts` | List child folders of the configured appraisal-projects parent (new-project picker) |
 | `src/lib/comp-parser.ts` | Download comp files and run Gemini extraction |
 | `src/lib/engagement-parser.ts` | Parse engagement letters (upload or Drive file) |
 | `src/lib/map-context.ts` | Register map screenshots as `project_documents` context |

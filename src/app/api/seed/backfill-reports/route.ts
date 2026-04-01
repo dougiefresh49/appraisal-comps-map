@@ -1,7 +1,8 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
-import { createClient } from "~/utils/supabase/server";
+import { createClient, createServiceClient } from "~/utils/supabase/server";
 import { generateEmbedding } from "~/lib/embeddings";
 import { GoogleGenAI } from "@google/genai";
 
@@ -90,7 +91,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase =
+      process.env.NODE_ENV === "development"
+        ? createServiceClient()
+        : await createClient();
 
     // Only skip if doing a bulk run without a specific project_id (legacy orphan check)
     if (!project_id && !pdf_filename) {

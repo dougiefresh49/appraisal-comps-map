@@ -18,7 +18,7 @@ sequenceDiagram
     participant GDrive as Google Drive
     participant Supabase
 
-    User->>NewProjectPage: Pick Drive project folder (useProjectsList → n8n /projects-new for list only)
+    User->>NewProjectPage: Pick Drive project folder (useProjectsList → GET /api/projects/list-drive-roots for list only)
     NewProjectPage->>Supabase: insertProject() stub row
     NewProjectPage->>Discover: {projectId, projectFolderId}
     Discover->>GDrive: Walk folders + spreadsheet candidates
@@ -39,7 +39,7 @@ sequenceDiagram
 
 **Data stored:** Primarily `projects` (metadata + `folder_structure`), `comparables`, `maps`, `map_markers`, and `subject_data` as the wizard completes.
 
-**n8n dependency:** The **folder picker list** still comes from n8n `/projects-new` (`useProjectsList`). Everything after you select a folder is in-app (discover, Drive list, engagement/flood parsing, Supabase).
+**n8n dependency:** **None** for this flow. The folder picker list comes from `GET /api/projects/list-drive-roots` (Drive API with the signed-in user’s token; parent folder ID from `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID`). Discover, Drive list, engagement/flood parsing, and Supabase persistence are all in-app.
 
 ### Restore from localStorage
 
@@ -339,7 +339,7 @@ flowchart TB
 
 | Feature | n8n | Direct (Supabase/Gemini/Drive) |
 |---------|-----|----------------------------------|
-| Project creation | **Picker list only** (`/projects-new`) | **Direct** after selection (discover + Drive list + engagement parse) |
+| Project creation | | **Direct** — picker: `GET /api/projects/list-drive-roots`; after selection: discover + Drive list + engagement parse |
 | Cover photo data | | **Direct** (`POST /api/cover-data`) |
 | Photo analysis | **Yes** (`/subject-photos-analyze`) | |
 | Photo export (input.json) | | **Direct** (`exportInputJson` → Drive API) |

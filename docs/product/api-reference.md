@@ -47,6 +47,20 @@ Saves the chosen appraisal spreadsheet ID on the project.
 
 **External calls:** Supabase only
 
+### `GET /api/projects/list-drive-roots`
+
+Lists **immediate child folders** of the Drive parent configured for appraisal project roots (same purpose the legacy n8n `/projects-new` webhook served).
+
+**Query / body:** None.
+
+**Returns:** `{ projects: { id: string; name: string }[] }` — sorted by folder name.
+
+**Configuration:** Server env `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID`. If unset, responds `503` with an error message.
+
+**External calls:** Google Drive API (`listFolderChildren` with user OAuth)
+
+**Caller:** `useProjectsList()` on `/projects/new`.
+
 ---
 
 ## Drive
@@ -274,11 +288,10 @@ Supabase Google OAuth exchange; sets session cookies; redirects to `/projects`.
 
 | Route / caller | n8n endpoint | Notes |
 |----------------|-------------|--------|
-| `/projects/new` (`useProjectsList`) | `/projects-new` | Client-side; lists Drive folders only |
 | `POST /api/photos/process` | `/subject-photos-analyze` | |
 | `POST /api/comps-data` | `/comps-data` | |
 | `POST /api/comps-exists` | `/comps-exists` | |
 
-**No longer n8n:** `POST /api/photos` (input.json), `POST /api/cover-data`, `POST /api/comps/parse`, `POST /api/comps-folder-list`, `POST /api/comps-folder-details`, project discovery / engagement / flood parsing (`/api/projects/*`), `POST /api/drive/list`.
+**No longer n8n:** `GET /api/projects/list-drive-roots` (project picker), `POST /api/photos` (input.json), `POST /api/cover-data`, `POST /api/comps/parse`, `POST /api/comps-folder-list`, `POST /api/comps-folder-details`, project discovery / engagement / flood parsing (`/api/projects/*` except list roots), `POST /api/drive/list`.
 
 **Historical note:** There is no `POST /api/comps-parser` route in the App Router; parsing is `/api/comps/parse`.

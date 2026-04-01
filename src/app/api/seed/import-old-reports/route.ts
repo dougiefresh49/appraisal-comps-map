@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
-import { createClient } from "~/utils/supabase/server";
+import { createClient, createServiceClient } from "~/utils/supabase/server";
 
 interface ProjectFolderEntry {
   "Report PDF": string;
@@ -48,7 +48,10 @@ export async function POST(request: Request) {
 
     const force = body.force === true;
 
-    const supabase = await createClient();
+    const supabase =
+      process.env.NODE_ENV === "development"
+        ? createServiceClient()
+        : await createClient();
     const entries = parseProjectFolderIds();
     const pastReportsDir = path.join(process.cwd(), "docs", "past-reports");
 
@@ -103,7 +106,6 @@ export async function POST(request: Request) {
             name: projectName,
             project_folder_id: folderId,
             is_reference: true,
-            subject: { folderName },
           })
           .select("id")
           .single();
@@ -157,7 +159,7 @@ export async function POST(request: Request) {
       let n8nWebhook: "fired" | "skipped" = "skipped";
       if (n8nWebhookBase) {
         try {
-          void fetch(`${n8nWebhookBase}/past-report-photo-backfil`, {
+          void fetch(`${n8nWebhookBase}/past-report-photo-backfill`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

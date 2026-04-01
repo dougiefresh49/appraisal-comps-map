@@ -1,23 +1,38 @@
 # Open Issues Index
 
-Tracked issues for the Appraisal Comps Maps webapp. Each issue file is self-contained with description, affected files, acceptance criteria, complexity, priority, and dependencies.
-
 ## Completed Issues (removed)
 
-Issues 001-038 have been resolved and their documents deleted.
+All issues 001-038 have been resolved and merged. All issue documents deleted.
 
-## Quick Reference
+## Open Code Issues
 
-| ID | Title | Priority | Complexity | Dependencies |
-|----|-------|----------|------------|--------------|
-| 017 | Analysis pages: generation context controls + visual polish | Medium | Medium | None |
-| 018 | Photo analysis: move from n8n to webapp | Medium | High | None |
-| 032 | Past report vectorization and comp reuse | Medium | Medium | None |
-| 033 | Write comp/subject data back to Google Spreadsheet | Medium | Medium | None |
+None.
 
-## Status Notes
+**039 (done):** New-project Drive folder list uses `GET /api/projects/list-drive-roots` and env `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` — see [039-remove-n8n-projects-new-folder-picker.md](./039-remove-n8n-projects-new-folder-picker.md).
 
-- **017** -- Analysis page enhancements (include/exclude checkboxes, photo context, HBU prereqs, timestamps). Pre-existing issue, not yet started.
-- **018** -- Move photo analysis from n8n to webapp. Pre-existing issue, not yet started. The n8n photo backfill workflow is working and writes to Supabase directly.
-- **032** -- Past report vectorization. Project folder IDs collected (11 projects in `docs/past-reports/project-folder-ids.md`). n8n photo backfill endpoint working. Need: import endpoint for CSV comp data + PDF narrative backfill + comp reuse search UI.
-- **033** -- Spreadsheet write-back via Sheets API. OAuth scope added (`spreadsheets`). Need: `sheets-api.ts` module + per-section push buttons.
+## Roadmap status (historical)
+
+Planned features from the Stability and Features Roadmap were implemented:
+- Wave 1: Critical bugs (022-025, 034) -- merged
+- Wave 2: Data quality (026-029) -- merged
+- Wave 3: Features (030-033, 035-038) -- merged
+- Pre-existing tracks (017, 018) -- merged
+
+## Remaining Operational Tasks (not code issues)
+
+These are one-time data operations, not code changes:
+
+### 1. Run CSV comp import
+Call `POST /api/seed/import-csv-comps` to import the 490 rows from the CSV exports into the Reference Library project. This creates comparables + comp_parsed_data + comp_parcels + comp_parcel_improvements.
+
+### 2. Run old report import orchestrator
+Call `POST /api/seed/import-old-reports` to create the 11 reference projects, backfill PDF report sections, and fire n8n photo webhooks. This:
+- Creates 11 reference projects from `docs/past-reports/project-folder-ids.md`
+- Calls backfill-reports for each PDF with the project_id
+- Fires the n8n photo backfill webhook for each project
+
+### 3. Push migration 023 (is_reference column)
+The 032-A agent created migration `023_reference_projects.sql`. Verify it was pushed to Supabase. If not: `npx supabase db push`.
+
+### 4. Verify Sheets API push
+Test the "Push to Sheet" button on a comp detail page to confirm the Google Sheets write-back works with the new OAuth scope.

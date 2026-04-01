@@ -222,6 +222,7 @@ Defined in `src/env.js` via `@t3-oss/env-nextjs`:
 | `SUPABASE_SECRET_KEY` | Supabase service role key |
 | `GOOGLE_GEMINI_API_KEY` | Gemini API key for AI features |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth for token refresh |
+| `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` | Optional. Drive folder whose children are project roots (`/projects/new` picker via `/api/projects/list-drive-roots`) |
 | `N8N_WEBHOOK_BASE_URL` | n8n server-side webhook base |
 | `NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL` | n8n client-side webhook base |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps API key |
