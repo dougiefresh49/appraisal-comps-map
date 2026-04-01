@@ -33,6 +33,7 @@ const ReportRequestSchema = z.object({
   previousContent: z.string().optional(),
   regenerationContext: z.string().optional(),
   excludedDocIds: z.array(z.string()).optional(),
+  excludePhotoContext: z.boolean().optional(),
 });
 
 export type ReportRequest = z.infer<typeof ReportRequestSchema>;
@@ -173,6 +174,7 @@ async function handleGenerate(
   regenerationContext?: string,
   previousContent?: string,
   excludedDocIds?: string[],
+  excludePhotoContext?: boolean,
 ): Promise<ReportContentResult> {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
     return {
@@ -187,6 +189,7 @@ async function handleGenerate(
     regenerationContext,
     previousContent,
     excludedDocIds,
+    excludePhotoContext,
   });
 
   const generatedContent = await generateReportSection(prompt);
@@ -242,7 +245,7 @@ export async function runReportAction(
         return await saveSection(projectId, section, parsed.data.content);
 
       case "generate":
-        return await handleGenerate(projectId, section, undefined, undefined, parsed.data.excludedDocIds);
+        return await handleGenerate(projectId, section, undefined, undefined, parsed.data.excludedDocIds, parsed.data.excludePhotoContext);
 
       case "regenerate":
         return await handleGenerate(
@@ -251,6 +254,7 @@ export async function runReportAction(
           parsed.data.regenerationContext,
           parsed.data.previousContent,
           parsed.data.excludedDocIds,
+          parsed.data.excludePhotoContext,
         );
 
       default:

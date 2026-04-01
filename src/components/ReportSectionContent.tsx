@@ -34,6 +34,8 @@ interface ReportSectionContentProps {
   emptyStateNote?: ReactNode;
   /** Document IDs to exclude from AI generation context */
   excludedDocIds?: Set<string>;
+  /** When true, photo analyses will be omitted from the AI generation prompt */
+  excludePhotoContext?: boolean;
 }
 
 export function ReportSectionContent({
@@ -44,6 +46,7 @@ export function ReportSectionContent({
   description,
   emptyStateNote,
   excludedDocIds,
+  excludePhotoContext,
 }: ReportSectionContentProps) {
   const {
     section: sectionData,
@@ -133,6 +136,9 @@ export function ReportSectionContent({
       if (context) body.regenerationContext = context;
       if (excludedDocIds && excludedDocIds.size > 0) {
         body.excludedDocIds = Array.from(excludedDocIds);
+      }
+      if (excludePhotoContext) {
+        body.excludePhotoContext = true;
       }
 
       const response = await fetch("/api/report-content", {
@@ -322,6 +328,11 @@ export function ReportSectionContent({
               {excludedDocIds && excludedDocIds.size > 0 && (
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                   {excludedDocIds.size} document{excludedDocIds.size !== 1 ? "s" : ""} excluded from context
+                </p>
+              )}
+              {excludePhotoContext && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Photo context excluded
                 </p>
               )}
             </div>

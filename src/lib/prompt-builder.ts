@@ -38,11 +38,18 @@ export async function buildReportPrompt(
     regenerationContext?: string;
     previousContent?: string;
     excludedDocIds?: string[];
+    excludePhotoContext?: boolean;
   },
 ): Promise<string> {
   const supabase = await createClient();
 
-  const context = await gatherContext(supabase, sectionKey, projectId, options?.excludedDocIds);
+  const context = await gatherContext(
+    supabase,
+    sectionKey,
+    projectId,
+    options?.excludedDocIds,
+    options?.excludePhotoContext,
+  );
 
   if (options?.previousContent) {
     context.previousContent = options.previousContent;
@@ -61,13 +68,14 @@ async function gatherContext(
   sectionKey: SectionKey,
   projectId: string,
   excludedDocIds?: string[],
+  excludePhotoContext?: boolean,
 ): Promise<PromptContext> {
   const [knowledgeBase, projectData, documents, photoAnalyses, relatedSections, similarPast] =
     await Promise.all([
       fetchKnowledgeForSection(supabase, sectionKey),
       fetchProjectData(supabase, projectId),
       fetchRelevantDocuments(supabase, projectId, sectionKey, excludedDocIds),
-      fetchPhotoContext(supabase, projectId),
+      excludePhotoContext ? Promise.resolve("") : fetchPhotoContext(supabase, projectId),
       fetchRelatedSections(supabase, projectId, sectionKey),
       fetchSimilarPastSections(sectionKey, projectId),
     ]);

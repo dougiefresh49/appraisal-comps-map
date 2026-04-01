@@ -90,6 +90,7 @@ function SiteSummaryKeyFacts({ projectId }: { projectId: string }) {
 function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
+  const [includePhotoContext, setIncludePhotoContext] = useState(true);
 
   return (
     <div className="mx-auto max-w-5xl p-8">
@@ -104,6 +105,7 @@ function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
         title="Subject Site Summary"
         description="Generate, view, and edit the subject site summary section."
         excludedDocIds={excludedDocIds}
+        excludePhotoContext={!includePhotoContext}
       />
       <DocumentContextPanel
         projectId={projectId}
@@ -111,6 +113,8 @@ function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
         isOpen={isDocPanelOpen}
         onClose={() => setIsDocPanelOpen(false)}
         onExcludedIdsChange={setExcludedDocIds}
+        showPhotoContext
+        onPhotoContextChange={setIncludePhotoContext}
       />
     </div>
   );

@@ -31,6 +31,13 @@ interface ProjectDocument {
   created_at: string;
 }
 
+interface PhotoEntry {
+  id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+}
+
 type DocStatus = "processed" | "stale" | "unprocessed" | "processing";
 
 function getDocStatus(doc: ProjectDocument): DocStatus {
@@ -151,6 +158,10 @@ interface DocumentContextPanelProps {
   sectionTag?: string;
   /** Called whenever the set of excluded document IDs changes. */
   onExcludedIdsChange?: (excludedIds: Set<string>) => void;
+  /** When true, show a "Photo Context" section listing subject photos with a toggle. */
+  showPhotoContext?: boolean;
+  /** Called whenever the user toggles photo context inclusion. */
+  onPhotoContextChange?: (includePhotos: boolean) => void;
 }
 
 export function DocumentContextPanel({
@@ -161,6 +172,8 @@ export function DocumentContextPanel({
   compFolderId,
   sectionTag: sectionTagProp,
   onExcludedIdsChange,
+  showPhotoContext,
+  onPhotoContextChange,
 }: DocumentContextPanelProps) {
   const { project } = useProject(projectId);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
@@ -171,6 +184,11 @@ export function DocumentContextPanel({
   const [showAddBrowser, setShowAddBrowser] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Photo context state (only used when showPhotoContext=true)
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [includePhotos, setIncludePhotos] = useState(true);
 
   const folderStructure = useMemo(
     () => getFolderStructure(project),
@@ -231,8 +249,32 @@ export function DocumentContextPanel({
     return () => void supabase.removeChannel(channel);
   }, [isOpen, projectId, fetchDocuments]);
 
-  const handleReprocess = useCallback(
-    async (docId: string) => {
+  // Fetch photos when the panel opens and showPhotoContext is enabled
+  useEffect(() => {
+    if (!isOpen || !showPhotoContext) return;
+    setIsLoadingPhotos(true);
+    const supabase = createClient();
+    void supabase
+      .from("photo_analyses")
+      .select("id, label, description, sort_order")
+      .eq("project_id", projectId)
+      .eq("is_included", true)
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => {
+        setPhotos((data ?? []) as PhotoEntry[]);
+        setIsLoadingPhotos(false);
+      });
+  }, [isOpen, showPhotoContext, projectId]);
+
+  const handleToggleIncludePhotos = useCallback(() => {
+    setIncludePhotos((prev) => {
+      const next = !prev;
+      onPhotoContextChange?.(next);
+      return next;
+    });
+  }, [onPhotoContextChange]);
+
+  const handleReprocess = useCallback(    async (docId: string) => {
       setReprocessingIds((prev) => new Set(prev).add(docId));
       try {
         await fetch("/api/documents", {
@@ -499,6 +541,68 @@ export function DocumentContextPanel({
                           ? "Add a document from this comp's folder to tag and attach it here."
                           : 'Click "Add Document" to browse your Drive.'}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Photo Context Section */}
+                  {showPhotoContext && (
+                    <div className="mb-6">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          Photo Context
+                        </h3>
+                        {/* Global include/exclude toggle */}
+                        <button
+                          type="button"
+                          onClick={handleToggleIncludePhotos}
+                          className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+                            includePhotos
+                              ? "bg-blue-900/40 text-blue-300 hover:bg-blue-900/60"
+                              : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                          }`}
+                          title={includePhotos ? "Exclude photos from AI context" : "Include photos in AI context"}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              includePhotos ? "bg-blue-400" : "bg-gray-600"
+                            }`}
+                          />
+                          {includePhotos ? "Photos included" : "Photos excluded"}
+                        </button>
+                      </div>
+
+                      {isLoadingPhotos ? (
+                        <div className="flex items-center gap-2 py-3">
+                          <div className="h-3 w-3 animate-spin rounded-full border border-gray-600 border-t-blue-500" />
+                          <span className="text-xs text-gray-500">Loading photos…</span>
+                        </div>
+                      ) : photos.length === 0 ? (
+                        <p className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-3 text-xs text-gray-500">
+                          No analyzed photos found. Run photo analysis from the Subject Photos page first.
+                        </p>
+                      ) : (
+                        <div
+                          className={`space-y-1.5 transition-opacity ${
+                            includePhotos ? "opacity-100" : "opacity-40"
+                          }`}
+                        >
+                          {photos.map((photo) => (
+                            <div
+                              key={photo.id}
+                              className="rounded-lg border border-gray-800 bg-gray-900/50 px-3 py-2"
+                            >
+                              <p className="truncate text-xs font-medium text-gray-200">
+                                {photo.label}
+                              </p>
+                              {photo.description && (
+                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-gray-500">
+                                  {photo.description}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

@@ -44,6 +44,9 @@ export async function POST(request: Request) {
       ? (body.excludedDocIds as unknown[]).filter((id): id is string => typeof id === "string")
       : undefined;
 
+    const excludePhotoContext: boolean | undefined =
+      typeof body.excludePhotoContext === "boolean" ? body.excludePhotoContext : undefined;
+
     if (!projectId) {
       return NextResponse.json(
         { error: "projectId is required" },
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
       previousContent,
       regenerationContext,
       excludedDocIds,
+      excludePhotoContext,
     });
 
     if (!result.ok) {
