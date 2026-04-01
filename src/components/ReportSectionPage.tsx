@@ -11,6 +11,8 @@ interface ReportSectionPageProps {
   title: string;
   description?: string;
   emptyStateNote?: ReactNode;
+  /** Document IDs to exclude from AI generation context */
+  excludedDocIds?: Set<string>;
 }
 
 export function ReportSectionPage({
@@ -18,6 +20,7 @@ export function ReportSectionPage({
   title,
   description,
   emptyStateNote,
+  excludedDocIds,
 }: ReportSectionPageProps) {
   const routeParams = useParams<{ projectId: string }>();
   const projectId = routeParams.projectId ?? "";
@@ -75,6 +78,7 @@ export function ReportSectionPage({
         title={title}
         description={description}
         emptyStateNote={emptyStateNote}
+        excludedDocIds={excludedDocIds}
       />
     </div>
   );

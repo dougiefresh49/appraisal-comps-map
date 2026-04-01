@@ -40,6 +40,10 @@ export async function POST(request: Request) {
         ? body.regenerationContext
         : undefined;
 
+    const excludedDocIds: string[] | undefined = Array.isArray(body.excludedDocIds)
+      ? (body.excludedDocIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : undefined;
+
     if (!projectId) {
       return NextResponse.json(
         { error: "projectId is required" },
@@ -55,6 +59,7 @@ export async function POST(request: Request) {
       content,
       previousContent,
       regenerationContext,
+      excludedDocIds,
     });
 
     if (!result.ok) {

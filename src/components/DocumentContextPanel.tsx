@@ -149,6 +149,8 @@ interface DocumentContextPanelProps {
   compFolderId?: string;
   /** Explicit section_tag override (e.g. "sales-comp-1"). */
   sectionTag?: string;
+  /** Called whenever the set of excluded document IDs changes. */
+  onExcludedIdsChange?: (excludedIds: Set<string>) => void;
 }
 
 export function DocumentContextPanel({
@@ -158,12 +160,14 @@ export function DocumentContextPanel({
   onClose,
   compFolderId,
   sectionTag: sectionTagProp,
+  onExcludedIdsChange,
 }: DocumentContextPanelProps) {
   const { project } = useProject(projectId);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [showAddBrowser, setShowAddBrowser] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -257,6 +261,19 @@ export function DocumentContextPanel({
       return next;
     });
   }, []);
+
+  const toggleExcluded = useCallback(
+    (id: string) => {
+      setExcludedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        onExcludedIdsChange?.(next);
+        return next;
+      });
+    },
+    [onExcludedIdsChange],
+  );
 
   const handleFileSelect = useCallback(
     async (file: { id: string; name: string; mimeType: string }) => {
@@ -416,11 +433,18 @@ export function DocumentContextPanel({
                 <>
                   {scopedDocs.length > 0 && (
                     <div className="mb-6">
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                        {effectiveSectionTag
-                          ? `${sectionKey.replace(/-/g, " ")} documents`
-                          : "Relevant Documents"}
-                      </h3>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          {effectiveSectionTag
+                            ? `${sectionKey.replace(/-/g, " ")} documents`
+                            : "Relevant Documents"}
+                        </h3>
+                        {excludedIds.size > 0 && (
+                          <span className="text-[10px] text-amber-500/80">
+                            {excludedIds.size} excluded
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         {scopedDocs.map((doc) => (
                           <DocumentRow
@@ -428,8 +452,10 @@ export function DocumentContextPanel({
                             doc={doc}
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
+                            isExcluded={excludedIds.has(doc.id)}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
+                            onToggleExclude={() => toggleExcluded(doc.id)}
                           />
                         ))}
                       </div>
@@ -448,8 +474,10 @@ export function DocumentContextPanel({
                             doc={doc}
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
+                            isExcluded={excludedIds.has(doc.id)}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
+                            onToggleExclude={() => toggleExcluded(doc.id)}
                           />
                         ))}
                       </div>
@@ -508,22 +536,50 @@ function DocumentRow({
   doc,
   isExpanded,
   isReprocessing,
+  isExcluded,
   onToggleExpand,
   onReprocess,
+  onToggleExclude,
 }: {
   doc: ProjectDocument;
   isExpanded: boolean;
   isReprocessing: boolean;
+  isExcluded: boolean;
   onToggleExpand: () => void;
   onReprocess: () => void;
+  onToggleExclude: () => void;
 }) {
   const status = isReprocessing ? "processing" : getDocStatus(doc);
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/50">
+    <div
+      className={`rounded-lg border bg-gray-900/50 transition-opacity ${
+        isExcluded
+          ? "border-gray-800/40 opacity-40"
+          : "border-gray-800"
+      }`}
+    >
       <div className="flex items-center gap-3 px-3 py-2.5">
+        {/* Include/exclude checkbox */}
+        <button
+          type="button"
+          onClick={onToggleExclude}
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+            isExcluded
+              ? "border-gray-600 bg-transparent text-transparent"
+              : "border-blue-500 bg-blue-500/20 text-blue-400"
+          }`}
+          title={isExcluded ? "Excluded from context — click to include" : "Included in context — click to exclude"}
+          aria-label={isExcluded ? "Include document" : "Exclude document"}
+        >
+          {!isExcluded && (
+            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" />
+            </svg>
+          )}
+        </button>
         <StatusIcon className={`h-4 w-4 shrink-0 ${config.colorClass}`} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-gray-200">
