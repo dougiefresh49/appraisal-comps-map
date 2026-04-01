@@ -1275,8 +1275,8 @@ function parseAddressParts(address: string): {
     return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
   }
 
-  // Pattern 2: "... City, ST ZIP" (no comma before city, e.g. "331 Angel Trail Odessa, TX 79766")
-  const p2 = /\s+(\w[\w\s]*?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  // Pattern 2: "... City, ST ZIP" (last token before comma = city; avoids greedy street match)
+  const p2 = /\s+(\S+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
   if (p2) {
     return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
   }
@@ -1287,8 +1287,8 @@ function parseAddressParts(address: string): {
     return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
   }
 
-  // Pattern 4: "... City ST ZIP" (no commas at all)
-  const p4 = /\s+(\w[\w\s]*?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  // Pattern 4: "... City ST ZIP" (no commas at all; last token before state = city)
+  const p4 = /\s+(\S+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
   if (p4) {
     return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
   }
