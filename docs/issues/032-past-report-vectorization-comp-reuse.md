@@ -2,20 +2,19 @@
 
 **Priority:** Medium
 **Complexity:** Medium
-**Dependencies:** None (uses existing pgvector + tables). Layer C benefits from 027 (parcel tables).
+**Dependencies:** None (uses existing pgvector + tables).
 
 ## Problem
 
-Users want to reuse narrative patterns from past reports (RAG-style) and pull comps from prior engagements into a new project. Supabase Vector Buckets are optional paid scale; **pgvector** is already enabled with `report_sections` embeddings and backfill API patterns.
+Users want to reuse narrative patterns from past reports (RAG-style) and pull comps from prior engagements into a new project. **pgvector** is already enabled with `report_sections` embeddings and backfill API patterns.
 
 ## Comp Duplication Strategy
 
 Comps reused across reports are **duplicated per project**, not shared via a join table. Rationale:
-- The same property may have updated information between reports (new details found, corrected data, different comments)
+- The same property may have updated information between reports
 - Each project needs independent `#` numbering, comments, and adjustments
-- Historical accuracy: old report data stays frozen even if the comp is updated in a new report
+- Historical accuracy: old report data stays frozen
 - Simple clone flow: copy `raw_data` from source to new `comparables` + `comp_parsed_data` rows
-- The "Search Past Comps" flow prevents re-parsing by cloning existing data instead of re-running Gemini
 
 The search UI shows which projects previously used a comp:
 ```
@@ -27,107 +26,138 @@ The search UI shows which projects previously used a comp:
 
 ## Import Flow
 
-For each old report, the import creates a **reference project** in Supabase first, then kicks off parallel data population:
-
 ```
-1. Create reference project row (name, project_folder_id, flagged as reference)
+1. Create "Reference Library" project row
    └── Returns project_id (UUID)
 
-2. In parallel (all use the project_id from step 1):
-   a. PDF backfill → report_sections (narrative extraction via Gemini)
-   b. CSV import → comp_parsed_data, comp_parcels, comp_parcel_improvements
+2. CSV import → comparables + comp_parsed_data + comp_parcels + comp_parcel_improvements
+
+3. For each of the 11 reference projects (from project-folder-ids.md):
+   a. Create reference project row (name, project_folder_id, is_reference = true)
+   b. PDF backfill → report_sections (narrative extraction via Gemini)
    c. Fire n8n webhook (project_id + project_folder_id) → photo_analyses (fire-and-forget)
 ```
 
 ## Input Data
 
-### Project folder IDs
+### Project folder IDs (complete)
 
-The user will provide a mapping of past reports to their Google Drive folder IDs in `docs/past-reports/project-folder-ids.md`. The import script reads this file to create reference projects and fire n8n webhooks. Format:
+11 projects mapped in `docs/past-reports/project-folder-ids.md` with both table and JSON formats. Includes the n8n photo backfill webhook endpoint.
 
-```markdown
-| Report PDF | Project Name | Google Drive Folder ID |
-|------------|-------------|----------------------|
-| 6310 Tashaya Dr Odessa Report.pdf | 6310 Tashaya Dr Odessa | {folder_id} |
-| 210 W 57th Odessa Report.pdf | 210 W 57th Odessa | {folder_id} |
-| 103 East Ave Kermit Appraisal Report.pdf | 103 East Ave Kermit | {folder_id} |
-| Apprisal Report for 1227 S Murphy.pdf | 1227 S Murphy | {folder_id} |
-```
+### CSV exports (5 files, ~490 rows total)
 
-### CSV exports (current spreadsheet only)
+All in `docs/report-data-spreadsheet/sheets-exported--csv/`:
 
-CSV files in `docs/report-data-spreadsheet/sheets-exported--csv/` contain comp data from the **current running spreadsheet** (which accumulates comps across reports). These are imported once and associated with whichever reference project they belong to based on the comp's date range or instrument number.
+| File | Rows | Headers | Links To |
+|------|------|---------|----------|
+| `report-data  - sale comps.csv` | 75 | `#, Address, Use Type, Grantor, Grantee, Recording, Date of Sale, ...` (65 columns) | `comp_parsed_data.raw_data` |
+| `report-data - land comps.csv` | 60 | `#, Address, Use Type, Grantor, Grantee, Recording, ...` (36 columns) | `comp_parsed_data.raw_data` |
+| `report-data - comp-parcels.csv` | 141 | `instrumentNumber, APN, APN Link, Location, Legal, Lot #, Size (AC), ...` (17 columns) | `comp_parcels` table |
+| `report-data - comp-parcel-improvements.csv` | 210 | `instrumentNumber, APN, Building #, Section #, Year Built, ...` (14 columns) | `comp_parcel_improvements` table |
+| `report-data - subject.csv` | 1 | Same as subject sheet | `subject_data.core` (current project only) |
 
-## Implementation (Four Layers)
+### CSV Column Mapping
+
+**Sale comps / Land comps → `comparables` + `comp_parsed_data`:**
+- CSV `#` → `comparables.number`
+- CSV `Address` → `comparables.address`
+- CSV `Recording` → `comparables.instrument_number`
+- CSV comp type inferred from which file (sale comps → `'Sales'`, land comps → `'Land'`)
+- **Entire CSV row** → `comp_parsed_data.raw_data` as a JSON object (keys = CSV header names, values = cell values)
+- `Use Type` column indicates if the row is `"Sale"`, `"Extra"`, `"Rental"`, or `"Old Report"` -- rows with `"Old Report"` or negative `#` values are from prior reports
+
+**Comp parcels → `comp_parcels` table:**
+- CSV headers map 1:1 to table columns (column names match the schema from migration 018)
+- `instrumentNumber` links parcels to comps via `comparables.instrument_number`
+- `comp_id` resolved by looking up `comparables` WHERE `instrument_number` matches
+
+**Comp parcel improvements → `comp_parcel_improvements` table:**
+- CSV headers map 1:1 to table columns
+- `instrumentNumber` + `APN` links to the parent `comp_parcels` row
+- `parcel_id` resolved by looking up `comp_parcels` WHERE `instrument_number` + `apn` match
+
+### Handling negative `#` values and "Old Report" use type
+
+The CSV contains rows with negative `#` values (e.g., `-1`, `-2`) and `Use Type = "Old Report"`. These are comps from prior reports that are kept in the running spreadsheet for reference. Import them all -- the comp reuse search benefits from having the full history. Assign a positive `number` starting from 1 per reference project during import.
+
+## Implementation
 
 ### Layer 0: Create Reference Projects
 
-- Read `docs/past-reports/project-folder-ids.md` for the mapping
-- For each report, insert a `projects` row with:
-  - `name`: from the mapping table
-  - `project_folder_id`: the Drive folder ID from the mapping
-  - `is_reference`: flag to distinguish from active projects (add `boolean DEFAULT false` column to `projects` if not present, or use a convention)
-- Returns a `project_id` UUID for each
+New migration to add `is_reference` boolean to `projects`:
+```sql
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_reference boolean DEFAULT false;
+```
 
-### Layer A: Narrative sections from PDFs (existing endpoint)
+Import endpoint creates:
+1. One "Reference Library" project (`is_reference = true`) -- holds all CSV-imported comps
+2. One reference project per entry in `project-folder-ids.md` -- holds report sections + photos
 
-- Run the backfill endpoint for each PDF in `docs/past-reports/` into `report_sections` with the corresponding reference `project_id`
-- The PDFs are sufficient -- Gemini multimodal handles PDF directly
-- If PDFs are too large for context window, user has an iLovePDF API key for compression
+### Layer A: Narrative sections from PDFs
 
-### Layer B: Comp data extraction from PDFs (optional)
+Update `src/app/api/seed/backfill-reports/route.ts` to accept an optional `project_id` body parameter. When provided, `report_sections` rows get that `project_id` instead of `null`.
 
-- Parse comp data tables from past report PDFs using Gemini
-- Store in `comp_parsed_data` with the reference `project_id`
-- Useful as a fallback when CSV data is incomplete for older reports
+For each reference project, call the updated endpoint with the matching PDF file and `project_id`.
 
-### Layer C: Spreadsheet data import from CSV exports
+### Layer C: CSV Import
 
-- Read CSV files from `docs/report-data-spreadsheet/sheets-exported--csv/`:
-  - `report-data  - sale comps.csv` (77 rows)
-  - `report-data - comp-parcel-improvements.csv` (212 rows)
-  - `report-data - subject.csv`
-  - Other comp/parcel CSVs
-- For each comp row: create `comparables` + `comp_parsed_data` entries
-- Populate `comp_parcels` and `comp_parcel_improvements` from the parcel CSVs
-- Comps that appear in multiple reports get **duplicated** -- one `comp_parsed_data` row per project that used them
+New endpoint `POST /api/seed/import-csv-comps` that:
 
-### Layer D: Fire n8n photo backfill webhook
+1. Reads the CSV files from `docs/report-data-spreadsheet/sheets-exported--csv/` using a simple CSV parser (e.g., `papaparse` or manual split -- no heavy dependency needed)
+2. For each sale/land comp row:
+   - Insert into `comparables`: `{ id: uuid, project_id, type, number, address, instrument_number }`
+   - Insert into `comp_parsed_data`: `{ comp_id, project_id, raw_data: {entire CSV row as JSON} }`
+3. For each parcel row:
+   - Look up `comp_id` from `comparables` WHERE `instrument_number` matches
+   - Insert into `comp_parcels`: `{ comp_id, project_id, instrument_number, apn, ... }`
+4. For each improvement row:
+   - Look up `parcel_id` from `comp_parcels` WHERE `instrument_number` + `apn` match
+   - Insert into `comp_parcel_improvements`: `{ parcel_id, comp_id, project_id, ... }`
 
-- For each reference project, call the n8n webhook with:
-  - `project_id`: the UUID from Layer 0
-  - `project_folder_id`: the Drive folder ID from `project-folder-ids.md`
-- **Fire-and-forget** -- don't wait for completion
-- n8n downloads photos from Drive, runs classify/label/describe, inserts into `photo_analyses` with the `project_id`
-- The webapp's Realtime subscription on `photo_analyses` will show progress as rows appear
+### Layer D: Fire n8n photo backfill
+
+For each reference project that has a `project_folder_id`, POST to the n8n webhook:
+```
+POST https://dougiefreshdesigns.app.n8n.cloud/webhook/past-report-photo-backfil
+{ "project_folder_id": "...", "project_id": "..." }
+```
+Fire-and-forget.
 
 ### Comp Reuse Search
 
-- "Search Past Comps" button in `CompAddFlow.tsx`
-- Queries `comp_parsed_data` across all projects (including reference projects) by address (ILIKE) or APN
-- Shows matches with key fields (address, sale price, date, type, source project name)
-- Shows "Used in: Project A, Project B" for comps that appear in multiple projects
-- On selection, **clones** into current project (new `comparables` + `comp_parsed_data` rows with copied `raw_data`)
+New API route `POST /api/comps/search`:
+```typescript
+// Body: { query: string, type?: CompType }
+// Searches comp_parsed_data.raw_data->>'Address' ILIKE '%query%'
+// OR comp_parsed_data.raw_data->>'APN' ILIKE '%query%'
+// Returns: comp data + project name + list of projects using the same address
+```
+
+UI in `CompAddFlow.tsx`:
+- "Search Past Comps" tab/button alongside the Drive folder picker
+- Search input + results list
+- Each result shows: address, sale price, date, type, "Used in: Project A, Project B"
+- "Clone" button creates new `comparables` + `comp_parsed_data` in current project
 
 ## Affected Files
 
-- New: `docs/past-reports/project-folder-ids.md` -- user-provided mapping (manual)
-- New: `src/app/api/seed/import-old-reports/route.ts` -- orchestrates the full import
-- Existing: `src/app/api/seed/backfill-reports/route.ts` -- update to accept project_id parameter
-- New: CSV parser utility for reading the exported spreadsheet data
-- `src/components/CompAddFlow.tsx` -- "Search Past Comps" UI
-- New API route or server action for cross-project comp search
-- Possibly: migration to add `is_reference` boolean to `projects`
+- `docs/past-reports/project-folder-ids.md` -- complete (user filled in 11 projects)
+- New migration: add `is_reference` boolean to `projects`
+- New: `src/app/api/seed/import-csv-comps/route.ts` -- CSV import endpoint
+- New: `src/app/api/seed/import-old-reports/route.ts` -- orchestrates reference project creation + PDF backfill + n8n webhook
+- Update: `src/app/api/seed/backfill-reports/route.ts` -- accept `project_id` parameter
+- New: `src/app/api/comps/search/route.ts` -- cross-project comp search
+- Update: `src/components/CompAddFlow.tsx` -- "Search Past Comps" UI
 
 ## Acceptance Criteria
 
-- [ ] `docs/past-reports/project-folder-ids.md` exists with the mapping (user fills in folder IDs)
-- [ ] Reference project created for each old report with a valid project_id and is_reference flag
-- [ ] PDF narrative sections backfilled into `report_sections` with project_id
-- [ ] CSV comp data imported into `comp_parsed_data` + `comp_parcels` + `comp_parcel_improvements`
-- [ ] Comps used in multiple reports are duplicated per project (not shared)
-- [ ] n8n webhook fired with project_id + project_folder_id for photo backfill (fire-and-forget)
-- [ ] Comp add flow has "Search Past Comps" with address/APN search across all projects
+- [ ] `is_reference` column added to `projects` table
+- [ ] Reference projects created for all 11 old reports
+- [ ] CSV comp data imported into `comparables` + `comp_parsed_data` (75 sales + 60 land comps)
+- [ ] CSV parcel data imported into `comp_parcels` (141 rows) + `comp_parcel_improvements` (210 rows)
+- [ ] PDF narrative sections backfilled into `report_sections` with per-project `project_id`
+- [ ] n8n photo backfill webhook fired for each reference project with `project_folder_id`
+- [ ] Cross-project comp search works by address and APN
 - [ ] Search results show which projects previously used each comp
-- [ ] Cloning creates new comp rows in the current project with copied data
-- [ ] No new mandatory paid dependencies
+- [ ] Cloning creates new comp rows in the current project with copied `raw_data`
+- [ ] `pnpm build` passes

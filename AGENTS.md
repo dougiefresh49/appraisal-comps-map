@@ -39,13 +39,21 @@ When creating a new migration file in `supabase/migrations/`, push it with:
 npx supabase db push
 ```
 
-The Supabase CLI reads the `SUPABASE_SECRET_KEY` env var (set in `.env`) to authenticate. If you get an auth error, verify the key is set:
+**IMPORTANT -- Cloud agents:** The Supabase CLI authenticates via `SUPABASE_SECRET_KEY`. For cloud agents, this is set in the **Configured Environment** secrets (Cursor cloud agent settings). If `npx supabase db push` fails with an auth error or "Cannot find project ref":
+
+1. First, try linking the project: `npx supabase link --project-ref eijvwgxixczzpespefmd`
+2. If that fails, verify the env var is available: `echo $SUPABASE_SECRET_KEY | head -c 10`
+3. The project ref is `eijvwgxixczzpespefmd` (AppraisalBotReports)
+
+**For local development:** The CLI reads `SUPABASE_SECRET_KEY` from `.env`. Verify with: `grep SUPABASE_SECRET_KEY .env`
+
+**Migration file naming:** Use the convention `NNN_description.sql` (e.g., `022_merge_subject_core_force_keys.sql`). Always check the highest existing number in `supabase/migrations/` before creating a new one to avoid conflicts:
 
 ```bash
-grep SUPABASE_SECRET_KEY .env
+ls supabase/migrations/ | sort | tail -5
 ```
 
-Migration files follow the naming convention `NNN_description.sql` (e.g., `016_add_section_tags.sql`). Check the highest existing number in `supabase/migrations/` before creating a new one to avoid conflicts.
+**After creating a migration, you MUST push it.** Do not skip this step. If the push fails due to a remote mismatch, use `npx supabase migration repair` to fix the history.
 
 ## Project Structure
 
@@ -78,7 +86,7 @@ src/
   utils/                  # Client utilities (projectStore, supabase client, etc.)
 
 supabase/
-  migrations/             # SQL migration files (001-016)
+  migrations/             # SQL migration files (001-022)
 
 docs/
   issues/                 # Open issue tracker (017-034)
