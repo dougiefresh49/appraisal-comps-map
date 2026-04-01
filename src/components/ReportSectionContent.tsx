@@ -13,6 +13,17 @@ const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
 });
 
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 interface ReportSectionContentProps {
   projectId: string;
   projectFolderId?: string;
@@ -21,6 +32,10 @@ interface ReportSectionContentProps {
   description?: string;
   /** Shown inside the dashed empty state above the generate button */
   emptyStateNote?: ReactNode;
+  /** Document IDs to exclude from AI generation context */
+  excludedDocIds?: Set<string>;
+  /** When true, photo analyses will be omitted from the AI generation prompt */
+  excludePhotoContext?: boolean;
 }
 
 export function ReportSectionContent({
@@ -30,8 +45,11 @@ export function ReportSectionContent({
   title,
   description,
   emptyStateNote,
+  excludedDocIds,
+  excludePhotoContext,
 }: ReportSectionContentProps) {
   const {
+    section: sectionData,
     content,
     exists: hasContent,
     isLoading,
@@ -116,6 +134,12 @@ export function ReportSectionContent({
 
       if (previousContent) body.previousContent = previousContent;
       if (context) body.regenerationContext = context;
+      if (excludedDocIds && excludedDocIds.size > 0) {
+        body.excludedDocIds = Array.from(excludedDocIds);
+      }
+      if (excludePhotoContext) {
+        body.excludePhotoContext = true;
+      }
 
       const response = await fetch("/api/report-content", {
         method: "POST",
@@ -215,12 +239,12 @@ export function ReportSectionContent({
       ) : null}
 
       {hasContent ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => (isEditing ? setIsEditing(false) : handleStartEdit())}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               disabled={isBusy}
             >
               {isEditing ? "Cancel Edit" : "Edit"}
@@ -228,7 +252,7 @@ export function ReportSectionContent({
             <button
               type="button"
               onClick={() => setShowRegenerateDialog(true)}
-              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
               disabled={isBusy || !projectFolderId}
             >
               Regenerate
@@ -236,7 +260,7 @@ export function ReportSectionContent({
             <button
               type="button"
               onClick={handleCopy}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               disabled={isBusy || !hasContent}
             >
               Copy
@@ -271,46 +295,66 @@ export function ReportSectionContent({
             </div>
           ) : (
             <div
-              className="prose max-w-none rounded-md border border-gray-100 bg-gray-50 p-4 text-gray-900"
+              className="prose max-w-none rounded-md border border-gray-100 bg-gray-50 p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-100"
               data-color-mode="light"
             >
               <MarkdownPreview source={content} />
             </div>
           )}
+
+          {/* Last generated timestamp */}
+          {sectionData?.updatedAt && !isEditing ? (
+            <p className="mt-3 text-right text-xs text-gray-400 dark:text-gray-500">
+              Last generated:{" "}
+              <span className="text-gray-500 dark:text-gray-400">
+                {formatTimestamp(sectionData.updatedAt)}
+              </span>
+            </p>
+          ) : null}
         </div>
       ) : null}
 
       {showRegenerateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Regenerate Content
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Provide additional context to guide the regeneration. The
                 previous content will be included automatically.
               </p>
+              {excludedDocIds && excludedDocIds.size > 0 && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {excludedDocIds.size} document{excludedDocIds.size !== 1 ? "s" : ""} excluded from context
+                </p>
+              )}
+              {excludePhotoContext && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Photo context excluded
+                </p>
+              )}
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Additional Context (Optional)
               </label>
               <textarea
                 value={regenerationContext}
                 onChange={(e) => setRegenerationContext(e.target.value)}
                 placeholder="e.g., Make it more concise, focus on X aspect, add information about Y..."
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                 rows={6}
               />
             </div>
 
-            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-medium text-gray-600">
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+              <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
                 Previous Content (will be sent automatically):
               </p>
-              <p className="line-clamp-3 text-xs text-gray-500">
+              <p className="line-clamp-3 text-xs text-gray-500 dark:text-gray-400">
                 {content.substring(0, 200)}
                 {content.length > 200 ? "..." : ""}
               </p>
@@ -323,7 +367,7 @@ export function ReportSectionContent({
                   setShowRegenerateDialog(false);
                   setRegenerationContext("");
                 }}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                 disabled={isBusy}
               >
                 Cancel

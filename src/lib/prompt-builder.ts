@@ -37,11 +37,19 @@ export async function buildReportPrompt(
   options?: {
     regenerationContext?: string;
     previousContent?: string;
+    excludedDocIds?: string[];
+    excludePhotoContext?: boolean;
   },
 ): Promise<string> {
   const supabase = await createClient();
 
-  const context = await gatherContext(supabase, sectionKey, projectId);
+  const context = await gatherContext(
+    supabase,
+    sectionKey,
+    projectId,
+    options?.excludedDocIds,
+    options?.excludePhotoContext,
+  );
 
   if (options?.previousContent) {
     context.previousContent = options.previousContent;
@@ -59,13 +67,15 @@ async function gatherContext(
   supabase: ServerSupabase,
   sectionKey: SectionKey,
   projectId: string,
+  excludedDocIds?: string[],
+  excludePhotoContext?: boolean,
 ): Promise<PromptContext> {
   const [knowledgeBase, projectData, documents, photoAnalyses, relatedSections, similarPast] =
     await Promise.all([
       fetchKnowledgeForSection(supabase, sectionKey),
       fetchProjectData(supabase, projectId),
-      fetchRelevantDocuments(supabase, projectId, sectionKey),
-      fetchPhotoContext(supabase, projectId),
+      fetchRelevantDocuments(supabase, projectId, sectionKey, excludedDocIds),
+      excludePhotoContext ? Promise.resolve("") : fetchPhotoContext(supabase, projectId),
       fetchRelatedSections(supabase, projectId, sectionKey),
       fetchSimilarPastSections(sectionKey, projectId),
     ]);
@@ -164,6 +174,7 @@ async function fetchRelevantDocuments(
   supabase: ServerSupabase,
   projectId: string,
   sectionKey: SectionKey,
+  excludedDocIds?: string[],
 ): Promise<{ type: string; text: string; structured: Record<string, unknown> }[]> {
   const docTypes = SECTION_DOCUMENT_MAP[sectionKey];
 
@@ -171,10 +182,11 @@ async function fetchRelevantDocuments(
 
   const result = (await supabase
     .from("project_documents")
-    .select("document_type, extracted_text, structured_data")
+    .select("id, document_type, extracted_text, structured_data")
     .eq("project_id", projectId)
     .in("document_type", docTypes)
     .not("extracted_text", "is", null)) as PostgrestResponse<{
+    id: string;
     document_type: string;
     extracted_text: string | null;
     structured_data: Record<string, unknown>;
@@ -182,11 +194,15 @@ async function fetchRelevantDocuments(
 
   if (!result.data) return [];
 
-  return result.data.map((d) => ({
-    type: d.document_type,
-    text: d.extracted_text ?? "",
-    structured: d.structured_data ?? {},
-  }));
+  const excludedSet = new Set(excludedDocIds ?? []);
+
+  return result.data
+    .filter((d) => !excludedSet.has(d.id))
+    .map((d) => ({
+      type: d.document_type,
+      text: d.extracted_text ?? "",
+      structured: d.structured_data ?? {},
+    }));
 }
 
 async function fetchPhotoContext(
