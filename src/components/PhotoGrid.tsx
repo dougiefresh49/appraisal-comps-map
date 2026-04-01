@@ -158,6 +158,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectFolderId: project.projectFolderId,
+          projectId,
         }),
       });
 
