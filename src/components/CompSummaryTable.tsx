@@ -13,6 +13,7 @@ import {
   formatAcres,
 } from "~/lib/calculated-fields";
 import type { CompParsedDataRow } from "~/types/comp-data";
+import { PushToSheetButton } from "~/components/PushToSheetButton";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -479,6 +480,26 @@ export function CompSummaryTable({ projectId, compType }: CompSummaryTableProps)
           >
             Reset Defaults
           </button>
+          <PushToSheetButton
+            confirmDescription={`${rows.length} summary row label(s) to the ${compType.toLowerCase()} summary chart sheet`}
+            confirmDetail="Column A (rows 2+) of the summary chart sheet will be overwritten with the current row labels."
+            onPush={async () => {
+              const res = await fetch("/api/spreadsheet/push-summary", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  projectId,
+                  type: compType,
+                  labels: rows.map((r) => r.label),
+                }),
+              });
+              if (!res.ok) {
+                const data = (await res.json()) as { error?: string };
+                throw new Error(data.error ?? "Push failed");
+              }
+            }}
+            disabled={rows.length === 0}
+          />
         </div>
         <span className="text-xs text-gray-500">
           {comps.length} comp{comps.length !== 1 ? "s" : ""} · {rows.length} row{rows.length !== 1 ? "s" : ""}

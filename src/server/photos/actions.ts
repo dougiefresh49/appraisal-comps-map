@@ -1,54 +1,133 @@
 import "server-only";
-import { env } from "~/env";
-import { createClient } from "~/utils/supabase/server";
-import { getGoogleToken } from "~/utils/supabase/server";
+import { createClient, createServiceClient, getGoogleToken } from "~/utils/supabase/server";
 import {
   listFolderChildren,
   findChildByName,
   uploadOrUpdateFile,
 } from "~/lib/drive-api";
+import {
+  analyzeProjectPhotos,
+  buildSubjectPhotoContext,
+} from "~/lib/photo-analyzer";
 
 /**
- * Trigger the n8n photo analysis workflow.
- * The n8n endpoint is expected to return a JSON response with the total number
- * of photos in the folder (e.g. `{ totalPhotos: 35 }`) once it starts processing.
- * Individual photo results are written to Supabase asynchronously by n8n,
- * so the UI can track progress via Realtime subscriptions.
+ * Triggers photo analysis for a project's subject photos folder.
+ *
+ * Loads the project's subject_data.core to build subject context, then
+ * calls the photo-analyzer module to classify and describe each image via Gemini.
+ * Results are upserted into photo_analyses asynchronously (fire-and-forget for the caller).
+ *
+ * Returns immediately with { success: true, totalPhotos } where totalPhotos
+ * reflects the number of images found and queued. Individual photo results
+ * are written to Supabase asynchronously; the UI tracks progress via Realtime.
  */
 export async function triggerPhotoAnalysis(
   projectFolderId: string,
+  projectId?: string,
 ): Promise<{ success: boolean; totalPhotos?: number; error?: string }> {
   try {
     if (!projectFolderId) {
       return { success: false, error: "Project Folder ID is required" };
     }
 
-    if (!env.N8N_WEBHOOK_BASE_URL) {
-      return { success: false, error: "N8N_WEBHOOK_BASE_URL is not set" };
-    }
-
-    const response = await fetch(
-      env.N8N_WEBHOOK_BASE_URL + "/subject-photos-analyze",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectFolderId }),
-      },
-    );
-
-    if (!response.ok) {
+    const { token, error: driveAuthError } = await getGoogleToken();
+    if (!token) {
       return {
         success: false,
-        error: `n8n returned ${response.status}: ${response.statusText}`,
+        error:
+          driveAuthError ??
+          "Not authenticated — please sign in again to grant Drive access",
       };
     }
 
-    const data = (await response.json()) as { totalPhotos?: number };
+    // Resolve the subject photos folder inside the project Drive folder
+    const photosFolderId = await resolveSubjectPhotosFolderId(
+      token,
+      projectFolderId,
+    );
 
-    return {
-      success: true,
-      totalPhotos: data.totalPhotos ?? undefined,
-    };
+    // Resolve project ID from folder if not provided
+    let resolvedProjectId = projectId;
+    if (!resolvedProjectId) {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("project_folder_id", projectFolderId)
+        .single();
+      resolvedProjectId = (data as { id: string } | null)?.id ?? undefined;
+    }
+
+    if (!resolvedProjectId) {
+      return {
+        success: false,
+        error: "Could not resolve project ID from folder. Pass projectId explicitly.",
+      };
+    }
+
+    // Load subject context from subject_data.core
+    const supabase = await createClient();
+    const { data: subjectRow } = await supabase
+      .from("subject_data")
+      .select("core")
+      .eq("project_id", resolvedProjectId)
+      .single();
+
+    const core = (subjectRow as { core: Record<string, unknown> } | null)?.core ?? {};
+    const subjectContext = buildSubjectPhotoContext(core);
+
+    // Load property type and address from projects + core
+    const { data: projectRow } = await supabase
+      .from("projects")
+      .select("property_type, name")
+      .eq("id", resolvedProjectId)
+      .single();
+
+    const row = projectRow as {
+      property_type: string | null;
+      name: string | null;
+    } | null;
+
+    const propertyType =
+      (typeof core.propertyType === "string" ? core.propertyType : null) ??
+      row?.property_type ??
+      "Commercial";
+
+    const subjectAddress =
+      (typeof core.address === "string" ? core.address : null) ??
+      (typeof core.siteAddress === "string" ? core.siteAddress : null) ??
+      row?.name ??
+      "Unknown Address";
+
+    // Fire analysis in the background using service client (bypasses RLS)
+    const serviceClient = createServiceClient();
+
+    // Return total count quickly, process asynchronously
+    // Count images first for the response
+    const allFiles = await listFolderChildren(token, photosFolderId, {
+      filesOnly: true,
+    });
+    const imageExtensions = new Set([
+      "jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "tif", "tiff",
+    ]);
+    const imageFiles = allFiles.filter((f) => {
+      if (f.mimeType?.startsWith("image/")) return true;
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      return imageExtensions.has(ext);
+    });
+    const totalPhotos = imageFiles.length;
+
+    // Fire-and-forget: run analysis in background
+    void analyzeProjectPhotos(resolvedProjectId, photosFolderId, token, serviceClient, {
+      propertyType,
+      subjectAddress,
+      subjectContext,
+      concurrency: 2,
+    }).catch((err) => {
+      console.error("[triggerPhotoAnalysis] Background analysis failed:", err);
+    });
+
+    return { success: true, totalPhotos };
   } catch (error) {
     console.error("Error triggering photo analysis:", error);
     return {

@@ -7,6 +7,7 @@ import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
+import { PushToSheetButton } from "~/components/PushToSheetButton";
 import { acToSf, sfToAc } from "~/lib/calculated-fields";
 
 interface SubjectDataEditorProps {
@@ -199,6 +200,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             </span>
           )}
           <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+          <PushToSheetButton
+            confirmDescription="subject property data to row 2 of the 'subject' sheet"
+            confirmDetail="Fields from the core subject data object will be matched to column headers dynamically."
+            onPush={async () => {
+              const res = await fetch("/api/spreadsheet/push-subject", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ projectId }),
+              });
+              if (!res.ok) {
+                const data = (await res.json()) as { error?: string };
+                throw new Error(data.error ?? "Push failed");
+              }
+            }}
+          />
           <button
             onClick={() => void handleSave()}
             disabled={isSaving}

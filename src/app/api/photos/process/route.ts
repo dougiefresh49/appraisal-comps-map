@@ -6,8 +6,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       projectFolderId: string;
+      projectId?: string;
     };
-    const { projectFolderId } = body;
+    const { projectFolderId, projectId } = body;
 
     if (!projectFolderId) {
       return NextResponse.json(
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await triggerPhotoAnalysis(projectFolderId);
+    const result = await triggerPhotoAnalysis(projectFolderId, projectId);
     return NextResponse.json(result);
   } catch (error) {
     console.error("Error processing images:", error);
