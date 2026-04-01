@@ -9,10 +9,12 @@ type StructuredData = Record<string, unknown>;
  * After a document is processed by Gemini, merge the extracted
  * structured data into the project's `subject_data` row.
  *
- * Uses an atomic Postgres function (`merge_subject_core`) so that
- * concurrent document processors never overwrite each other's fields.
- * Only empty/null/0 fields in `core` are filled — user-edited values
- * are never clobbered.
+ * Uses atomic Postgres functions (`merge_subject_core`, `merge_subject_core_force_keys`)
+ * so concurrent document processors do not race. Location fields from cad/notes/deed use
+ * the force merge path; other keys use fill-empty-only behavior.
+ * Only empty/null/0 fields in `core` are filled by default — user-edited values
+ * are not clobbered. For cad, notes, and deed documents, City, State, Zip, and
+ * County from the document always overwrite (more reliable than regex-parsed address).
  *
  * flood_map documents are routed to the dedicated `fema` JSONB column.
  *
@@ -56,10 +58,34 @@ export async function mergeDocumentIntoSubjectData(
 
   if (Object.keys(cleanPatch).length === 0) return;
 
-  const { error } = await supabase.rpc("merge_subject_core", {
-    p_project_id: projectId,
-    p_patch: cleanPatch,
-  });
+  const forceKeys = DOCUMENT_FORCE_OVERWRITE_KEYS[documentType];
+  const fillOnlyPatch: Record<string, unknown> = {};
+  const forcePatch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(cleanPatch)) {
+    if (forceKeys?.has(key)) forcePatch[key] = value;
+    else fillOnlyPatch[key] = value;
+  }
+
+  if (Object.keys(forcePatch).length > 0) {
+    const { error: forceErr } = await supabase.rpc("merge_subject_core_force_keys", {
+      p_project_id: projectId,
+      p_patch: forcePatch,
+    });
+    if (forceErr) {
+      console.error(
+        "[mergeDocumentIntoSubjectData] rpc merge_subject_core_force_keys failed:",
+        forceErr,
+      );
+    }
+  }
+
+  const { error } =
+    Object.keys(fillOnlyPatch).length > 0
+      ? await supabase.rpc("merge_subject_core", {
+          p_project_id: projectId,
+          p_patch: fillOnlyPatch,
+        })
+      : { error: null };
 
   if (!error) {
     await backfillAddressParts(projectId, supabase);
@@ -79,7 +105,8 @@ export async function mergeDocumentIntoSubjectData(
     const mergedCore = { ...currentCore };
     for (const [key, value] of Object.entries(cleanPatch)) {
       const cur = mergedCore[key];
-      if (cur == null || cur === "" || cur === 0) {
+      const overwrite = forceKeys?.has(key) ?? false;
+      if (overwrite || cur == null || cur === "" || cur === 0) {
         mergedCore[key] = value;
       }
     }
@@ -160,13 +187,13 @@ function parseAddressComponents(address: string): {
   const p1 = /,\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
   if (p1) return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
 
-  const p2 = /\s+(\w[\w\s]*?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  const p2 = /\s+(\S+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
   if (p2) return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
 
   const p3 = /,\s*([^,]+),\s*([A-Z]{2})\s*$/i.exec(address);
   if (p3) return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
 
-  const p4 = /\s+(\w[\w\s]*?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
+  const p4 = /\s+(\S+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
   if (p4) return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
 
   return {};
@@ -242,19 +269,35 @@ async function mergeFemaData(
 
 type CorePatch = Record<string, unknown>;
 
+/** Document-sourced location fields: always overwrite (beat regex-parsed address). */
+const LOCATION_FORCE_KEYS = new Set(["City", "State", "Zip", "County"]);
+
+const DOCUMENT_FORCE_OVERWRITE_KEYS: Record<string, Set<string>> = {
+  cad: LOCATION_FORCE_KEYS,
+  notes: LOCATION_FORCE_KEYS,
+  deed: LOCATION_FORCE_KEYS,
+};
+
 const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
-  deed: (d) => ({
-    Address: str(d.property_address),
-    instrumentNumber: str(d.instrument_number),
-    County: str(d.county),
-    purchasePrice: str(d.consideration),
-    purchaseDate: str(d.recording_date),
-    loanAmount: str(d.loan_amount),
-    deedType: str(d.deed_type),
-    grantor: str(d.grantor),
-    grantee: str(d.grantee),
-    ownershipSummary: str(d.ownership_summary),
-  }),
+  deed: (d) => {
+    const address = str(d.property_address);
+    const fromAddr = address ? parseAddressComponents(address) : {};
+    return {
+      Address: address,
+      ...(fromAddr.city ? { City: fromAddr.city } : {}),
+      ...(fromAddr.state ? { State: fromAddr.state } : {}),
+      ...(fromAddr.zip ? { Zip: fromAddr.zip } : {}),
+      instrumentNumber: str(d.instrument_number),
+      County: str(d.county),
+      purchasePrice: str(d.consideration),
+      purchaseDate: str(d.recording_date),
+      loanAmount: str(d.loan_amount),
+      deedType: str(d.deed_type),
+      grantor: str(d.grantor),
+      grantee: str(d.grantee),
+      ownershipSummary: str(d.ownership_summary),
+    };
+  },
 
   cad: (d) => ({
     APN: str(d.property_id),
