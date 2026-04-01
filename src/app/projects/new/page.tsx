@@ -2,7 +2,7 @@
 
 import { addDays, format, isValid, parse, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   createDefaultProject,
   normalizeProjectData,
@@ -13,12 +13,14 @@ import type { FolderStructure } from "~/lib/project-discovery";
 import type { EngagementData } from "~/lib/engagement-parser";
 import { ProfileMenu } from "~/components/ProfileMenu";
 import { useAuth } from "~/hooks/useAuth";
+import { createClient } from "~/utils/supabase/client";
 
 type WizardStep =
   | "select-folder"
   | "discovering"
   | "engagement"
   | "subject-docs"
+  | "photos"
   | "flood-map"
   | "confirm";
 
@@ -26,6 +28,34 @@ interface DriveFileItem {
   id: string;
   name: string;
   mimeType: string;
+}
+
+interface ProcessingTask {
+  id: string;
+  label: string;
+  type: "project" | "doc" | "photos";
+  status: "done" | "queued" | "background";
+  isCritical: boolean;
+}
+
+const ALL_STEPS: WizardStep[] = [
+  "select-folder",
+  "discovering",
+  "engagement",
+  "subject-docs",
+  "photos",
+  "flood-map",
+  "confirm",
+];
+
+const IMAGE_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "tif", "tiff",
+]);
+
+function isImageFile(name: string, mimeType?: string): boolean {
+  if (mimeType?.startsWith("image/")) return true;
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXTENSIONS.has(ext);
 }
 
 export default function NewProjectPage() {
@@ -37,44 +67,31 @@ export default function NewProjectPage() {
     error: listError,
   } = useProjectsList();
 
-  const [driveHealth, setDriveHealth] = useState<
-    "checking" | "ok" | "issue"
-  >("checking");
-  const [driveHealthMessage, setDriveHealthMessage] = useState<string | null>(
-    null,
-  );
+  const [driveHealth, setDriveHealth] = useState<"checking" | "ok" | "issue">("checking");
+  const [driveHealthMessage, setDriveHealthMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await fetch("/api/auth/drive-status");
-        const data = (await res.json()) as {
-          authenticated?: boolean;
-          error?: string;
-        };
+        const data = (await res.json()) as { authenticated?: boolean; error?: string };
         if (cancelled) return;
         if (data.authenticated) {
           setDriveHealth("ok");
           setDriveHealthMessage(null);
         } else {
           setDriveHealth("issue");
-          setDriveHealthMessage(
-            data.error ?? "Google Drive is not connected for this session.",
-          );
+          setDriveHealthMessage(data.error ?? "Google Drive is not connected for this session.");
         }
       } catch {
         if (!cancelled) {
           setDriveHealth("issue");
-          setDriveHealthMessage(
-            "Could not verify Google Drive access. Check your connection and try again.",
-          );
+          setDriveHealthMessage("Could not verify Google Drive access. Check your connection and try again.");
         }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const [step, setStep] = useState<WizardStep>("select-folder");
@@ -99,9 +116,100 @@ export default function NewProjectPage() {
   const [selectedSketchFileIds, setSelectedSketchFileIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [photoFiles, setPhotoFiles] = useState<DriveFileItem[]>([]);
+  const [autoImportPhotos, setAutoImportPhotos] = useState(true);
+
   const [floodMapFile, setFloodMapFile] = useState<DriveFileItem | null>(null);
   const [isParsingFlood, setIsParsingFlood] = useState(false);
   const [floodData, setFloodData] = useState<Record<string, string> | null>(null);
+
+  // Processing status modal state
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingTasks, setProcessingTasks] = useState<ProcessingTask[]>([]);
+  const [photoAnalysisCount, setPhotoAnalysisCount] = useState(0);
+  const [expectedPhotoCount, setExpectedPhotoCount] = useState(0);
+  const photoChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const docChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+
+  // Realtime subscriptions for processing modal
+  useEffect(() => {
+    if (!showProcessingModal || !projectId) return;
+
+    const supabase = createClient();
+
+    // Subscribe to document updates
+    const docChannel = supabase
+      .channel(`onboarding-docs:${projectId}`)
+      .on(
+        "postgres_changes" as never,
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "project_documents",
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload: { new: Record<string, unknown> }) => {
+          const doc = payload.new as { id: string; processed_at: string | null };
+          if (doc.processed_at) {
+            setProcessingTasks((prev) =>
+              prev.map((t) =>
+                t.id === `doc-${doc.id}` ? { ...t, status: "done" } : t,
+              ),
+            );
+          }
+        },
+      )
+      .subscribe();
+
+    docChannelRef.current = docChannel;
+
+    // Subscribe to photo analysis inserts
+    const photoChannel = supabase
+      .channel(`onboarding-photos:${projectId}`)
+      .on(
+        "postgres_changes" as never,
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "photo_analyses",
+          filter: `project_id=eq.${projectId}`,
+        },
+        () => {
+          setPhotoAnalysisCount((prev) => prev + 1);
+          setProcessingTasks((prev) =>
+            prev.map((t) =>
+              t.id === "photos" && t.status === "queued"
+                ? { ...t, status: "background" }
+                : t,
+            ),
+          );
+        },
+      )
+      .subscribe();
+
+    photoChannelRef.current = photoChannel;
+
+    return () => {
+      void docChannel.unsubscribe();
+      void photoChannel.unsubscribe();
+      docChannelRef.current = null;
+      photoChannelRef.current = null;
+    };
+  }, [showProcessingModal, projectId]);
+
+  // Auto-redirect when all critical tasks are done
+  useEffect(() => {
+    if (!showProcessingModal || !projectId) return;
+    const criticalTasks = processingTasks.filter((t) => t.isCritical);
+    if (criticalTasks.length === 0) return;
+    const allCriticalDone = criticalTasks.every((t) => t.status === "done");
+    if (allCriticalDone) {
+      const timer = setTimeout(() => {
+        router.push(`/project/${projectId}`);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [showProcessingModal, processingTasks, projectId, router]);
 
   const filteredProjects = availableProjects.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -125,10 +233,7 @@ export default function NewProjectPage() {
         const discoverRes = await fetch("/api/projects/discover", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId: newId,
-            projectFolderId: project.id,
-          }),
+          body: JSON.stringify({ projectId: newId, projectFolderId: project.id }),
         });
 
         if (!discoverRes.ok) {
@@ -146,79 +251,55 @@ export default function NewProjectPage() {
         setSpreadsheetId(discoverData.spreadsheetId);
         setSpreadsheetCandidates(discoverData.spreadsheetCandidates ?? []);
 
-        if (discoverData.folderStructure.engagementFolderId) {
-          const listRes = await fetch("/api/drive/list", {
+        // Fetch all folder contents in parallel
+        const fetchFolder = async (folderId: string): Promise<DriveFileItem[]> => {
+          const res = await fetch("/api/drive/list", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folderId: discoverData.folderStructure.engagementFolderId,
-              filesOnly: true,
-            }),
+            body: JSON.stringify({ folderId, filesOnly: true }),
           });
-          if (listRes.ok) {
-            const listData = (await listRes.json()) as { files: DriveFileItem[] };
-            setEngagementFiles(listData.files);
-          } else {
-            const errBody = (await listRes.json()) as { error?: string };
-            setDriveHealth("issue");
-            setDriveHealthMessage(
-              errBody.error ?? "Could not load engagement folder from Drive.",
-            );
-          }
-        }
+          if (!res.ok) return [];
+          const data = (await res.json()) as { files: DriveFileItem[] };
+          return data.files;
+        };
 
-        if (discoverData.folderStructure.subjectFolderId) {
-          const listRes = await fetch("/api/drive/list", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folderId: discoverData.folderStructure.subjectFolderId,
-              filesOnly: true,
-            }),
-          });
-          if (listRes.ok) {
-            const listData = (await listRes.json()) as { files: DriveFileItem[] };
-            setSubjectFiles(listData.files);
-          } else {
-            const errBody = (await listRes.json()) as { error?: string };
-            setDriveHealth("issue");
-            setDriveHealthMessage(
-              errBody.error ?? "Could not load subject folder from Drive.",
-            );
-          }
-        }
+        const [
+          fetchedEngagement,
+          fetchedSubject,
+          fetchedSketches,
+          fetchedPhotos,
+          fetchedMaps,
+        ] = await Promise.all([
+          discoverData.folderStructure.engagementFolderId
+            ? fetchFolder(discoverData.folderStructure.engagementFolderId)
+            : Promise.resolve([]),
+          discoverData.folderStructure.subjectFolderId
+            ? fetchFolder(discoverData.folderStructure.subjectFolderId)
+            : Promise.resolve([]),
+          discoverData.folderStructure.subjectSketchesFolderId
+            ? fetchFolder(discoverData.folderStructure.subjectSketchesFolderId)
+            : Promise.resolve([]),
+          discoverData.folderStructure.subjectPhotosFolderId
+            ? fetchFolder(discoverData.folderStructure.subjectPhotosFolderId)
+            : Promise.resolve([]),
+          discoverData.folderStructure.reportMapsFolderId
+            ? fetchFolder(discoverData.folderStructure.reportMapsFolderId)
+            : Promise.resolve([]),
+        ]);
 
-        if (discoverData.folderStructure.subjectSketchesFolderId) {
-          const listRes = await fetch("/api/drive/list", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folderId: discoverData.folderStructure.subjectSketchesFolderId,
-              filesOnly: true,
-            }),
-          });
-          if (listRes.ok) {
-            const listData = (await listRes.json()) as { files: DriveFileItem[] };
-            setSketchFiles(listData.files);
-          }
-        }
+        setEngagementFiles(fetchedEngagement);
+        setSubjectFiles(fetchedSubject);
+        setSketchFiles(fetchedSketches);
+        setPhotoFiles(fetchedPhotos.filter((f) => isImageFile(f.name, f.mimeType)));
 
-        if (discoverData.folderStructure.reportMapsFolderId) {
-          const listRes = await fetch("/api/drive/list", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folderId: discoverData.folderStructure.reportMapsFolderId,
-              filesOnly: true,
-            }),
-          });
-          if (listRes.ok) {
-            const listData = (await listRes.json()) as { files: DriveFileItem[] };
-            const floodFile = listData.files.find((f) =>
-              f.name.toLowerCase().includes("flood"),
-            );
-            if (floodFile) setFloodMapFile(floodFile);
-          }
+        const floodFile = fetchedMaps.find((f) =>
+          f.name.toLowerCase().includes("flood"),
+        );
+        if (floodFile) setFloodMapFile(floodFile);
+
+        // If drive list failed for engagement folder, show error
+        if (discoverData.folderStructure.engagementFolderId && fetchedEngagement.length === 0) {
+          // Non-fatal - user can still continue
         }
 
         setStep("engagement");
@@ -226,8 +307,6 @@ export default function NewProjectPage() {
         console.error("Discovery error:", err);
         setError(err instanceof Error ? err.message : "Discovery failed");
         setStep("select-folder");
-      } finally {
-        // Step-based UI handles the loading state
       }
     },
     [],
@@ -261,9 +340,7 @@ export default function NewProjectPage() {
           const err = (await res.json()) as { error?: string };
           if (res.status === 401) {
             setDriveHealth("issue");
-            setDriveHealthMessage(
-              err.error ?? "Google Drive access expired — sign in again.",
-            );
+            setDriveHealthMessage(err.error ?? "Google Drive access expired — sign in again.");
           }
           throw new Error(err.error ?? "Parse failed");
         }
@@ -332,9 +409,7 @@ export default function NewProjectPage() {
         const err = (await res.json()) as { error?: string };
         if (res.status === 401) {
           setDriveHealth("issue");
-          setDriveHealthMessage(
-            err.error ?? "Google Drive access expired — sign in again.",
-          );
+          setDriveHealthMessage(err.error ?? "Google Drive access expired — sign in again.");
         }
         throw new Error(err.error ?? "Failed to parse flood map");
       }
@@ -355,7 +430,6 @@ export default function NewProjectPage() {
     setError(null);
 
     try {
-      const { createClient } = await import("~/utils/supabase/client");
       const supabase = createClient();
 
       const address = engagementData?.propertyAddress ?? "";
@@ -378,8 +452,6 @@ export default function NewProjectPage() {
         }
       }
 
-      // Seed subject_data so Subject Overview starts populated.
-      // FEMA data goes into its own `fema` column to avoid collisions with core.
       const subjectCore: Record<string, unknown> = { Address: address };
       const addressParts = parseAddressParts(address);
       if (addressParts.city) subjectCore.City = addressParts.city;
@@ -410,51 +482,81 @@ export default function NewProjectPage() {
           { onConflict: "project_id" },
         );
 
-      if (selectedSubjectFileIds.size > 0) {
-        for (const fileId of selectedSubjectFileIds) {
-          const file = subjectFiles.find((f) => f.id === fileId);
-          if (!file) continue;
+      // Build processing tasks, starting with project creation (already done)
+      const tasks: ProcessingTask[] = [
+        { id: "project", label: "Project created", type: "project", status: "done", isCritical: false },
+      ];
 
-          const docType = inferDocumentType(file.name, file.mimeType);
-          await fetch("/api/documents", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              projectId,
-              documentType: docType,
-              documentLabel: file.name,
-              fileId: file.id,
-              fileName: file.name,
-              mimeType: file.mimeType,
-              sectionTag: "subject",
-            }),
-          });
+      // Submit subject docs, capturing document IDs for tracking
+      for (const fileId of selectedSubjectFileIds) {
+        const file = subjectFiles.find((f) => f.id === fileId);
+        if (!file) continue;
+
+        const docType = inferDocumentType(file.name, file.mimeType);
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            documentType: docType,
+            documentLabel: file.name,
+            fileId: file.id,
+            fileName: file.name,
+            mimeType: file.mimeType,
+            sectionTag: "subject",
+          }),
+        });
+
+        if (res.ok) {
+          const result = (await res.json()) as { documentId?: string };
+          if (result.documentId) {
+            tasks.push({
+              id: `doc-${result.documentId}`,
+              label: file.name,
+              type: "doc",
+              status: "queued",
+              isCritical: true,
+            });
+          }
         }
       }
 
-      if (selectedSketchFileIds.size > 0) {
-        for (const fileId of selectedSketchFileIds) {
-          const file = sketchFiles.find((f) => f.id === fileId);
-          if (!file) continue;
+      // Submit sketch docs
+      for (const fileId of selectedSketchFileIds) {
+        const file = sketchFiles.find((f) => f.id === fileId);
+        if (!file) continue;
 
-          await fetch("/api/documents", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              projectId,
-              documentType: "sketch",
-              documentLabel: file.name,
-              fileId: file.id,
-              fileName: file.name,
-              mimeType: file.mimeType,
-              sectionTag: "subject",
-            }),
-          });
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            documentType: "sketch",
+            documentLabel: file.name,
+            fileId: file.id,
+            fileName: file.name,
+            mimeType: file.mimeType,
+            sectionTag: "subject",
+          }),
+        });
+
+        if (res.ok) {
+          const result = (await res.json()) as { documentId?: string };
+          if (result.documentId) {
+            tasks.push({
+              id: `doc-${result.documentId}`,
+              label: file.name,
+              type: "doc",
+              status: "queued",
+              isCritical: true,
+            });
+          }
         }
       }
 
+      // Submit flood map doc (non-critical — FEMA data already extracted in wizard)
       if (floodMapFile) {
-        await fetch("/api/documents", {
+        const res = await fetch("/api/documents", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -467,24 +569,90 @@ export default function NewProjectPage() {
             sectionTag: "subject",
           }),
         });
+
+        if (res.ok) {
+          const result = (await res.json()) as { documentId?: string };
+          if (result.documentId) {
+            tasks.push({
+              id: `doc-${result.documentId}`,
+              label: floodMapFile.name,
+              type: "doc",
+              status: "queued",
+              isCritical: false,
+            });
+          }
+        }
       }
 
-      router.push(`/project/${projectId}`);
+      // Fire photo analysis (fire-and-forget) if opted in
+      if (autoImportPhotos && photoFiles.length > 0 && selectedProject) {
+        tasks.push({
+          id: "photos",
+          label: `Analyze subject photos (${photoFiles.length} images)`,
+          type: "photos",
+          status: "queued",
+          isCritical: false,
+        });
+
+        void fetch("/api/photos/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectFolderId: selectedProject.id,
+            projectId,
+          }),
+        });
+
+        setExpectedPhotoCount(photoFiles.length);
+      }
+
+      // If there are no critical tasks, just redirect immediately
+      const criticalCount = tasks.filter((t) => t.isCritical).length;
+      if (criticalCount === 0) {
+        router.push(`/project/${projectId}`);
+        return;
+      }
+
+      setProcessingTasks(tasks);
+      setShowProcessingModal(true);
     } catch (err) {
       console.error("Finalization error:", err);
       setError(err instanceof Error ? err.message : "Failed to finalize project");
     } finally {
       setIsSubmitting(false);
     }
-  }, [projectId, engagementData, selectedSubjectFileIds, subjectFiles, selectedSketchFileIds, sketchFiles, floodData, floodMapFile, router]);
+  }, [
+    projectId,
+    engagementData,
+    selectedSubjectFileIds,
+    subjectFiles,
+    selectedSketchFileIds,
+    sketchFiles,
+    floodData,
+    floodMapFile,
+    autoImportPhotos,
+    photoFiles,
+    selectedProject,
+    router,
+  ]);
 
-  const activeStyle =
-    "border-blue-500 bg-blue-600 text-white hover:bg-blue-700";
-  const inactiveStyle =
-    "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700";
+  const activeStyle = "border-blue-500 bg-blue-600 text-white hover:bg-blue-700";
+  const inactiveStyle = "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700";
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-950 px-4 py-8 sm:px-8">
+    <div className="relative flex min-h-screen flex-col bg-gray-950 px-4 py-8 sm:px-8">
+      {/* Processing status modal */}
+      {showProcessingModal && projectId && (
+        <ProcessingStatusModal
+          projectId={projectId}
+          projectName={projectName}
+          tasks={processingTasks}
+          photoAnalysisCount={photoAnalysisCount}
+          expectedPhotoCount={expectedPhotoCount}
+          onGoToDashboard={() => router.push(`/project/${projectId}`)}
+        />
+      )}
+
       <div className="mx-auto w-full max-w-2xl flex-1">
         <header className="mb-6 flex items-center justify-between gap-4">
           <button
@@ -515,29 +683,24 @@ export default function NewProjectPage() {
 
         {/* Progress indicator */}
         <div className="mb-8 flex items-center justify-center gap-2">
-          {(["select-folder", "discovering", "engagement", "subject-docs", "flood-map", "confirm"] as WizardStep[]).map(
-            (s, i) => {
-              const allSteps: WizardStep[] = ["select-folder", "discovering", "engagement", "subject-docs", "flood-map", "confirm"];
-              return (
-                <div key={s} className="flex items-center gap-2">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                      step === s
-                        ? "bg-blue-600 text-white"
-                        : allSteps.indexOf(s) < allSteps.indexOf(step)
-                          ? "bg-blue-900/50 text-blue-300"
-                          : "bg-gray-800 text-gray-500"
-                    }`}
-                  >
-                    {i + 1}
-                  </div>
-                  {i < allSteps.length - 1 && (
-                    <div className="h-px w-6 bg-gray-700" />
-                  )}
-                </div>
-              );
-            },
-          )}
+          {ALL_STEPS.map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                  step === s
+                    ? "bg-blue-600 text-white"
+                    : ALL_STEPS.indexOf(s) < ALL_STEPS.indexOf(step)
+                      ? "bg-blue-900/50 text-blue-300"
+                      : "bg-gray-800 text-gray-500"
+                }`}
+              >
+                {i + 1}
+              </div>
+              {i < ALL_STEPS.length - 1 && (
+                <div className="h-px w-4 bg-gray-700" />
+              )}
+            </div>
+          ))}
         </div>
 
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 shadow-2xl">
@@ -566,9 +729,7 @@ export default function NewProjectPage() {
                     <p>Loading available folders...</p>
                   </div>
                 ) : listError ? (
-                  <div className="p-6 text-center text-sm text-red-400">
-                    {listError}
-                  </div>
+                  <div className="p-6 text-center text-sm text-red-400">{listError}</div>
                 ) : filteredProjects.length === 0 ? (
                   <div className="p-6 text-center text-sm text-gray-500">
                     No project folders found
@@ -589,7 +750,6 @@ export default function NewProjectPage() {
                   </div>
                 )}
               </div>
-
             </>
           )}
 
@@ -616,18 +776,17 @@ export default function NewProjectPage() {
                 Select an engagement letter to extract client and property details, or skip this step.
               </p>
 
-              {/* Discovery summary */}
               <div className="mb-6 rounded-lg border border-gray-700 bg-gray-800/50 p-4">
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Discovered Structure
                 </h3>
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
                   <span>Subject folder: {folderStructure.subjectFolderId ? "Found" : "—"}</span>
-                  <span>Photos folder: {folderStructure.subjectPhotosFolderId ? "Found" : "—"}</span>
+                  <span>Photos folder: {folderStructure.subjectPhotosFolderId ? `Found (${photoFiles.length} images)` : "—"}</span>
                   <span>Reports folder: {folderStructure.reportsFolderId ? "Found" : "—"}</span>
                   <span>Maps folder: {folderStructure.reportMapsFolderId ? "Found" : "—"}</span>
                   <span>Comps folders: {folderStructure.compsFolderIds ? "Found" : "—"}</span>
-                  <span>Spreadsheet: {spreadsheetId ? "Found" : spreadsheetCandidates.length > 1 ? "Select below \u2193" : "\u2014"}</span>
+                  <span>Spreadsheet: {spreadsheetId ? "Found" : spreadsheetCandidates.length > 1 ? "Select below ↓" : "—"}</span>
                 </div>
               </div>
 
@@ -678,16 +837,12 @@ export default function NewProjectPage() {
                           type="button"
                           onClick={() => toggleEngagementFile(f.id)}
                           className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition ${
-                            isSelected
-                              ? "bg-blue-900/20 text-blue-300"
-                              : "text-gray-300 hover:bg-gray-800"
+                            isSelected ? "bg-blue-900/20 text-blue-300" : "text-gray-300 hover:bg-gray-800"
                           }`}
                         >
                           <div
                             className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
-                              isSelected
-                                ? "border-blue-500 bg-blue-600"
-                                : "border-gray-600 bg-gray-800"
+                              isSelected ? "border-blue-500 bg-blue-600" : "border-gray-600 bg-gray-800"
                             }`}
                           >
                             {isSelected && (
@@ -708,7 +863,9 @@ export default function NewProjectPage() {
                     onClick={() => void handleParseEngagement()}
                     disabled={selectedEngagementFileIds.size === 0 || isParsingEngagement}
                     className={`mt-3 w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
-                      selectedEngagementFileIds.size > 0 && !isParsingEngagement ? activeStyle : "border-gray-700 bg-gray-800 text-gray-500"
+                      selectedEngagementFileIds.size > 0 && !isParsingEngagement
+                        ? activeStyle
+                        : "border-gray-700 bg-gray-800 text-gray-500"
                     } disabled:opacity-50`}
                   >
                     {isParsingEngagement
@@ -740,9 +897,7 @@ export default function NewProjectPage() {
                     ] as [string, keyof EngagementData][]
                   ).map(([label, key]) => (
                     <div key={key}>
-                      <label className="mb-1 block text-xs text-gray-500">
-                        {label}
-                      </label>
+                      <label className="mb-1 block text-xs text-gray-500">{label}</label>
                       <input
                         type="text"
                         value={engagementData[key]}
@@ -756,9 +911,7 @@ export default function NewProjectPage() {
                     </div>
                   ))}
                   <div>
-                    <label className="mb-1 block text-xs text-gray-500">
-                      Effective Date
-                    </label>
+                    <label className="mb-1 block text-xs text-gray-500">Effective Date</label>
                     <input
                       type="date"
                       value={toDateInputValue(engagementData.effectiveDate)}
@@ -766,30 +919,20 @@ export default function NewProjectPage() {
                         const nextEffective = fromDateInputValue(e.target.value);
                         setEngagementData((prev) => {
                           if (!prev) return prev;
-                          return maybeFillReportDueDate({
-                            ...prev,
-                            effectiveDate: nextEffective,
-                          });
+                          return maybeFillReportDueDate({ ...prev, effectiveDate: nextEffective });
                         });
                       }}
                       className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-gray-500">
-                      Due Date
-                    </label>
+                    <label className="mb-1 block text-xs text-gray-500">Due Date</label>
                     <input
                       type="date"
                       value={toDateInputValue(engagementData.reportDueDate)}
                       onChange={(e) =>
                         setEngagementData((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                reportDueDate: fromDateInputValue(e.target.value),
-                              }
-                            : prev,
+                          prev ? { ...prev, reportDueDate: fromDateInputValue(e.target.value) } : prev,
                         )
                       }
                       className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 [color-scheme:dark] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
@@ -838,16 +981,12 @@ export default function NewProjectPage() {
                         type="button"
                         onClick={() => toggleSubjectFile(f.id)}
                         className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${
-                          isSelected
-                            ? "bg-blue-900/20 text-blue-300"
-                            : "text-gray-300 hover:bg-gray-800"
+                          isSelected ? "bg-blue-900/20 text-blue-300" : "text-gray-300 hover:bg-gray-800"
                         }`}
                       >
                         <div
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
-                            isSelected
-                              ? "border-blue-500 bg-blue-600"
-                              : "border-gray-600 bg-gray-800"
+                            isSelected ? "border-blue-500 bg-blue-600" : "border-gray-600 bg-gray-800"
                           }`}
                         >
                           {isSelected && (
@@ -885,16 +1024,12 @@ export default function NewProjectPage() {
                           type="button"
                           onClick={() => toggleSketchFile(f.id)}
                           className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${
-                            isSelected
-                              ? "bg-blue-900/20 text-blue-300"
-                              : "text-gray-300 hover:bg-gray-800"
+                            isSelected ? "bg-blue-900/20 text-blue-300" : "text-gray-300 hover:bg-gray-800"
                           }`}
                         >
                           <div
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
-                              isSelected
-                                ? "border-blue-500 bg-blue-600"
-                                : "border-gray-600 bg-gray-800"
+                              isSelected ? "border-blue-500 bg-blue-600" : "border-gray-600 bg-gray-800"
                             }`}
                           >
                             {isSelected && (
@@ -922,6 +1057,104 @@ export default function NewProjectPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setStep("photos")}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${activeStyle}`}
+                >
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 5: Photos confirmation */}
+          {step === "photos" && (
+            <>
+              <h2 className="mb-2 text-xl font-bold text-gray-100">
+                Subject Photos
+              </h2>
+              <p className="mb-6 text-sm text-gray-400">
+                {folderStructure.subjectPhotosFolderId
+                  ? `Found ${photoFiles.length} image${photoFiles.length !== 1 ? "s" : ""} in the subject photos folder.`
+                  : "No subject photos folder was found in the project structure."}
+              </p>
+
+              {photoFiles.length > 0 && (
+                <div className="mb-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Photo Files
+                    </span>
+                    <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs font-semibold text-gray-300">
+                      {photoFiles.length}
+                    </span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto rounded-lg border border-gray-700">
+                    {photoFiles.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 border-b border-gray-800 last:border-b-0"
+                      >
+                        <span className="text-gray-500 shrink-0">🖼️</span>
+                        <span className="truncate">{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!folderStructure.subjectPhotosFolderId && (
+                <div className="mb-6 rounded-lg border border-gray-700 bg-gray-800/50 px-4 py-3">
+                  <p className="text-sm text-gray-400">
+                    No photos folder found. A &quot;photos&quot; subfolder inside the subject folder is required for photo import.
+                    You can analyze photos manually from the subject photos page after project creation.
+                  </p>
+                </div>
+              )}
+
+              {/* Auto-import checkbox */}
+              <button
+                type="button"
+                onClick={() => setAutoImportPhotos((v) => !v)}
+                disabled={!folderStructure.subjectPhotosFolderId || photoFiles.length === 0}
+                className={`flex w-full items-start gap-4 rounded-xl border p-4 text-left transition ${
+                  autoImportPhotos && folderStructure.subjectPhotosFolderId && photoFiles.length > 0
+                    ? "border-blue-700/60 bg-blue-950/30"
+                    : "border-gray-700 bg-gray-800/40"
+                } disabled:opacity-40`}
+              >
+                <div
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                    autoImportPhotos && folderStructure.subjectPhotosFolderId && photoFiles.length > 0
+                      ? "border-blue-500 bg-blue-600"
+                      : "border-gray-600 bg-gray-800"
+                  }`}
+                >
+                  {autoImportPhotos && folderStructure.subjectPhotosFolderId && photoFiles.length > 0 && (
+                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-100">
+                    Auto-import and analyze subject photos
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Each photo will be classified, labeled, and described using AI. Analysis runs in the background after project creation. Results appear on the subject photos page.
+                  </p>
+                </div>
+              </button>
+
+              <div className="mt-6 flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => setStep("subject-docs")}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${inactiveStyle}`}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
                   onClick={() => setStep("flood-map")}
                   className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${activeStyle}`}
                 >
@@ -931,7 +1164,7 @@ export default function NewProjectPage() {
             </>
           )}
 
-          {/* Step 5: Flood Map */}
+          {/* Step 6: Flood Map */}
           {step === "flood-map" && (
             <>
               <h2 className="mb-2 text-xl font-bold text-gray-100">
@@ -1012,7 +1245,7 @@ export default function NewProjectPage() {
               <div className="mt-6 flex justify-between">
                 <button
                   type="button"
-                  onClick={() => setStep("subject-docs")}
+                  onClick={() => setStep("photos")}
                   className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${inactiveStyle}`}
                 >
                   Back
@@ -1039,7 +1272,7 @@ export default function NewProjectPage() {
             </>
           )}
 
-          {/* Step 6: Confirmation */}
+          {/* Step 7: Confirmation */}
           {step === "confirm" && (
             <>
               <h2 className="mb-2 text-xl font-bold text-gray-100">
@@ -1106,9 +1339,7 @@ export default function NewProjectPage() {
                     <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-700 pt-2 text-xs">
                       <span className="text-gray-400">Spreadsheet</span>
                       <code className="truncate font-mono text-gray-500" title={spreadsheetId}>
-                        {spreadsheetId.length > 16
-                          ? `${spreadsheetId.slice(0, 16)}...`
-                          : spreadsheetId}
+                        {spreadsheetId.length > 16 ? `${spreadsheetId.slice(0, 16)}...` : spreadsheetId}
                       </code>
                     </div>
                   )}
@@ -1125,6 +1356,15 @@ export default function NewProjectPage() {
                         return <li key={id}>{file?.name ?? id}</li>;
                       })}
                     </ul>
+                  </div>
+                )}
+
+                {autoImportPhotos && photoFiles.length > 0 && (
+                  <div className="flex items-center gap-3 rounded-lg border border-blue-900/40 bg-blue-950/20 px-4 py-3">
+                    <span className="text-blue-400 text-lg">📸</span>
+                    <p className="text-xs text-blue-200/80">
+                      <span className="font-semibold text-blue-100">{photoFiles.length} photos</span> will be analyzed in the background after creation.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1167,10 +1407,195 @@ export default function NewProjectPage() {
   );
 }
 
-function mergeEngagementData(
-  existing: EngagementData,
-  incoming: EngagementData,
-): EngagementData {
+// ============================================================
+// Processing Status Modal
+// ============================================================
+
+interface ProcessingStatusModalProps {
+  projectId: string;
+  projectName: string;
+  tasks: ProcessingTask[];
+  photoAnalysisCount: number;
+  expectedPhotoCount: number;
+  onGoToDashboard: () => void;
+}
+
+function ProcessingStatusModal({
+  projectId: _projectId,
+  projectName,
+  tasks,
+  photoAnalysisCount,
+  expectedPhotoCount,
+  onGoToDashboard,
+}: ProcessingStatusModalProps) {
+  const criticalTasks = tasks.filter((t) => t.isCritical);
+  const doneCritical = criticalTasks.filter((t) => t.status === "done").length;
+  const allCriticalDone = criticalTasks.length > 0 && doneCritical === criticalTasks.length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/90 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md rounded-2xl border border-gray-700/80 bg-gray-900 p-8 shadow-2xl">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <div className="mb-3 flex justify-center">
+            {allCriticalDone ? (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-900/40 text-green-400">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-gray-700 border-t-blue-500" />
+            )}
+          </div>
+          <h2 className="text-lg font-bold text-gray-100">
+            {allCriticalDone ? "Project Ready" : "Setting Up Project"}
+          </h2>
+          <p className="mt-1 text-sm text-gray-400 truncate">{projectName}</p>
+        </div>
+
+        {/* Progress bar (critical tasks only) */}
+        {criticalTasks.length > 0 && (
+          <div className="mb-6">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
+              <span>Processing documents</span>
+              <span>{doneCritical} / {criticalTasks.length}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                style={{ width: `${criticalTasks.length > 0 ? (doneCritical / criticalTasks.length) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Task list */}
+        <div className="space-y-2">
+          {tasks.map((task) => (
+            <ProcessingTaskRow
+              key={task.id}
+              task={task}
+              photoAnalysisCount={task.id === "photos" ? photoAnalysisCount : undefined}
+              expectedPhotoCount={task.id === "photos" ? expectedPhotoCount : undefined}
+            />
+          ))}
+        </div>
+
+        {/* Footer actions */}
+        <div className="mt-8 border-t border-gray-800 pt-6">
+          {allCriticalDone ? (
+            <div className="text-center">
+              <p className="mb-3 text-sm text-green-400">Redirecting to dashboard...</p>
+              <button
+                type="button"
+                onClick={onGoToDashboard}
+                className="w-full rounded-lg border border-blue-500 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="mb-3 text-xs text-gray-500">
+                You can open the dashboard while processing continues in the background.
+              </p>
+              <button
+                type="button"
+                onClick={onGoToDashboard}
+                className="w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:bg-gray-700"
+              >
+                Open Dashboard Now
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProcessingTaskRow({
+  task,
+  photoAnalysisCount,
+  expectedPhotoCount,
+}: {
+  task: ProcessingTask;
+  photoAnalysisCount?: number;
+  expectedPhotoCount?: number;
+}) {
+  const isPhotos = task.id === "photos";
+
+  const statusConfig = {
+    done: {
+      icon: (
+        <svg className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      ),
+      badge: (
+        <span className="rounded-full bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-400">
+          Done
+        </span>
+      ),
+    },
+    queued: {
+      icon: (
+        <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="9" />
+          <path strokeLinecap="round" d="M12 7v5l3 3" />
+        </svg>
+      ),
+      badge: (
+        <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-500">
+          Queued
+        </span>
+      ),
+    },
+    background: {
+      icon: (
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-700 border-t-blue-400" />
+      ),
+      badge: (
+        <span className="rounded-full bg-blue-950/50 px-2 py-0.5 text-xs font-medium text-blue-400">
+          Analyzing
+        </span>
+      ),
+    },
+  };
+
+  const config = statusConfig[task.status];
+
+  const label = isPhotos && task.status !== "queued" && photoAnalysisCount !== undefined
+    ? `${task.label.split("(")[0]?.trim() ?? task.label} (${photoAnalysisCount}${expectedPhotoCount ? ` / ${expectedPhotoCount}` : ""} analyzed)`
+    : task.label;
+
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+      task.status === "done"
+        ? "bg-green-950/20"
+        : task.status === "background"
+          ? "bg-blue-950/10"
+          : "bg-gray-800/40"
+    }`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="shrink-0">{config.icon}</div>
+        <span className={`truncate text-sm ${
+          task.status === "done" ? "text-gray-300" : "text-gray-400"
+        }`}>
+          {label}
+        </span>
+      </div>
+      <div className="shrink-0">{config.badge}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// Helper functions
+// ============================================================
+
+function mergeEngagementData(existing: EngagementData, incoming: EngagementData): EngagementData {
   const merged = { ...existing };
   for (const key of Object.keys(incoming) as (keyof EngagementData)[]) {
     if (!merged[key] && incoming[key]) {
@@ -1184,11 +1609,9 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
   const lower = fileName.toLowerCase();
   if (lower.includes("deed")) return "deed";
   if (lower.includes("flood")) return "flood_map";
-  if (lower.includes("cad") || lower.includes("appraisal district"))
-    return "cad";
+  if (lower.includes("cad") || lower.includes("appraisal district")) return "cad";
   if (lower.includes("zoning")) return "zoning_map";
-  if (lower.includes("engagement") || lower.includes("proposal"))
-    return "engagement";
+  if (lower.includes("engagement") || lower.includes("proposal")) return "engagement";
   if (lower.includes("notes")) return "notes";
   if (lower.includes("sketch")) return "sketch";
   if (lower.includes("survey") || lower.includes("plat")) return "other";
@@ -1197,10 +1620,6 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
 
 const DATE_PARSE_REF = new Date(2000, 0, 1);
 
-/**
- * Parse engagement effective/due strings (ISO, MM/DD/YYYY, long-form English) to a local calendar Date.
- * Returns null if the value is empty or not a real calendar date (e.g. Gemini "TBD" prose).
- */
 function parseEngagementDateToDate(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -1231,14 +1650,12 @@ function reportDueDateIsUnset(raw: string): boolean {
   return d === null;
 }
 
-/** Convert a stored date string to the YYYY-MM-DD format required by <input type="date">. */
 function toDateInputValue(value: string | undefined): string {
   if (!value?.trim()) return "";
   const d = parseEngagementDateToDate(value);
   return d ? format(d, "yyyy-MM-dd") : "";
 }
 
-/** Convert the YYYY-MM-DD value from <input type="date"> to MM/DD/YYYY for storage. */
 function fromDateInputValue(value: string): string {
   if (!value) return "";
   const d = parse(value, "yyyy-MM-dd", DATE_PARSE_REF);
@@ -1247,20 +1664,15 @@ function fromDateInputValue(value: string): string {
 
 const REPORT_DUE_DAYS_AFTER_EFFECTIVE = 21;
 
-/** When due date is empty or not parseable, and effective date parses, set due date to effective + 21 local calendar days. */
 function maybeFillReportDueDate(data: EngagementData): EngagementData {
   const effective = parseEngagementDateToDate(data.effectiveDate);
   if (!effective) return data;
   if (!reportDueDateIsUnset(data.reportDueDate)) return data;
 
   const due = addDays(effective, REPORT_DUE_DAYS_AFTER_EFFECTIVE);
-  return {
-    ...data,
-    reportDueDate: format(due, "MM/dd/yyyy"),
-  };
+  return { ...data, reportDueDate: format(due, "MM/dd/yyyy") };
 }
 
-/** Best-effort extraction of city, state, zip from a freeform US address string. */
 function parseAddressParts(address: string): {
   city?: string;
   state?: string;
@@ -1269,29 +1681,17 @@ function parseAddressParts(address: string): {
 } {
   if (!address) return {};
 
-  // Pattern 1: "..., City, ST ZIP" (standard)
   const p1 = /,\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
-  if (p1) {
-    return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
-  }
+  if (p1) return { city: p1[1]?.trim(), state: p1[2]?.toUpperCase(), zip: p1[3] };
 
-  // Pattern 2: "... City, ST ZIP" (last token before comma = city; avoids greedy street match)
   const p2 = /\s+(\S+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
-  if (p2) {
-    return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
-  }
+  if (p2) return { city: p2[1]?.trim(), state: p2[2]?.toUpperCase(), zip: p2[3] };
 
-  // Pattern 3: "..., City, ST" without zip
   const p3 = /,\s*([^,]+),\s*([A-Z]{2})\s*$/i.exec(address);
-  if (p3) {
-    return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
-  }
+  if (p3) return { city: p3[1]?.trim(), state: p3[2]?.toUpperCase() };
 
-  // Pattern 4: "... City ST ZIP" (no commas at all; last token before state = city)
   const p4 = /\s+(\S+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i.exec(address);
-  if (p4) {
-    return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
-  }
+  if (p4) return { city: p4[1]?.trim(), state: p4[2]?.toUpperCase(), zip: p4[3] };
 
   return {};
 }
