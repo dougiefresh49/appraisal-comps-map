@@ -12,6 +12,7 @@ import { useProject } from "~/hooks/useProject";
 import { createClient } from "~/utils/supabase/client";
 import { computeGeneratedFields } from "~/lib/calculated-fields";
 import type { Comparable } from "~/utils/projectStore";
+import { PushToSheetButton } from "~/components/PushToSheetButton";
 
 // ============================================================
 // Types
@@ -942,6 +943,26 @@ export function CompUITemplate({
               >
                 Edit Template
               </button>
+              <PushToSheetButton
+                confirmDescription={`${compType.toLowerCase()} UI template config to the 'ui-templates' sheet`}
+                confirmDetail="The template sections and field mappings will be serialized to the ui-templates sheet. Trigger generateStandard*UI from the Apps Script menu to regenerate the sheet template."
+                onPush={async () => {
+                  const res = await fetch("/api/spreadsheet/push-template", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      projectId,
+                      type: compType,
+                      templateType: salesVariant === "income" ? "INCOME" : "DEFAULT",
+                      sections,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = (await res.json()) as { error?: string };
+                    throw new Error(data.error ?? "Push failed");
+                  }
+                }}
+              />
               <button
                 type="button"
                 onClick={() => void handleCopy()}
