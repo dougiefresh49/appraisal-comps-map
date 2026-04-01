@@ -16,7 +16,7 @@ A Next.js (App Router) webapp for commercial real estate appraisal report prepar
 | State (server) | Supabase (PostgreSQL, Realtime, RLS, pgvector) |
 | State (client) | React hooks (`useProject`, `useSubjectData`, `useCompParsedData`, etc.) |
 | Auth | Supabase Google OAuth (provider_token used for Drive API) |
-| AI | Google Gemini (`@google/genai`) for document extraction, report generation, comp parsing |
+| AI | Google Gemini 3+ (`@google/genai`) only -- see [Gemini models](#gemini-api-gemini-3-only) |
 | File Storage | Google Drive (user's OAuth token, accessed via `src/lib/drive-api.ts`) |
 | Maps | Google Maps Platform (`@vis.gl/react-google-maps`) |
 | Package Manager | pnpm |
@@ -196,7 +196,7 @@ See `docs/issues/000-index.md` for the full list, parallelization guide, and wav
 
 **Wave 1 -- Critical / onboarding:** 022 (comp_parsed_data UNIQUE + upsert), 023 (onboarding `section_tag`), 024 (subject merge from notes/CAD/address), 025 (sketches in onboarding)
 
-**Wave 2 -- Data quality:** 026 (parsing prompts + gemini-3.1-pro-preview), 027 (`comp_parcels` / `comp_parcel_improvements`), 028 (calculated fields), 029 (parser type defs vs gem prompt sync), 034 (update all Gemini models to 3.x)
+**Wave 2 -- Data quality:** 026 (parsing prompts + `gemini-3.1-pro-preview`), 027 (`comp_parcels` / `comp_parcel_improvements`), 028 (calculated fields), 029 (parser type defs vs gem prompt sync), 034 (audit codebase for model IDs older than Gemini 3; policy is Gemini 3+ only)
 
 **Wave 3 -- Features:** 030 (comp summary tables w/ dropdown labels + add/remove rows), 031 (comp UI redesign; absorbs former 016), 032 (past report vectorization: narratives + comp data + spreadsheet import), 033 (per-section push to spreadsheet via Sheets API)
 
@@ -210,6 +210,22 @@ Most n8n workflows have been replaced. Remaining:
 - **Comp exists check** (`/comps-exists`) -- still calls n8n, will be replaced when comps are fully managed in-app
 
 Everything else (project creation, folder discovery, document processing, report generation, comp parsing, photo export, cover data, comp folder browsing) is handled directly by the webapp.
+
+## Gemini API (Gemini 3+ only)
+
+**Policy:** Use **only** [Gemini 3](https://ai.google.dev/gemini-api/docs/gemini-3) family model IDs for text, vision, and structured outputs in this repo. Do **not** add new call sites or defaults that use Gemini 2.x, 1.5, or other models older than Gemini 3. When changing existing code, migrate model strings to Gemini 3 unless a Google-documented exception applies (e.g. a capability explicitly requires an older model).
+
+**Reference:** [Gemini 3 Developer Guide](https://ai.google.dev/gemini-api/docs/gemini-3) (thinking levels, `media_resolution` on `v1alpha`, temperature default 1.0, thought signatures for tools / image workflows).
+
+**Standard model IDs (pick by latency/cost vs reasoning depth):**
+
+| Use case | Model ID |
+|----------|----------|
+| High volume, lowest cost / latency | `gemini-3.1-flash-lite-preview` |
+| Balanced flash | `gemini-3-flash-preview` |
+| Heaviest reasoning, extraction quality | `gemini-3.1-pro-preview` |
+
+For multimodal **image generation** or other specialized 3.x variants, use the IDs listed in the same guide (e.g. `gemini-3.1-flash-image-preview` / `gemini-3-pro-image-preview`) rather than legacy image models.
 
 ## Environment Variables
 
