@@ -31,7 +31,12 @@ Extract the following sections if they exist in the document. Return a JSON obje
 For each section key, return the full extracted text. If a section is not found, return an empty string for that key.
 Only return the JSON object, nothing else.`;
 
-export async function POST() {
+interface BackfillRequestBody {
+  project_id?: string;
+  pdf_filename?: string;
+}
+
+export async function POST(request: Request) {
   try {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -41,38 +46,65 @@ export async function POST() {
       );
     }
 
-    const reportsDir = path.join(process.cwd(), "docs", "prior-reports");
+    let body: BackfillRequestBody = {};
+    try {
+      const text = await request.text();
+      if (text.trim()) {
+        body = JSON.parse(text) as BackfillRequestBody;
+      }
+    } catch {
+      // Empty body or non-JSON is fine — treat as no-op body
+    }
+
+    const { project_id, pdf_filename } = body;
+
+    const reportsDir = path.join(process.cwd(), "docs", "past-reports");
     if (!fs.existsSync(reportsDir)) {
       return NextResponse.json(
-        { error: "docs/prior-reports directory not found" },
+        { error: "docs/past-reports directory not found" },
         { status: 404 },
       );
     }
 
-    const pdfFiles = fs
-      .readdirSync(reportsDir)
-      .filter((f) => f.endsWith(".pdf"))
-      .sort();
+    // When pdf_filename is provided, process only that file; otherwise process all PDFs
+    let pdfFiles: string[];
+    if (pdf_filename) {
+      if (!fs.existsSync(path.join(reportsDir, pdf_filename))) {
+        return NextResponse.json(
+          { error: `PDF file not found: ${pdf_filename}` },
+          { status: 404 },
+        );
+      }
+      pdfFiles = [pdf_filename];
+    } else {
+      pdfFiles = fs
+        .readdirSync(reportsDir)
+        .filter((f) => f.endsWith(".pdf"))
+        .sort();
+    }
 
     if (pdfFiles.length === 0) {
       return NextResponse.json(
-        { error: "No PDF files found in docs/prior-reports" },
+        { error: "No PDF files found in docs/past-reports" },
         { status: 404 },
       );
     }
 
     const supabase = await createClient();
 
-    const { count } = await supabase
-      .from("report_sections")
-      .select("id", { count: "exact", head: true })
-      .is("project_id", null);
+    // Only skip if doing a bulk run without a specific project_id (legacy orphan check)
+    if (!project_id && !pdf_filename) {
+      const { count } = await supabase
+        .from("report_sections")
+        .select("id", { count: "exact", head: true })
+        .is("project_id", null);
 
-    if (count && count > 0) {
-      return NextResponse.json({
-        message: `Backfill already contains ${count} orphan report sections. Skipping.`,
-        existingCount: count,
-      });
+      if (count && count > 0) {
+        return NextResponse.json({
+          message: `Backfill already contains ${count} orphan report sections. Skipping.`,
+          existingCount: count,
+        });
+      }
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -90,7 +122,7 @@ export async function POST() {
         const base64Data = fileBuffer.toString("base64");
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite-preview",
+          model: "gemini-2.0-flash",
           contents: [
             {
               inlineData: {
@@ -135,7 +167,7 @@ export async function POST() {
           if (!content || content.trim().length < 50) continue;
 
           const insertPayload: Record<string, unknown> = {
-            project_id: null,
+            project_id: project_id ?? null,
             section_key: key,
             content: content.trim(),
             version: 1,
@@ -183,6 +215,7 @@ export async function POST() {
 
     return NextResponse.json({
       message: `Processed ${results.length} PDFs, extracted ${totalSections} total sections`,
+      project_id: project_id ?? null,
       results,
     });
   } catch (error) {
