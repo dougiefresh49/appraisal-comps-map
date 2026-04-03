@@ -1,0 +1,1011 @@
+{
+  "$schema": "Report Section Taxonomy v1",
+  "description": "Canonical taxonomy of commercial appraisal report sections for annotation and knowledge extraction. Covers all ~50+ sections visible in the standard TOC, plus variations across land-only, improved, and income-approach reports.",
+  "parent_groups": [
+    {
+      "key": "cover",
+      "label": "Cover & Transmittal",
+      "order": 1
+    },
+    {
+      "key": "definitions",
+      "label": "Definition of the Problem",
+      "order": 2
+    },
+    {
+      "key": "general-data",
+      "label": "General Data",
+      "order": 3
+    },
+    {
+      "key": "subject-analysis",
+      "label": "Subject Property Analysis",
+      "order": 4
+    },
+    {
+      "key": "valuation-land",
+      "label": "Sales Comparison – Land Value",
+      "order": 5
+    },
+    {
+      "key": "valuation-cost",
+      "label": "Cost Approach",
+      "order": 6
+    },
+    {
+      "key": "valuation-sales",
+      "label": "Sales Comparison – Improved",
+      "order": 7
+    },
+    {
+      "key": "valuation-income",
+      "label": "Income Capitalization Approach",
+      "order": 8
+    },
+    {
+      "key": "reconciliation",
+      "label": "Reconciliation & Certification",
+      "order": 9
+    },
+    {
+      "key": "addenda",
+      "label": "Addenda",
+      "order": 10
+    }
+  ],
+  "content_types": [
+    {
+      "key": "boilerplate",
+      "label": "Boilerplate",
+      "description": "Identical or near-identical across all reports. Legal definitions, standard disclaimers, certification language."
+    },
+    {
+      "key": "standard-with-tweaks",
+      "label": "Standard with Tweaks",
+      "description": "Mostly templated text where a few fields change per report (client name, dates, address, value amount)."
+    },
+    {
+      "key": "data-driven",
+      "label": "Data-Driven",
+      "description": "Content generated directly from structured data — tables, charts, schedules, tax breakdowns."
+    },
+    {
+      "key": "narrative",
+      "label": "Narrative",
+      "description": "Appraiser-written prose that varies significantly between reports based on the property and market."
+    },
+    {
+      "key": "analysis",
+      "label": "Analysis",
+      "description": "Combines data and reasoning — adjustments, reconciliation, value conclusions with supporting logic."
+    },
+    {
+      "key": "visual",
+      "label": "Visual",
+      "description": "Maps, photos, sketches, flood maps — image-primary content."
+    }
+  ],
+  "sections": [
+    {
+      "section_key": "letter-of-transmittal",
+      "label": "Letter of Transmittal",
+      "parent_group": "cover",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "important",
+      "data_sources": [
+        "projects.client_name",
+        "projects.effective_date",
+        "subject_data.core.Address",
+        "report_sections.reconciliation"
+      ],
+      "existing_parser_key": null,
+      "notes": "Template letter with client name, address, date, and final value plugged in. Body structure is nearly identical across reports."
+    },
+    {
+      "section_key": "table-of-contents",
+      "label": "Table of Contents",
+      "parent_group": "cover",
+      "content_type": "data-driven",
+      "variability": "medium",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Auto-generated structural element. Useful only for identifying which sections a report contains (e.g. whether income approach is present)."
+    },
+    {
+      "section_key": "summary-of-significant-facts",
+      "label": "Summary of Significant Facts and Conclusions",
+      "parent_group": "cover",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "subject_data.core",
+        "subject_data.taxes",
+        "report_sections.reconciliation",
+        "projects.effective_date"
+      ],
+      "existing_parser_key": null,
+      "notes": "One-page summary table with effective date, property details, zoning, HBU, indicated values by approach, and final value. All data sourced from other sections. High extraction value as a quick validation checkpoint."
+    },
+    {
+      "section_key": "extraordinary-assumptions",
+      "label": "Extraordinary Assumptions",
+      "parent_group": "cover",
+      "content_type": "standard-with-tweaks",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.extraordinary-assumptions"
+      ],
+      "existing_parser_key": "extraordinary-assumptions",
+      "notes": "Usually 1-3 bullet points. Often 'None' for straightforward assignments. When present, they materially affect the value conclusion and must be tracked."
+    },
+    {
+      "section_key": "hypothetical-conditions",
+      "label": "Hypothetical Conditions",
+      "parent_group": "cover",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Usually 'None' or a brief statement. Less common than extraordinary assumptions in these reports."
+    },
+    {
+      "section_key": "qualifications-of-appraiser",
+      "label": "Qualifications of Appraiser",
+      "parent_group": "cover",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Appraiser's resume/qualifications. Identical across all reports by the same appraiser. Heading varies: 'Qualifications of Deanna Peden' in most reports."
+    },
+    {
+      "section_key": "subject-photos",
+      "label": "Subject Photos",
+      "parent_group": "cover",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "skip",
+      "data_sources": [
+        "photo_analyses"
+      ],
+      "existing_parser_key": null,
+      "notes": "Photos of the subject property. Handled separately by the photo_analyses pipeline; no text extraction needed from this section."
+    },
+    {
+      "section_key": "property-identification",
+      "label": "Property Identification",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "subject_data.core.Address",
+        "subject_data.core.APN",
+        "subject_data.core.Legal",
+        "subject_data.core.County"
+      ],
+      "existing_parser_key": null,
+      "notes": "Address, APN, legal description, county. Template sentence with property-specific data plugged in. Critical for matching reports to projects."
+    },
+    {
+      "section_key": "purpose-of-the-appraisal",
+      "label": "Purpose of the Appraisal",
+      "parent_group": "definitions",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Always 'To provide an estimation of Market Value as is.' One sentence, identical across reports."
+    },
+    {
+      "section_key": "definition-of-market-value",
+      "label": "Definition of Market Value",
+      "parent_group": "definitions",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Legal definition quoted verbatim from USPAP / OCC 12 CFR Part 34. Identical in every report."
+    },
+    {
+      "section_key": "exposure-time",
+      "label": "Exposure Time",
+      "parent_group": "definitions",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Standard definition of exposure time. Identical across reports."
+    },
+    {
+      "section_key": "property-rights-appraised",
+      "label": "Property Rights Appraised",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "subject_data.core.Property Rights"
+      ],
+      "existing_parser_key": null,
+      "notes": "Usually 'Fee Simple Estate'. Occasionally 'Leased Fee' for tenant-occupied properties. One sentence."
+    },
+    {
+      "section_key": "intended-user",
+      "label": "Intended User of the Appraisal",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "projects.client_name"
+      ],
+      "existing_parser_key": null,
+      "notes": "Client name plugged into a template sentence. One sentence."
+    },
+    {
+      "section_key": "intended-use",
+      "label": "Intended Use of the Appraisal",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Usually 'To assist in making a lending/purchase/insurance decision.' Template sentence, varies only by transaction type."
+    },
+    {
+      "section_key": "scope-of-work",
+      "label": "Scope of Work / Appraisal Process",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "1-2 pages describing the appraisal process followed. Mostly templated with property-specific details (data sources consulted, inspections made)."
+    },
+    {
+      "section_key": "definitions-and-applicability",
+      "label": "Definitions and Applicability of Each Approach",
+      "parent_group": "definitions",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Textbook definitions of Cost, Sales Comparison, and Income approaches. Identical across reports. Not present in all reports (some fold this into Scope of Work)."
+    },
+    {
+      "section_key": "significant-appraisal-dates",
+      "label": "Significant Appraisal Dates",
+      "parent_group": "definitions",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "important",
+      "data_sources": [
+        "projects.effective_date"
+      ],
+      "existing_parser_key": null,
+      "notes": "Effective date and date of report. Sometimes includes date of inspection. These dates appear as sub-headings in the TOC but are a single short section. Critical for temporal context."
+    },
+    {
+      "section_key": "general-assumptions-and-limiting-conditions",
+      "label": "General Assumptions and Limiting Conditions",
+      "parent_group": "definitions",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "4+ pages of standard legal disclaimers. Identical across all reports. No extraction value."
+    },
+    {
+      "section_key": "neighborhood",
+      "label": "Neighborhood Analysis",
+      "parent_group": "general-data",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.neighborhood",
+        "knowledge_base"
+      ],
+      "existing_parser_key": "neighborhood",
+      "notes": "Appraiser-written description of the immediate neighborhood — boundaries, land uses, trends, amenities, demographics. Varies significantly by location. High RAG value for similar properties in the same area."
+    },
+    {
+      "section_key": "market-area",
+      "label": "Market Area",
+      "parent_group": "general-data",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.neighborhood",
+        "knowledge_base"
+      ],
+      "existing_parser_key": null,
+      "notes": "Broader market analysis — city/region economic data, population trends, employment, major employers, construction activity. Often includes tables of economic indicators. Reusable across reports in the same city/region."
+    },
+    {
+      "section_key": "market-area-analysis-summary",
+      "label": "Market Area Analysis Summary",
+      "parent_group": "general-data",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.neighborhood",
+        "knowledge_base"
+      ],
+      "existing_parser_key": null,
+      "notes": "Brief concluding summary of neighborhood + market area analysis. Not present in all reports (appears in 103 East Ave, some others). When present, captures the appraiser's overall market conclusion."
+    },
+    {
+      "section_key": "neighborhood-map",
+      "label": "Neighborhood Map",
+      "parent_group": "general-data",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "maps"
+      ],
+      "existing_parser_key": null,
+      "notes": "Map image showing subject location within the neighborhood. Generated/managed by the maps system in the app."
+    },
+    {
+      "section_key": "site-analysis-location",
+      "label": "Location",
+      "parent_group": "subject-analysis",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "subject_data.core.Address",
+        "subject_data.core.City",
+        "subject_data.core.County"
+      ],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Describes the property's location context — street frontage, proximity to highways, surrounding uses. 1-2 paragraphs."
+    },
+    {
+      "section_key": "site-analysis-size-configuration",
+      "label": "Size and Configuration",
+      "parent_group": "subject-analysis",
+      "content_type": "data-driven",
+      "variability": "medium",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "subject_data.core.Land Size (AC)",
+        "subject_data.core.Land Size (SF)",
+        "subject_data.core.Building Size (SF)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Land dimensions, acreage, shape description. Template sentence with property-specific measurements."
+    },
+    {
+      "section_key": "site-analysis-topography",
+      "label": "Topography / Drainage",
+      "parent_group": "subject-analysis",
+      "content_type": "narrative",
+      "variability": "medium",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Usually 1-2 sentences: 'Level and at street grade' or similar. Low variability for West Texas properties."
+    },
+    {
+      "section_key": "site-analysis-soil",
+      "label": "Soil and Subsoil Conditions",
+      "parent_group": "subject-analysis",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Standard disclaimer that no soil analysis was performed. Identical across reports."
+    },
+    {
+      "section_key": "zoning",
+      "label": "Zoning",
+      "parent_group": "subject-analysis",
+      "content_type": "narrative",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "subject_data.core.Zoning",
+        "subject_data.core.Zoning Area",
+        "subject_data.core.Zoning Description",
+        "report_sections.zoning"
+      ],
+      "existing_parser_key": "zoning",
+      "notes": "Sub-section of Site Analysis. Zoning classification, permitted uses, compliance assessment. Varies by jurisdiction. Some properties are outside city limits with no zoning."
+    },
+    {
+      "section_key": "property-taxes",
+      "label": "Property Taxes",
+      "parent_group": "subject-analysis",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "subject_data.taxes",
+        "subject_data.tax_entities",
+        "subject_data.core.Total Taxes"
+      ],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Tax entity breakdown table showing each taxing authority, rate, and amount. Structured data extraction is straightforward."
+    },
+    {
+      "section_key": "flood-plain",
+      "label": "Flood Plain",
+      "parent_group": "subject-analysis",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "subject_data.fema"
+      ],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. FEMA flood zone designation, map panel number, determination date. Template sentence with zone-specific data."
+    },
+    {
+      "section_key": "flood-map",
+      "label": "Flood Map",
+      "parent_group": "subject-analysis",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "subject_data.fema"
+      ],
+      "existing_parser_key": null,
+      "notes": "FEMA flood map image with subject property location marked."
+    },
+    {
+      "section_key": "utilities-and-public-services",
+      "label": "Utilities and Public Services",
+      "parent_group": "subject-analysis",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "subject_data.core.Utils - Electricity",
+        "subject_data.core.Utils - Water",
+        "subject_data.core.Utils - Sewer"
+      ],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Lists available utilities (electric, water, sewer, gas). Template structure with property-specific utility availability."
+    },
+    {
+      "section_key": "easements-and-encroachments",
+      "label": "Easements and Encroachments",
+      "parent_group": "subject-analysis",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Sub-section of Site Analysis. Usually a brief statement that no adverse easements were observed. Occasionally notes specific easements."
+    },
+    {
+      "section_key": "subject-property-development",
+      "label": "Subject Property Development",
+      "parent_group": "subject-analysis",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "subject_data.core",
+        "subject_data.improvements",
+        "subject_data.improvement_analysis"
+      ],
+      "existing_parser_key": null,
+      "notes": "Describes the improvements — building construction, features, condition, layout. For improved properties this can be several pages. For vacant land reports this section may be minimal or absent."
+    },
+    {
+      "section_key": "improvement-analysis",
+      "label": "Improvement Analysis",
+      "parent_group": "subject-analysis",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "subject_data.improvement_analysis",
+        "subject_data.improvements"
+      ],
+      "existing_parser_key": null,
+      "notes": "Detailed improvement breakdown table — building sections, SF, year built, construction type. Not present in all reports; appears in reports with multiple buildings or complex improvements (103 East Ave, 360 SE Loop). Absent from simpler or land-only reports."
+    },
+    {
+      "section_key": "ownership",
+      "label": "Ownership / Sales History",
+      "parent_group": "subject-analysis",
+      "content_type": "narrative",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.ownership"
+      ],
+      "existing_parser_key": "ownership",
+      "notes": "3-year ownership and sales history of the subject property. Includes recording info, sale prices, and whether the current sale is arm's-length. Required by USPAP."
+    },
+    {
+      "section_key": "subject-site-summary",
+      "label": "Site Analysis Summary",
+      "parent_group": "subject-analysis",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.subject-site-summary",
+        "subject_data.core"
+      ],
+      "existing_parser_key": "subject-site-summary",
+      "notes": "Site analysis + subject property development + utilities/easements narrative synthesized into an overall site description. In the parser this maps to SITE ANALYSIS content, not the 'Summary and Conclusion' TOC heading (which is a sibling under Subject Property Analysis, not a child of Ownership)."
+    },
+    {
+      "section_key": "building-sketch",
+      "label": "Building Sketch",
+      "parent_group": "subject-analysis",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Floor plan / sketch of the subject building(s). Sometimes labeled 'Building Sketches' (plural) for multi-building properties. Not present in land-only reports."
+    },
+    {
+      "section_key": "highest-best-use",
+      "label": "Highest and Best Use / Market Analysis",
+      "parent_group": "subject-analysis",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.highest-best-use",
+        "knowledge_base"
+      ],
+      "existing_parser_key": "highest-best-use",
+      "notes": "Introductory framing of the HBU analysis — the four-test methodology (legally permissible, physically possible, financially feasible, maximally productive). Template intro followed by property-specific analysis."
+    },
+    {
+      "section_key": "hbu-site-as-vacant",
+      "label": "Site As Vacant",
+      "parent_group": "subject-analysis",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.highest-best-use",
+        "knowledge_base"
+      ],
+      "existing_parser_key": null,
+      "notes": "HBU analysis assuming the site is vacant. Considers zoning, demand, and feasibility of development. Conclusion states the highest and best use as if vacant."
+    },
+    {
+      "section_key": "hbu-site-as-improved",
+      "label": "Site As Improved",
+      "parent_group": "subject-analysis",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.highest-best-use",
+        "knowledge_base"
+      ],
+      "existing_parser_key": null,
+      "notes": "HBU analysis considering existing improvements. Evaluates whether current use is the highest and best use, or whether demolition/renovation would be warranted. Not present in land-only reports."
+    },
+    {
+      "section_key": "valuation-process",
+      "label": "Valuation Process",
+      "parent_group": "valuation-land",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "reference",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Overview of which valuation approaches are applicable. In the TOC this heading is followed by brief sub-headings for each approach (Cost Approach to Value, Sales Comparison Approach, Income Approach) stating applicability. Together these are 1-2 pages. The stated approaches determine report structure."
+    },
+    {
+      "section_key": "sales-comparison-land",
+      "label": "Sales Comparison Approach – Land Value Estimate",
+      "parent_group": "valuation-land",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (LandSaleData)",
+        "report_sections.sales-comparison-land"
+      ],
+      "existing_parser_key": "sales-comparison-land",
+      "notes": "Introduction to the land sales comparison approach. Describes the search criteria, market conditions, and selection rationale. Followed by individual comp descriptions. Always present — even improved-property reports include a land value estimate for the cost approach."
+    },
+    {
+      "section_key": "land-sales-summary-chart",
+      "label": "Comparable Land Sales Summary Chart",
+      "parent_group": "valuation-land",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (LandSaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Summary table of all land comparables — address, date, price, size, price/SF, price/AC, zoning, utilities. Structured data maps directly to LandSaleData interface."
+    },
+    {
+      "section_key": "discussion-of-land-sales",
+      "label": "Discussion of Land Sales",
+      "parent_group": "valuation-land",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (LandSaleData)",
+        "report_sections.sales-comparison-land"
+      ],
+      "existing_parser_key": null,
+      "notes": "Detailed narrative discussing each land comparable — why selected, how it compares to the subject, key similarities and differences. High RAG value for understanding adjustment rationale."
+    },
+    {
+      "section_key": "land-sales-adjustment-chart",
+      "label": "Land Sales Adjustment Chart",
+      "parent_group": "valuation-land",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (LandSaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Grid showing adjustment percentages for each land comp across categories (market conditions, location, size, corner, highway frontage, utilities, etc.). The actual adjustment percentages and categories are critical for pattern extraction."
+    },
+    {
+      "section_key": "land-sales-adjustments-summary",
+      "label": "Comparable Land Sales Adjustments Summary",
+      "parent_group": "valuation-land",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (LandSaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Brief narrative summarizing adjusted values and the indicated land value conclusion. Ties the adjustment chart to the final land value estimate."
+    },
+    {
+      "section_key": "comparable-land-sales-map",
+      "label": "Comparable Land Sales Map",
+      "parent_group": "valuation-land",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "maps",
+        "map_markers"
+      ],
+      "existing_parser_key": null,
+      "notes": "Map showing subject and land comparable locations. Generated/managed by the maps system in the app."
+    },
+    {
+      "section_key": "cost-approach",
+      "label": "The Cost Approach",
+      "parent_group": "valuation-cost",
+      "content_type": "narrative",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.cost-approach",
+        "subject_data.core",
+        "subject_data.improvement_analysis"
+      ],
+      "existing_parser_key": "cost-approach",
+      "notes": "Introduction to the cost approach — methodology description, land value (from land sales comparison), and transition into replacement cost and depreciation analysis. Not present in land-only reports."
+    },
+    {
+      "section_key": "depreciation",
+      "label": "Depreciation",
+      "parent_group": "valuation-cost",
+      "content_type": "analysis",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "report_sections.cost-approach"
+      ],
+      "existing_parser_key": null,
+      "notes": "Covers depreciation definitions (physical, functional, external), and the applied depreciation estimates. In the TOC this spans sub-headings: Accrued Depreciation Definitions, Accrued Depreciation Application. Combined here as a single logical unit."
+    },
+    {
+      "section_key": "cost-estimation",
+      "label": "Improvement Cost Estimation via Swift Estimator",
+      "parent_group": "valuation-cost",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "subject_data.improvement_analysis"
+      ],
+      "existing_parser_key": null,
+      "notes": "Description of the cost estimation methodology (SwiftEstimator software). References the cost report in the addenda. The actual cost data lives in the Cost Approach Schedule."
+    },
+    {
+      "section_key": "cost-approach-schedule",
+      "label": "Cost Approach Schedule",
+      "parent_group": "valuation-cost",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "subject_data.core",
+        "subject_data.improvement_analysis",
+        "comp_parsed_data.raw_data (LandSaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "The cost approach calculation table: land value + replacement cost new - depreciation = indicated value via cost approach. Structured extraction of land value, RCN, depreciation amount/percentage, and final cost indication."
+    },
+    {
+      "section_key": "sales-comparison-improved",
+      "label": "Sales Comparison Approach – Improved Properties",
+      "parent_group": "valuation-sales",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)",
+        "report_sections.sales-comparison-improved"
+      ],
+      "existing_parser_key": "sales-comparison-improved",
+      "notes": "Introduction to the improved sales comparison — search criteria, market conditions, and selection rationale. Lists individual comp descriptions. Not present in land-only reports. In the TOC this is the second occurrence of 'SALES COMPARISON APPROACH'."
+    },
+    {
+      "section_key": "sales-summary-chart",
+      "label": "Comparable Sales Summary Chart",
+      "parent_group": "valuation-sales",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Summary table of improved sales comparables — address, date, price, building SF, land SF, price/SF, year built, condition, etc. Structured data maps directly to SaleData interface."
+    },
+    {
+      "section_key": "discussion-of-improved-sales",
+      "label": "Discussion of Improved Sales",
+      "parent_group": "valuation-sales",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)",
+        "report_sections.sales-comparison-improved"
+      ],
+      "existing_parser_key": null,
+      "notes": "Detailed narrative discussing each improved comparable — construction, condition, similarities/differences to subject. High RAG value."
+    },
+    {
+      "section_key": "land-to-building-ratio",
+      "label": "Land to Building Ratio",
+      "parent_group": "valuation-sales",
+      "content_type": "data-driven",
+      "variability": "medium",
+      "extraction_priority": "important",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)",
+        "subject_data.core"
+      ],
+      "existing_parser_key": null,
+      "notes": "Table comparing land/building ratios across subject and comparables. Used to assess site utilization. Not present in all reports."
+    },
+    {
+      "section_key": "sales-adjustment-chart",
+      "label": "Sales Adjustment Chart",
+      "parent_group": "valuation-sales",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Grid showing adjustment percentages for each improved comp across categories (market conditions, location, size, age, condition, construction, features, etc.). Critical for pattern extraction."
+    },
+    {
+      "section_key": "sales-adjustments-summary",
+      "label": "Comparable Sales Adjustments Summary",
+      "parent_group": "valuation-sales",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Brief narrative summarizing adjusted values and the indicated value via sales comparison. Ties the adjustment chart to the value conclusion."
+    },
+    {
+      "section_key": "comparable-sales-map",
+      "label": "Comparable Sales Map",
+      "parent_group": "valuation-sales",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "maps",
+        "map_markers"
+      ],
+      "existing_parser_key": null,
+      "notes": "Map showing subject and improved comparable locations. Generated/managed by the maps system."
+    },
+    {
+      "section_key": "income-capitalization-approach",
+      "label": "Income Capitalization Approach",
+      "parent_group": "valuation-income",
+      "content_type": "narrative",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "comp_parsed_data.raw_data (RentalData)",
+        "report_sections"
+      ],
+      "existing_parser_key": null,
+      "notes": "Introduction and methodology for the income approach — rent analysis, vacancy, expenses, capitalization. Only present in reports where income approach is applicable (e.g. 360 SE Loop 338). Includes rental comp descriptions."
+    },
+    {
+      "section_key": "rentals-summary-chart",
+      "label": "Rentals Summary Chart",
+      "parent_group": "valuation-income",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (RentalData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Summary table of rental comparables — address, rent/SF, lease terms, size, property type, condition. Maps to RentalData interface. Only present in income-approach reports."
+    },
+    {
+      "section_key": "rentals-adjustment-chart",
+      "label": "Rentals Adjustment Chart",
+      "parent_group": "valuation-income",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (RentalData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Adjustment grid for rental comparables — similar structure to land/sales adjustment charts. Only present in income-approach reports."
+    },
+    {
+      "section_key": "rentals-adjustments-summary",
+      "label": "Comparable Rentals Adjustments Summary",
+      "parent_group": "valuation-income",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (RentalData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Summary of adjusted rental values and indicated market rent conclusion. Only present in income-approach reports."
+    },
+    {
+      "section_key": "income-approach-schedule",
+      "label": "Income Approach Schedule",
+      "parent_group": "valuation-income",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "comp_parsed_data.raw_data (RentalData)",
+        "subject_data.core"
+      ],
+      "existing_parser_key": null,
+      "notes": "Income capitalization calculation: PGI - vacancy = EGI - expenses = NOI / cap rate = indicated value. Structured extraction of each line item. Only present in income-approach reports."
+    },
+    {
+      "section_key": "overall-capitalization-rates",
+      "label": "Overall Capitalization Rates",
+      "parent_group": "valuation-income",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "comp_parsed_data.raw_data (SaleData)"
+      ],
+      "existing_parser_key": null,
+      "notes": "Table of cap rates derived from comparable sales (NOI / sale price). Used to support the selected cap rate. Only present in income-approach reports."
+    },
+    {
+      "section_key": "expense-verification",
+      "label": "Expense Verification",
+      "parent_group": "valuation-income",
+      "content_type": "data-driven",
+      "variability": "high",
+      "extraction_priority": "important",
+      "data_sources": [
+        "subject_data.core"
+      ],
+      "existing_parser_key": null,
+      "notes": "Verification of expense estimates used in the income approach — taxes, insurance, maintenance, management. Only present in income-approach reports."
+    },
+    {
+      "section_key": "rentals-map",
+      "label": "Rentals Map",
+      "parent_group": "valuation-income",
+      "content_type": "visual",
+      "variability": "high",
+      "extraction_priority": "reference",
+      "data_sources": [
+        "maps",
+        "map_markers"
+      ],
+      "existing_parser_key": null,
+      "notes": "Map showing subject and rental comparable locations. Only present in income-approach reports."
+    },
+    {
+      "section_key": "reconciliation",
+      "label": "Reconciliation and Final Value Estimate",
+      "parent_group": "reconciliation",
+      "content_type": "analysis",
+      "variability": "high",
+      "extraction_priority": "critical",
+      "data_sources": [
+        "report_sections.reconciliation"
+      ],
+      "existing_parser_key": "reconciliation",
+      "notes": "The conclusion tying all approaches together. States the indicated value from each approach used, explains which approach is given most weight and why, and states the final reconciled value estimate. The most important single section for extraction."
+    },
+    {
+      "section_key": "certification-of-value",
+      "label": "Certification of Value",
+      "parent_group": "reconciliation",
+      "content_type": "standard-with-tweaks",
+      "variability": "low",
+      "extraction_priority": "important",
+      "data_sources": [
+        "projects.effective_date",
+        "subject_data.core.Address"
+      ],
+      "existing_parser_key": null,
+      "notes": "USPAP-required certification signed by the appraiser. Template text with property-specific data (address, date, value). Contains the legally binding value statement."
+    },
+    {
+      "section_key": "appraiser-certification",
+      "label": "Appraiser Certification",
+      "parent_group": "addenda",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Copy of appraiser's state certification/license. Identical across reports."
+    },
+    {
+      "section_key": "eo-insurance",
+      "label": "Errors & Omissions Insurance",
+      "parent_group": "addenda",
+      "content_type": "boilerplate",
+      "variability": "none",
+      "extraction_priority": "skip",
+      "data_sources": [],
+      "existing_parser_key": null,
+      "notes": "Copy of E&O insurance certificate. Identical across reports (updated annually). Not present in all reports."
+    }
+  ]
+}

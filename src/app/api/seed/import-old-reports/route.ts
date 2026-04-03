@@ -89,8 +89,9 @@ export async function POST(request: Request) {
       projectName: string;
       project_id: string;
       action: "created" | "existing";
-      pdfBackfill: "triggered" | "skipped" | "no_pdf";
-      pdfBackfillDetail?: string;
+      fileMode: "markdown" | "pdf" | "no_file";
+      backfill: "triggered" | "skipped" | "no_file";
+      backfillDetail?: string;
       n8nWebhook: "fired" | "skipped";
     }[] = [];
 
@@ -129,14 +130,30 @@ export async function POST(request: Request) {
         action = "existing";
         console.log(
           TAG,
-          `  Found existing project (force=true), clearing report_sections: ${projectId}`,
+          `  Found existing project (force=true), clearing report_sections + extracted data: ${projectId}`,
         );
-        const { count } = await supabase
+        const { error: delSectErr } = await supabase
           .from("report_sections")
           .delete()
-          .eq("project_id", projectId)
-          .select("id", { count: "exact", head: true });
-        console.log(TAG, `  Deleted ${count ?? 0} existing report_sections`);
+          .eq("project_id", projectId);
+        if (delSectErr) {
+          console.warn(TAG, `  Failed to delete report_sections: ${delSectErr.message}`);
+        }
+        const { error: delExtErr } = await supabase
+          .from("report_extracted_data")
+          .delete()
+          .eq("project_id", projectId);
+        if (delExtErr) {
+          console.warn(TAG, `  Failed to delete report_extracted_data: ${delExtErr.message}`);
+        }
+        const { error: delSubErr } = await supabase
+          .from("subject_data")
+          .delete()
+          .eq("project_id", projectId);
+        if (delSubErr) {
+          console.warn(TAG, `  Failed to delete subject_data: ${delSubErr.message}`);
+        }
+        console.log(TAG, `  Cleared report_sections, report_extracted_data, subject_data for project ${projectId}`);
       } else {
         console.log(TAG, `  Creating new project...`);
         const { data: newProject, error: projectErr } = await supabase
@@ -159,7 +176,8 @@ export async function POST(request: Request) {
             projectName,
             project_id: "",
             action: "created",
-            pdfBackfill: "skipped",
+            fileMode: "no_file",
+            backfill: "skipped",
             n8nWebhook: "skipped",
           });
           continue;
@@ -171,18 +189,34 @@ export async function POST(request: Request) {
       }
 
       // ------------------------------------------------------------------
-      // Call backfill endpoint for this project's PDF
+      // Call backfill endpoint — prefer .md over .pdf
       // ------------------------------------------------------------------
+      const mdFilename = pdfFilename.replace(/\.pdf$/i, ".md");
+      const mdPath = path.join(pastReportsDir, mdFilename);
       const pdfPath = path.join(pastReportsDir, pdfFilename);
-      let pdfBackfill: "triggered" | "skipped" | "no_pdf";
-      let pdfBackfillDetail: string | undefined;
 
-      if (fs.existsSync(pdfPath)) {
+      const useMd = fs.existsSync(mdPath);
+      const usePdf = !useMd && fs.existsSync(pdfPath);
+
+      if (useMd) {
+        console.log(TAG, `  Using markdown: ${mdFilename} (preferred over PDF)`);
+      } else if (usePdf) {
+        console.log(TAG, `  Using PDF: ${pdfFilename} (no .md available)`);
+      } else {
+        console.warn(TAG, `  Neither .md nor .pdf found for ${pdfFilename}`);
+      }
+
+      let fileMode: "markdown" | "pdf" | "no_file";
+      let backfill: "triggered" | "skipped" | "no_file";
+      let backfillDetail: string | undefined;
+
+      if (useMd || usePdf) {
+        fileMode = useMd ? "markdown" : "pdf";
         const backfillUrl = `${baseUrl}/api/seed/backfill-reports`;
-        const backfillBody = {
-          project_id: projectId,
-          pdf_filename: pdfFilename,
-        };
+        const backfillBody = useMd
+          ? { project_id: projectId, md_filename: mdFilename }
+          : { project_id: projectId, pdf_filename: pdfFilename };
+
         console.log(
           TAG,
           `  Calling backfill: POST ${backfillUrl}`,
@@ -204,16 +238,16 @@ export async function POST(request: Request) {
           const elapsed = Date.now() - backfillT0;
 
           if (backfillRes.ok) {
-            pdfBackfill = "triggered";
-            pdfBackfillDetail = JSON.stringify(backfillJson);
+            backfill = "triggered";
+            backfillDetail = JSON.stringify(backfillJson);
             console.log(
               TAG,
               `  Backfill OK (${elapsed}ms):`,
               JSON.stringify(backfillJson, null, 2),
             );
           } else {
-            pdfBackfill = "skipped";
-            pdfBackfillDetail = `HTTP ${backfillRes.status}: ${JSON.stringify(backfillJson)}`;
+            backfill = "skipped";
+            backfillDetail = `HTTP ${backfillRes.status}: ${JSON.stringify(backfillJson)}`;
             console.error(
               TAG,
               `  Backfill FAILED (${elapsed}ms): HTTP ${backfillRes.status}`,
@@ -221,14 +255,15 @@ export async function POST(request: Request) {
             );
           }
         } catch (err) {
-          pdfBackfill = "skipped";
-          pdfBackfillDetail =
+          backfill = "skipped";
+          backfillDetail =
             err instanceof Error ? err.message : "fetch error";
-          console.error(TAG, `  Backfill EXCEPTION:`, pdfBackfillDetail);
+          console.error(TAG, `  Backfill EXCEPTION:`, backfillDetail);
         }
       } else {
-        pdfBackfill = "no_pdf";
-        console.warn(TAG, `  PDF not found on disk: ${pdfFilename}`);
+        fileMode = "no_file";
+        backfill = "no_file";
+        console.warn(TAG, `  Skipping backfill — no file found for ${pdfFilename}`);
       }
 
       // ------------------------------------------------------------------
@@ -261,8 +296,9 @@ export async function POST(request: Request) {
         projectName,
         project_id: projectId,
         action,
-        pdfBackfill,
-        pdfBackfillDetail,
+        fileMode,
+        backfill,
+        backfillDetail,
         n8nWebhook,
       };
       results.push(result);

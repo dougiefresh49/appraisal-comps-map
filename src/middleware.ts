@@ -29,12 +29,9 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Local-only: seed API routes use the service role and read CSVs from disk.
-  // curl without browser cookies is expected during development.
-  if (
-    process.env.NODE_ENV === "development" &&
-    request.nextUrl.pathname.startsWith("/api/seed/")
-  ) {
+  // Seed API routes self-protect against production misuse internally.
+  // Bypass auth middleware so these can be called via curl in development.
+  if (request.nextUrl.pathname.startsWith("/api/seed/")) {
     return NextResponse.next({ request });
   }
 
