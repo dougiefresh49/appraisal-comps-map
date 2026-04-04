@@ -6,6 +6,10 @@ import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
+import {
+  SuggestionsPanel,
+  SuggestionsPanelToggle,
+} from "~/components/SuggestionsPanel";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import type { SubjectData, Condition } from "~/types/comp-data";
 
@@ -89,13 +93,24 @@ function SiteSummaryKeyFacts({ projectId }: { projectId: string }) {
 
 function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
   const [includePhotoContext, setIncludePhotoContext] = useState(true);
 
+  const openSuggestions = () => {
+    setIsDocPanelOpen(false);
+    setIsSuggestionsPanelOpen(true);
+  };
+  const openDocs = () => {
+    setIsSuggestionsPanelOpen(false);
+    setIsDocPanelOpen(true);
+  };
+
   return (
     <div className="mx-auto max-w-5xl p-8">
-      <div className="mb-4 flex items-center justify-end">
-        <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <SuggestionsPanelToggle onClick={openSuggestions} />
+        <DocumentPanelToggle onClick={openDocs} />
       </div>
 
       <SiteSummaryKeyFacts projectId={projectId} />
@@ -106,6 +121,12 @@ function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
         description="Generate, view, and edit the subject site summary section."
         excludedDocIds={excludedDocIds}
         excludePhotoContext={!includePhotoContext}
+      />
+      <SuggestionsPanel
+        projectId={projectId}
+        sectionKey="subject-site-summary"
+        isOpen={isSuggestionsPanelOpen}
+        onClose={() => setIsSuggestionsPanelOpen(false)}
       />
       <DocumentContextPanel
         projectId={projectId}

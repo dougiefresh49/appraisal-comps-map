@@ -6,6 +6,10 @@ import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
+import {
+  SuggestionsPanel,
+  SuggestionsPanelToggle,
+} from "~/components/SuggestionsPanel";
 import { createClient } from "~/utils/supabase/client";
 import {
   CheckCircleIcon,
@@ -190,8 +194,18 @@ export default function HighestBestUsePage({
 }) {
   const { projectId } = use(params);
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
   const [hbuUpdatedAt, setHbuUpdatedAt] = useState<string | null>(null);
+
+  const openSuggestions = () => {
+    setIsDocPanelOpen(false);
+    setIsSuggestionsPanelOpen(true);
+  };
+  const openDocs = () => {
+    setIsSuggestionsPanelOpen(false);
+    setIsDocPanelOpen(true);
+  };
 
   useEffect(() => {
     if (!projectId) return;
@@ -209,8 +223,9 @@ export default function HighestBestUsePage({
 
   return (
     <div className="mx-auto max-w-5xl p-8">
-      <div className="mb-4 flex items-center justify-end">
-        <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <SuggestionsPanelToggle onClick={openSuggestions} />
+        <DocumentPanelToggle onClick={openDocs} />
       </div>
 
       <HBUPrerequisiteStatus projectId={projectId} hbuUpdatedAt={hbuUpdatedAt} />
@@ -221,6 +236,12 @@ export default function HighestBestUsePage({
         description="Generate, view, and edit the highest and best use section."
         emptyStateNote="Complete Zoning, Ownership, Subject Site Summary, and Neighborhood first so generated content reflects those sections."
         excludedDocIds={excludedDocIds}
+      />
+      <SuggestionsPanel
+        projectId={projectId}
+        sectionKey="highest-best-use"
+        isOpen={isSuggestionsPanelOpen}
+        onClose={() => setIsSuggestionsPanelOpen(false)}
       />
       <DocumentContextPanel
         projectId={projectId}

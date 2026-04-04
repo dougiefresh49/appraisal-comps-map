@@ -4,6 +4,10 @@ import {
   getSimilarPastSections,
   type SectionKey,
 } from "~/lib/knowledge-retrieval";
+import {
+  findSimilarProjects,
+  getSimilarProjectContext,
+} from "~/lib/similar-projects";
 import { createClient } from "~/utils/supabase/server";
 
 interface PromptContext {
@@ -12,6 +16,7 @@ interface PromptContext {
   extraKnowledge: string[];
   sectionPrompt: string;
   similarPastSections: string[];
+  similarProjectContext: string[];
   regenerationContext?: string;
   previousContent?: string;
 }
@@ -67,15 +72,23 @@ async function gatherContext(
   excludedDocIds?: string[],
   excludePhotoContext?: boolean,
 ): Promise<PromptContext> {
-  const [knowledgeBase, projectData, documents, photoAnalyses, relatedSections, similarPast] =
-    await Promise.all([
-      getKnowledgeForSection(sectionKey),
-      fetchProjectData(supabase, projectId),
-      fetchRelevantDocuments(supabase, projectId, sectionKey, excludedDocIds),
-      excludePhotoContext ? Promise.resolve("") : fetchPhotoContext(supabase, projectId),
-      fetchRelatedSections(supabase, projectId, sectionKey),
-      getSimilarPastSections(sectionKey, projectId),
-    ]);
+  const [
+    knowledgeBase,
+    projectData,
+    documents,
+    photoAnalyses,
+    relatedSections,
+    similarPast,
+    similarProjectCtx,
+  ] = await Promise.all([
+    getKnowledgeForSection(sectionKey),
+    fetchProjectData(supabase, projectId),
+    fetchRelevantDocuments(supabase, projectId, sectionKey, excludedDocIds),
+    excludePhotoContext ? Promise.resolve("") : fetchPhotoContext(supabase, projectId),
+    fetchRelatedSections(supabase, projectId, sectionKey),
+    getSimilarPastSections(sectionKey, projectId),
+    fetchSimilarProjectContexts(projectId, sectionKey),
+  ]);
 
   const formattedSimilarPast = similarPast
     .filter((r) => r.content.trim().length > 100)
@@ -98,7 +111,163 @@ async function gatherContext(
     extraKnowledge: knowledgeBase.knowledge,
     sectionPrompt,
     similarPastSections: formattedSimilarPast,
+    similarProjectContext: similarProjectCtx,
   };
+}
+
+function subjectFieldDisplay(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t.length > 0 ? t : null;
+  }
+  if (typeof v === "number" && !Number.isNaN(v)) {
+    return String(v);
+  }
+  if (typeof v === "boolean") {
+    return v ? "true" : "false";
+  }
+  return null;
+}
+
+function appendSubjectComparisonForSection(
+  sectionKey: SectionKey,
+  subjectData: Record<string, unknown>,
+  lines: string[],
+): void {
+  if (sectionKey === "zoning") {
+    const z = subjectData.Zoning;
+    if (typeof z === "string" && z.trim()) {
+      lines.push(`\nTheir zoning (subject): ${z.trim()}`);
+    }
+    return;
+  }
+
+  if (sectionKey === "ownership") {
+    const legal = subjectData.Legal;
+    if (typeof legal === "string" && legal.trim()) {
+      lines.push(
+        `\nTheir legal description (excerpt): ${legal.trim().slice(0, 500)}`,
+      );
+    }
+    const inst = subjectData.instrumentNumber;
+    if (typeof inst === "string" && inst.trim()) {
+      lines.push(`Instrument: ${inst.trim()}`);
+    }
+    return;
+  }
+
+  if (sectionKey === "subject-site-summary") {
+    const keys = [
+      "Address",
+      "City",
+      "County",
+      "Zoning",
+      "Land Size (AC)",
+      "Building Size (SF)",
+      "Year Built",
+      "Condition",
+      "Construction",
+    ];
+    const parts: string[] = [];
+    for (const k of keys) {
+      const display = subjectFieldDisplay(subjectData[k]);
+      if (display) {
+        parts.push(`${k}: ${display}`);
+      }
+    }
+    if (parts.length > 0) {
+      const block = `\nTheir subject highlights:\n${parts.join("\n")}`;
+      lines.push(block.length > 1200 ? block.slice(0, 1200) : block);
+    }
+  }
+}
+
+async function fetchSimilarProjectContexts(
+  projectId: string,
+  sectionKey: SectionKey,
+): Promise<string[]> {
+  const TAG = "[prompt-builder]";
+  try {
+    const similar = await findSimilarProjects(projectId, { limit: 3 });
+    const withData = similar.filter((s) => s.hasExtractedData);
+    const contexts = await Promise.all(
+      withData.map((s) => getSimilarProjectContext(projectId, s.projectId)),
+    );
+
+    const blocks: string[] = [];
+    for (const ctx of contexts) {
+      const lines: string[] = [];
+      lines.push(
+        `## ${ctx.project.name} (${ctx.project.propertyType ?? "Unknown type"}, ${ctx.project.city ?? "Unknown city"})`,
+      );
+
+      const matchingSection = ctx.reportSections.find(
+        (s) => s.sectionKey === sectionKey,
+      );
+      if (matchingSection?.content.trim()) {
+        lines.push(`\n### Their ${sectionKey.replace(/-/g, " ")} section:\n`);
+        lines.push(matchingSection.content.substring(0, 1500));
+      }
+
+      appendSubjectComparisonForSection(sectionKey, ctx.subjectData, lines);
+
+      if (ctx.extractedData) {
+        const adjCategories: string[] = [];
+        for (const grid of [
+          ctx.extractedData.landAdjustments,
+          ctx.extractedData.saleAdjustments,
+          ctx.extractedData.rentalAdjustments,
+        ]) {
+          if (grid && typeof grid === "object" && "rows" in grid) {
+            const rows = (grid as { rows: { category?: string }[] }).rows;
+            if (Array.isArray(rows)) {
+              for (const row of rows) {
+                const cat = row.category;
+                if (
+                  typeof cat === "string" &&
+                  cat.trim() &&
+                  !adjCategories.includes(cat.trim())
+                ) {
+                  adjCategories.push(cat.trim());
+                }
+              }
+            }
+          }
+        }
+        if (adjCategories.length > 0) {
+          lines.push(`\nAdjustment categories used: ${adjCategories.join(", ")}`);
+        }
+
+        if (ctx.extractedData.reconciliation) {
+          const recon = ctx.extractedData.reconciliation as {
+            primary_approach?: string;
+          };
+          if (recon.primary_approach) {
+            lines.push(`Primary valuation approach: ${recon.primary_approach}`);
+          }
+        }
+      }
+
+      if (lines.length <= 1) {
+        continue;
+      }
+
+      let block = lines.join("\n");
+      if (block.length > 4000) {
+        block = `${block.substring(0, 4000)}\n...(truncated)`;
+      }
+      blocks.push(block);
+    }
+    return blocks;
+  } catch (e) {
+    console.error(
+      TAG,
+      "fetchSimilarProjectContexts:",
+      e instanceof Error ? e.message : e,
+    );
+    return [];
+  }
 }
 
 async function fetchProjectData(
@@ -383,6 +552,12 @@ function assemblePrompt(context: PromptContext): string {
   if (context.similarPastSections.length > 0) {
     parts.push(
       `# Similar Past Report Sections (for reference)\n\n${context.similarPastSections.join("\n\n---\n\n")}`,
+    );
+  }
+
+  if (context.similarProjectContext.length > 0) {
+    parts.push(
+      `# Context from Similar Past Projects\n\n${context.similarProjectContext.join("\n\n---\n\n")}`,
     );
   }
 
