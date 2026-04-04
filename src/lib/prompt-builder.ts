@@ -1,13 +1,10 @@
 import type { PostgrestResponse } from "@supabase/supabase-js";
+import {
+  getKnowledgeForSection,
+  getSimilarPastSections,
+  type SectionKey,
+} from "~/lib/knowledge-retrieval";
 import { createClient } from "~/utils/supabase/server";
-import { generateEmbedding } from "~/lib/embeddings";
-
-type SectionKey =
-  | "neighborhood"
-  | "zoning"
-  | "subject-site-summary"
-  | "highest-best-use"
-  | "ownership";
 
 interface PromptContext {
   systemPrompt: string;
@@ -72,13 +69,20 @@ async function gatherContext(
 ): Promise<PromptContext> {
   const [knowledgeBase, projectData, documents, photoAnalyses, relatedSections, similarPast] =
     await Promise.all([
-      fetchKnowledgeForSection(supabase, sectionKey),
+      getKnowledgeForSection(sectionKey),
       fetchProjectData(supabase, projectId),
       fetchRelevantDocuments(supabase, projectId, sectionKey, excludedDocIds),
       excludePhotoContext ? Promise.resolve("") : fetchPhotoContext(supabase, projectId),
       fetchRelatedSections(supabase, projectId, sectionKey),
-      fetchSimilarPastSections(sectionKey, projectId),
+      getSimilarPastSections(sectionKey, projectId),
     ]);
+
+  const formattedSimilarPast = similarPast
+    .filter((r) => r.content.trim().length > 100)
+    .map(
+      (r) =>
+        `[Past example${r.subjectAddress ? ` — ${r.subjectAddress}` : ""}]\n${r.content.substring(0, 2000)}`,
+    );
 
   const sectionPrompt = buildSectionPrompt(
     sectionKey,
@@ -93,63 +97,8 @@ async function gatherContext(
     examples: knowledgeBase.examples,
     extraKnowledge: knowledgeBase.knowledge,
     sectionPrompt,
-    similarPastSections: similarPast,
+    similarPastSections: formattedSimilarPast,
   };
-}
-
-async function fetchKnowledgeForSection(
-  supabase: ServerSupabase,
-  sectionKey: SectionKey,
-): Promise<{
-  systemPrompt: string;
-  examples: string[];
-  knowledge: string[];
-}> {
-  const gemNameMap: Record<SectionKey, string> = {
-    neighborhood: "Neighborhood",
-    zoning: "Zoning",
-    ownership: "Ownership",
-    "subject-site-summary": "Subject Site Summary",
-    "highest-best-use": "Highest and Best Use",
-  };
-
-  const gemName = gemNameMap[sectionKey];
-
-  const result = (await supabase
-    .from("knowledge_base")
-    .select("content_type, input, output")
-    .eq("gem_name", gemName)) as PostgrestResponse<{
-    content_type: string;
-    input: string | null;
-    output: string;
-  }>;
-
-  if (result.error || !result.data) {
-    return { systemPrompt: "", examples: [], knowledge: [] };
-  }
-
-  const rows = result.data;
-
-  const systemPrompt =
-    rows
-      .filter((r) => r.content_type === "system_prompt")
-      .map((r) => r.output)
-      .join("\n\n") || "";
-
-  const examples = rows
-    .filter((r) => r.content_type === "example")
-    .map((r) => {
-      if (r.input) {
-        return `**Input:**\n${r.input}\n\n**Output:**\n${r.output}`;
-      }
-      return r.output;
-    });
-
-  const knowledge = rows
-    .filter((r) => r.content_type === "knowledge")
-    .map((r) => r.output);
-
-  return { systemPrompt, examples, knowledge };
 }
 
 async function fetchProjectData(
@@ -270,41 +219,6 @@ async function fetchRelatedSections(
     sections[row.section_key] = row.content;
   }
   return sections;
-}
-
-async function fetchSimilarPastSections(
-  sectionKey: SectionKey,
-  _projectId: string,
-): Promise<string[]> {
-  if (!process.env.GOOGLE_GEMINI_API_KEY) return [];
-
-  try {
-    const queryText = `Commercial appraisal ${sectionKey.replace(/-/g, " ")} section`;
-    const embedding = await generateEmbedding(queryText);
-
-    const serverSupabase = await createClient();
-
-    const rpcResult = (await serverSupabase.rpc("search_similar_report_sections", {
-      query_embedding: JSON.stringify(embedding),
-      match_section_key: sectionKey,
-      match_limit: 3,
-      similarity_threshold: 0.5,
-    })) as PostgrestResponse<{
-      content: string;
-      subject_address: string | null;
-    }>;
-
-    if (!rpcResult.data) return [];
-
-    return rpcResult.data
-      .filter((r) => r.content.trim().length > 100)
-      .map(
-        (r) =>
-          `[Past example${r.subject_address ? ` — ${r.subject_address}` : ""}]\n${r.content.substring(0, 2000)}`,
-      );
-  } catch {
-    return [];
-  }
 }
 
 const NEIGHBORHOOD_BOUNDARY_SIDES = [

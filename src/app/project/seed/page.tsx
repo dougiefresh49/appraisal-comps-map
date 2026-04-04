@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "~/hooks/useAuth";
 
 interface SeedResult {
   message?: string;
@@ -364,6 +365,427 @@ function PatternsPanel() {
   );
 }
 
+interface PhotoBackfillSummaryRow {
+  project_id: string;
+  project_name: string;
+  total_in_db: number;
+  drive_image_count: number | null;
+  has_photos: boolean;
+  status: "none" | "partial" | "complete";
+}
+
+interface PhotoBackfillListResponse {
+  projects?: PhotoBackfillSummaryRow[];
+  drive_authenticated?: boolean;
+  error?: string;
+}
+
+interface PhotoBackfillPostResult {
+  project_name: string;
+  project_id: string;
+  success: boolean;
+  skipped?: boolean;
+  totalPhotos?: number;
+  error?: string;
+  existing_analyses?: number;
+}
+
+interface PhotoBackfillPostResponse {
+  message?: string;
+  error?: string;
+  results?: PhotoBackfillPostResult[];
+}
+
+async function waitForPhotoAnalysisProgress(
+  projectId: string,
+  expectedTotal: number,
+  onTick: (analyzed: number) => void,
+): Promise<number> {
+  for (;;) {
+    const res = await fetch(
+      `/api/seed/reference-photo-analysis?project_id=${encodeURIComponent(projectId)}`,
+    );
+    const data = (await res.json()) as {
+      analyzed_photos?: number;
+      error?: string;
+    };
+
+    if (!res.ok) {
+      throw new Error(data.error ?? `HTTP ${res.status}`);
+    }
+
+    const analyzed = data.analyzed_photos ?? 0;
+    onTick(analyzed);
+
+    if (expectedTotal === 0 || analyzed >= expectedTotal) {
+      return analyzed;
+    }
+
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+}
+
+function PhotoBackfillPanel() {
+  const { signIn } = useAuth();
+  const [rows, setRows] = useState<PhotoBackfillSummaryRow[]>([]);
+  const [driveAuthenticated, setDriveAuthenticated] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingList, setLoadingList] = useState(true);
+  const [force, setForce] = useState(false);
+  const [runAllProgress, setRunAllProgress] = useState<string | null>(null);
+  const [rowNote, setRowNote] = useState<Record<string, string | null>>({});
+  const [isRunning, setIsRunning] = useState(false);
+
+  const fetchList = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/seed/reference-photo-analysis");
+      const data = (await res.json()) as PhotoBackfillListResponse;
+      if (!res.ok) {
+        setLoadError(data.error ?? `HTTP ${res.status}`);
+        setRows([]);
+        return;
+      }
+      setRows(data.projects ?? []);
+      setDriveAuthenticated(data.drive_authenticated === true);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Request failed");
+      setRows([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      setLoadingList(true);
+      await fetchList();
+      setLoadingList(false);
+    })();
+  }, [fetchList]);
+
+  const setNote = (projectId: string, message: string | null) => {
+    setRowNote((m) => ({ ...m, [projectId]: message }));
+  };
+
+  const runOne = async (row: PhotoBackfillSummaryRow) => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setNote(row.project_id, null);
+
+    try {
+      const res = await fetch("/api/seed/reference-photo-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: row.project_id, force }),
+      });
+      const data = (await res.json()) as PhotoBackfillPostResponse;
+      if (!res.ok) {
+        setNote(row.project_id, data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+
+      const hit = data.results?.[0];
+      if (hit?.skipped) {
+        setNote(
+          row.project_id,
+          hit.error ?? "Skipped (already has photo_analyses). Enable force to re-run.",
+        );
+        await fetchList();
+        return;
+      }
+
+      if (!hit?.success) {
+        setNote(row.project_id, hit?.error ?? data.error ?? "Trigger failed");
+        return;
+      }
+
+      const total = hit.totalPhotos ?? 0;
+      setNote(row.project_id, `Queued — ${total} photo(s) in Drive`);
+
+      const analyzed = await waitForPhotoAnalysisProgress(
+        row.project_id,
+        total,
+        (n) => {
+          setNote(
+            row.project_id,
+            `Analyzing… ${n} / ${total}`,
+          );
+        },
+      );
+
+      setNote(row.project_id, `Done — ${analyzed} photo(s) analyzed`);
+      await fetchList();
+    } catch (e) {
+      setNote(
+        row.project_id,
+        e instanceof Error ? e.message : "Request failed",
+      );
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runAllMissing = async () => {
+    if (isRunning) return;
+    const missing = rows.filter((r) => r.total_in_db === 0);
+    if (missing.length === 0) {
+      setRunAllProgress("No projects with 0 rows in photo_analyses.");
+      setTimeout(() => setRunAllProgress(null), 4000);
+      return;
+    }
+
+    if (!driveAuthenticated) {
+      setRunAllProgress("Sign in with Google first (Drive access required).");
+      setTimeout(() => setRunAllProgress(null), 5000);
+      return;
+    }
+
+    setIsRunning(true);
+    try {
+      for (let i = 0; i < missing.length; i++) {
+        const row = missing[i]!;
+        const totalInBatch = missing.length;
+        try {
+          setRunAllProgress(
+            `Processing ${i + 1}/${totalInBatch} — ${row.project_name}…`,
+          );
+          setNote(row.project_id, "Starting…");
+
+          const res = await fetch("/api/seed/reference-photo-analysis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project_id: row.project_id, force }),
+          });
+          const data = (await res.json()) as PhotoBackfillPostResponse;
+          const hit = data.results?.[0];
+
+          if (!res.ok) {
+            setNote(row.project_id, data.error ?? `HTTP ${res.status}`);
+            continue;
+          }
+
+          if (hit?.skipped) {
+            setNote(row.project_id, hit.error ?? "Skipped");
+            await fetchList();
+            continue;
+          }
+
+          if (!hit?.success) {
+            setNote(row.project_id, hit?.error ?? "Trigger failed");
+            continue;
+          }
+
+          const total = hit.totalPhotos ?? 0;
+          setNote(row.project_id, `Queued — ${total} photo(s)`);
+
+          const analyzed = await waitForPhotoAnalysisProgress(
+            row.project_id,
+            total,
+            (n) => {
+              setRunAllProgress(
+                `Processing ${i + 1}/${totalInBatch} — ${row.project_name} (${n}/${total} photos)`,
+              );
+              setNote(row.project_id, `Analyzing… ${n} / ${total}`);
+            },
+          );
+
+          setNote(row.project_id, `Done — ${analyzed} photo(s)`);
+
+          await fetchList();
+        } finally {
+          if (i < missing.length - 1) {
+            await new Promise((r) => setTimeout(r, 3000));
+          }
+        }
+      }
+    } finally {
+      setRunAllProgress(null);
+      setIsRunning(false);
+    }
+  };
+
+  const busy = isRunning;
+  const statusBadge = (r: PhotoBackfillSummaryRow) => {
+    const label =
+      r.status === "none"
+        ? "None"
+        : r.status === "complete"
+          ? "Complete"
+          : "Partial";
+    const cls =
+      r.status === "none"
+        ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+        : r.status === "complete"
+          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+          : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+        {label}
+      </span>
+    );
+  };
+
+  const driveLabel =
+    rows.length > 0
+      ? `${rows.filter((r) => r.status === "complete").length}/${rows.length} complete (by Drive count)`
+      : "";
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Reference photo analysis backfill
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Queue Gemini classify + describe for subject photos on all{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            is_reference
+          </code>{" "}
+          projects. Replaces n8n backfill; processes in small batches in-app.
+          Requires an active Google session with Drive access.
+        </p>
+        {driveLabel && (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+            {driveLabel}
+          </p>
+        )}
+      </div>
+
+      {!loadingList && !driveAuthenticated && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-medium">Google Drive not available in this session</p>
+          <p className="mt-1">
+            Sign in with Google so the server can read subject photo folders.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void signIn("/project/seed")}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Sign in with Google
+            </button>
+            <a
+              href="/login"
+              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"
+            >
+              Open login
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Force re-analyze (ignore existing{" "}
+          <code className="text-xs">photo_analyses</code> rows)
+        </label>
+        <button
+          type="button"
+          onClick={() => void fetchList()}
+          disabled={loadingList || busy}
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"
+        >
+          Refresh list
+        </button>
+        <button
+          type="button"
+          onClick={() => void runAllMissing()}
+          disabled={loadingList || busy || !driveAuthenticated}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+        >
+          Run all missing
+        </button>
+      </div>
+
+      {runAllProgress && (
+        <p className="mb-3 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-950/50 dark:text-blue-100">
+          {runAllProgress}
+        </p>
+      )}
+
+      {loadError && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {loadError}
+        </div>
+      )}
+
+      {loadingList ? (
+        <p className="text-sm text-gray-500">Loading reference projects…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No reference projects found (<code>is_reference = true</code>).
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-800">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900/80">
+              <tr>
+                <th className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">
+                  Project
+                </th>
+                <th className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">
+                  In DB
+                </th>
+                <th className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">
+                  Drive images
+                </th>
+                <th className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">
+                  Status
+                </th>
+                <th className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">
+                  Run
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+              {rows.map((r) => (
+                <tr
+                  key={r.project_id}
+                  className="bg-white dark:bg-gray-950/40"
+                >
+                  <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">
+                    {r.project_name}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+                    {r.total_in_db}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+                    {r.drive_image_count === null ? "—" : r.drive_image_count}
+                  </td>
+                  <td className="px-3 py-2">{statusBadge(r)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void runOne(r)}
+                        disabled={busy || !driveAuthenticated}
+                        className="rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-600"
+                      >
+                        Run
+                      </button>
+                      {rowNote[r.project_id] && (
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                          {rowNote[r.project_id]}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SeedPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -393,6 +815,8 @@ export default function SeedPage() {
         <ForceImportPanel />
 
         <PatternsPanel />
+
+        <PhotoBackfillPanel />
       </div>
     </div>
   );

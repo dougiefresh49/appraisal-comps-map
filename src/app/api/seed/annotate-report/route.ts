@@ -90,7 +90,7 @@ For each section in the report markdown below, identify which taxonomy section_k
     "extraction_priority": "important",
     "variability": "low",
     "confidence": 0.95,
-    "content_preview": "First 300 chars of this section's text...",
+    "content_preview": "First ~800 chars of this section's text...",
     "start_line": 32,
     "end_line": 71,
     "notes": null
@@ -102,7 +102,7 @@ Rules:
 - If a section in the report doesn't exist in the taxonomy, add it with section_key prefixed with "unknown-" and confidence 0.0
 - content_type, extraction_priority, variability: use the taxonomy defaults but OVERRIDE if this specific report's section clearly differs (e.g. a normally-boilerplate section has unusual content)
 - start_line / end_line: approximate line numbers in the markdown
-- content_preview: first 300 characters of the section content (not headings)
+- content_preview: first 800 characters of the section content (not headings). Include enough text to understand the section's substance.
 - confidence: 0.0-1.0 how confident you are in the section_key mapping
 
 Return ONLY valid JSON array, no commentary.
@@ -110,6 +110,65 @@ Return ONLY valid JSON array, no commentary.
 # REPORT MARKDOWN
 
 ${reportMarkdown}`;
+}
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const projectId = url.searchParams.get("project_id");
+    const sourceFilename = url.searchParams.get("source_filename");
+
+    const pid = projectId?.trim() ?? "";
+    const src = sourceFilename?.trim() ?? "";
+
+    if (!pid && !src) {
+      return NextResponse.json(
+        { error: "project_id or source_filename is required" },
+        { status: 400 },
+      );
+    }
+
+    const supabase =
+      process.env.NODE_ENV === "development"
+        ? createServiceClient()
+        : await createClient();
+
+    let query = supabase.from("report_section_annotations").select("*");
+
+    if (pid) {
+      query = query.eq("project_id", pid);
+    } else {
+      query = query.eq("source_filename", src).is("project_id", null);
+    }
+
+    const { data, error } = await query
+      .order("start_line", { ascending: true, nullsFirst: false })
+      .order("section_key", { ascending: true });
+
+    if (error) {
+      console.error(TAG, "GET failed:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const annotations = data ?? [];
+    const n = annotations.length;
+
+    return NextResponse.json({
+      annotations,
+      message:
+        n > 0
+          ? `Loaded ${n} existing annotations`
+          : "No existing annotations",
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error ? err.message : "Annotation load failed",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -184,7 +243,7 @@ export async function POST(request: Request) {
       contents: [{ text: prompt }],
       config: {
         temperature: 0.2,
-        maxOutputTokens: 32768,
+        maxOutputTokens: 65536,
         responseMimeType: "application/json",
       },
     });
@@ -197,16 +256,65 @@ export async function POST(request: Request) {
 
     let geminiAnnotations: GeminiAnnotation[];
     try {
-      const parsed: unknown = JSON.parse(responseText);
+      let jsonText = responseText.trim();
+      // Strip markdown code fences if Gemini wrapped the response
+      const fenceMatch = /^```(?:json)?\s*\n?([\s\S]*?)```\s*$/.exec(jsonText);
+      if (fenceMatch?.[1]) {
+        jsonText = fenceMatch[1].trim();
+      }
+
+      // Sanitize raw control characters inside JSON string values.
+      // Gemini sometimes emits literal tabs, form feeds, etc. that
+      // are invalid in JSON strings per the spec.
+      // eslint-disable-next-line no-control-regex
+      jsonText = jsonText.replace(/[\x00-\x1f]/g, (ch) => {
+        if (ch === "\n" || ch === "\r") return ch;
+        if (ch === "\t") return "\\t";
+        return "";
+      });
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonText);
+      } catch {
+        // Fallback 1: extract outermost [...] in case of trailing junk
+        const firstBracket = jsonText.indexOf("[");
+        const lastBracket = jsonText.lastIndexOf("]");
+        if (firstBracket !== -1 && lastBracket > firstBracket) {
+          const extracted = jsonText.slice(firstBracket, lastBracket + 1);
+          try {
+            parsed = JSON.parse(extracted);
+          } catch {
+            // Fallback 2: truncated response — find the last complete object
+            // and close the array. This salvages partial results when Gemini
+            // hits the token limit mid-output.
+            const lastCompleteObj = extracted.lastIndexOf("}");
+            if (lastCompleteObj > firstBracket) {
+              const repaired = extracted.slice(0, lastCompleteObj + 1) + "]";
+              console.log(TAG, `Attempting truncation repair (salvaging ${repaired.length} chars)`);
+              parsed = JSON.parse(repaired);
+            } else {
+              throw new Error("Could not repair truncated JSON");
+            }
+          }
+        } else {
+          throw new Error("No JSON array brackets found in response");
+        }
+      }
+
       if (!Array.isArray(parsed)) {
         throw new Error("Response is not an array");
       }
       geminiAnnotations = parsed as GeminiAnnotation[];
-    } catch {
+    } catch (parseErr) {
       console.error(
         TAG,
-        "JSON parse failed. First 400 chars:",
+        "JSON parse failed:",
+        parseErr instanceof Error ? parseErr.message : parseErr,
+        "\nFirst 400 chars:",
         responseText.slice(0, 400),
+        "\nLast 400 chars:",
+        responseText.slice(-400),
       );
       return NextResponse.json(
         { error: "Gemini response was not a valid JSON array" },
@@ -258,7 +366,7 @@ export async function POST(request: Request) {
       human_reviewed: false,
       notes: a.notes ? String(a.notes) : null,
       content_preview: a.content_preview
-        ? String(a.content_preview).slice(0, 500)
+        ? String(a.content_preview).slice(0, 1000)
         : null,
       start_line: typeof a.start_line === "number" ? a.start_line : null,
       end_line: typeof a.end_line === "number" ? a.end_line : null,
