@@ -106,6 +106,263 @@ function SeedButton({
   );
 }
 
+interface DiscussionBackfillResult {
+  processed?: number;
+  inserted?: {
+    "discussion-of-land-sales"?: number;
+    "discussion-of-improved-sales"?: number;
+  };
+  skipped?: string[];
+  errors?: string[];
+  elapsed_ms?: number;
+  error?: string;
+}
+
+interface DiscussionBackfillListResponse {
+  files?: string[];
+  error?: string;
+}
+
+function DiscussionBackfillPanel() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [result, setResult] = useState<DiscussionBackfillResult | null>(null);
+  const [reportFiles, setReportFiles] = useState<string[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setListLoading(true);
+      setListError(null);
+      try {
+        const res = await fetch("/api/seed/backfill-discussion-sections");
+        const data = (await res.json()) as DiscussionBackfillListResponse;
+        if (!res.ok) {
+          if (!cancelled) {
+            setListError(data.error ?? `HTTP ${res.status}`);
+            setReportFiles([]);
+          }
+          return;
+        }
+        if (!cancelled) {
+          setReportFiles(data.files ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setListError(e instanceof Error ? e.message : "Failed to load file list");
+          setReportFiles([]);
+        }
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleFile = (name: string) => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const selectAllFiles = () => {
+    setSelectedNames(new Set(reportFiles));
+  };
+
+  const clearSelection = () => {
+    setSelectedNames(new Set());
+  };
+
+  const postBackfill = async (body: Record<string, unknown>) => {
+    setIsRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/seed/backfill-discussion-sections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as DiscussionBackfillResult;
+      if (!res.ok) {
+        setResult({ error: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      setResult(data);
+    } catch (err) {
+      setResult({
+        error: err instanceof Error ? err.message : "Request failed",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runAll = () => void postBackfill({});
+
+  const runSelected = () => {
+    if (selectedNames.size === 0) return;
+    void postBackfill({
+      md_filenames: [...selectedNames].sort(),
+      force: overwriteExisting,
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Backfill Discussion Sections
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Extract Discussion of Land Sales / Improved Sales from past report
+          markdown into{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            report_sections
+          </code>{" "}
+          with embeddings. No AI needed — uses heading-based extraction.
+        </p>
+      </div>
+
+      {listLoading ? (
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          Loading report file list…
+        </p>
+      ) : listError ? (
+        <p className="mb-3 text-sm text-red-700 dark:text-red-300">{listError}</p>
+      ) : (
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+            Select reports (or use Run all)
+          </p>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={selectAllFiles}
+              disabled={isRunning || reportFiles.length === 0}
+              className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              disabled={isRunning || selectedNames.size === 0}
+              className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-md border border-gray-200 p-2 dark:border-gray-800">
+            {reportFiles.map((name) => (
+              <label
+                key={name}
+                className="flex cursor-pointer items-start gap-2 text-xs text-gray-800 dark:text-gray-200"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedNames.has(name)}
+                  onChange={() => toggleFile(name)}
+                  disabled={isRunning}
+                  className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="break-all">{name}</span>
+              </label>
+            ))}
+          </div>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={overwriteExisting}
+              onChange={(e) => setOverwriteExisting(e.target.checked)}
+              disabled={isRunning}
+              className="rounded border-gray-300 dark:border-gray-600"
+            />
+            Overwrite existing discussion rows (re-embed after markdown edits)
+          </label>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={runAll}
+          disabled={isRunning || listLoading || !!listError}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+        >
+          {isRunning ? "Running..." : "Run all reports"}
+        </button>
+        <button
+          type="button"
+          onClick={runSelected}
+          disabled={
+            isRunning ||
+            listLoading ||
+            !!listError ||
+            selectedNames.size === 0
+          }
+          className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-600"
+        >
+          Run selected ({selectedNames.size})
+        </button>
+      </div>
+
+      {result && (
+        <div
+          className={`mt-3 rounded-md border p-3 text-sm ${
+            result.error
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          }`}
+        >
+          {result.error && <p>Error: {result.error}</p>}
+          {result.processed !== undefined && (
+            <p>Processed {result.processed} file(s)</p>
+          )}
+          {result.inserted && (
+            <p className="mt-1 text-xs">
+              Land: {result.inserted["discussion-of-land-sales"] ?? 0} · Improved:{" "}
+              {result.inserted["discussion-of-improved-sales"] ?? 0}
+            </p>
+          )}
+          {result.elapsed_ms !== undefined && (
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Elapsed: {(result.elapsed_ms / 1000).toFixed(1)}s
+            </p>
+          )}
+          {result.skipped && result.skipped.length > 0 && (
+            <details className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+              <summary className="cursor-pointer font-medium">
+                Skipped ({result.skipped.length})
+              </summary>
+              <ul className="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-4">
+                {result.skipped.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {result.errors && result.errors.length > 0 && (
+            <div className="mt-2 text-xs text-red-700 dark:text-red-300">
+              <p className="font-medium">Errors:</p>
+              {result.errors.map((e, i) => (
+                <p key={i}>{e}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ImportResult {
   message?: string;
   error?: string;
@@ -756,7 +1013,7 @@ function PhotoBackfillPanel() {
                     {r.total_in_db}
                   </td>
                   <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
-                    {r.drive_image_count === null ? "—" : r.drive_image_count}
+                    {r.drive_image_count ?? "—"}
                   </td>
                   <td className="px-3 py-2">{statusBadge(r)}</td>
                   <td className="px-3 py-2">
@@ -811,6 +1068,8 @@ export default function SeedPage() {
           description="Extract sections from the 11 prior report PDFs in docs/prior-reports/ using Gemini, insert into report_sections with embeddings. Skips if backfill data already exists."
           endpoint="/api/seed/backfill-reports"
         />
+
+        <DiscussionBackfillPanel />
 
         <ForceImportPanel />
 

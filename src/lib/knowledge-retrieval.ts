@@ -9,7 +9,9 @@ export type SectionKey =
   | "zoning"
   | "subject-site-summary"
   | "highest-best-use"
-  | "ownership";
+  | "ownership"
+  | "discussion-of-land-sales"
+  | "discussion-of-improved-sales";
 
 const GEM_NAME_BY_SECTION: Record<SectionKey, string> = {
   neighborhood: "Neighborhood",
@@ -17,6 +19,8 @@ const GEM_NAME_BY_SECTION: Record<SectionKey, string> = {
   ownership: "Ownership",
   "subject-site-summary": "Subject Site Summary",
   "highest-best-use": "Highest and Best Use",
+  "discussion-of-land-sales": "Discussion of Land Sales",
+  "discussion-of-improved-sales": "Discussion of Improved Sales",
 };
 
 const ADJUSTMENT_PATTERN_GEM_NAMES = [

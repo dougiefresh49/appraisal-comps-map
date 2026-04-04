@@ -70,11 +70,13 @@ src/
     project/[projectId]/  # All project pages (sidebar layout)
       analysis/           # Zoning, Ownership, Site Summary, HBU writeups
       cover/              # Cover page
-      land-sales/         # Land comps, map, UI template, comp details
+      land-sales/         # Land comps, map, UI template, comp details,
+                          # adjustments grid, discussion narrative
       neighborhood/       # Neighborhood overview (map banner + writeup)
       neighborhood-map/   # Full-screen neighborhood map editor
       rentals/            # Rental comps, map, UI template, comp details
-      sales/              # Sales comps, map, UI template, comp details
+      sales/              # Sales comps, map, UI template, comp details,
+                          # adjustments grid, discussion narrative
       subject/            # Overview, improvements, location-map, photos,
                           # flood-map, sketches, cost-report
     projects/             # Project list + new project onboarding wizard
@@ -86,7 +88,7 @@ src/
   utils/                  # Client utilities (projectStore, supabase client, etc.)
 
 supabase/
-  migrations/             # SQL migration files (001-022)
+  migrations/             # SQL migration files (001-028)
 
 docs/
   issues/                 # Open issue tracker (017-034)
@@ -116,10 +118,13 @@ docs/
 | `maps` | Map views (center, zoom, drawings, linked comp) | No |
 | `map_markers` | Marker positions on maps | No |
 | `photo_analyses` | AI-analyzed photo metadata (label, description, sort_order) | Yes |
-| `report_sections` | Generated report content per section | Yes |
+| `report_sections` | Generated report content per section (incl. discussion narratives) | Yes |
 | `project_documents` | Uploaded/linked documents with AI extraction results | Yes |
 | `knowledge_base` | AI knowledge entries (system prompts, examples) | No |
 | `page_locks` | Edit locks for multi-user collaboration | No |
+| `report_section_annotations` | AI-generated + human-reviewed section annotations from past reports | No |
+| `report_extracted_data` | Structured comp/adjustment/cost/reconciliation data extracted from past reports | No |
+| `project_adjustment_drafts` | Editable adjustment grid drafts (`grid_data` JSONB), one per project+comp_type | No |
 
 All tables have RLS enabled with "Authenticated full access" policies. The `update_updated_at()` trigger auto-updates `updated_at` on modifications.
 

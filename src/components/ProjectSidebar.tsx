@@ -175,6 +175,8 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             {renderCompSublinks(landComps, "land-sales")}
             <Link href={`${p}/land-sales/comparables-map`} className={linkClass(`${p}/land-sales/comparables-map`)}>Map</Link>
             <Link href={`${p}/land-sales/summary`} className={linkClass(`${p}/land-sales/summary`)}>Summary</Link>
+            <Link href={`${p}/land-sales/adjustments`} className={linkClass(`${p}/land-sales/adjustments`)}>Adjustments</Link>
+            <Link href={`${p}/land-sales/discussion`} className={linkClass(`${p}/land-sales/discussion`)}>Discussion</Link>
             <Link href={`${p}/land-sales/ui`} className={linkClass(`${p}/land-sales/ui`)}>Comp UI</Link>
           </div>
         )}
@@ -192,6 +194,8 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             {renderCompSublinks(salesComps, "sales")}
             <Link href={`${p}/sales/comparables-map`} className={linkClass(`${p}/sales/comparables-map`)}>Map</Link>
             <Link href={`${p}/sales/summary`} className={linkClass(`${p}/sales/summary`)}>Summary</Link>
+            <Link href={`${p}/sales/adjustments`} className={linkClass(`${p}/sales/adjustments`)}>Adjustments</Link>
+            <Link href={`${p}/sales/discussion`} className={linkClass(`${p}/sales/discussion`)}>Discussion</Link>
             <Link href={`${p}/sales/ui`} className={linkClass(`${p}/sales/ui`)}>Comp UI</Link>
           </div>
         )}

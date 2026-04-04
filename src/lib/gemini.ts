@@ -1,6 +1,7 @@
 import { GoogleGenAI, type Part } from "@google/genai";
 
 const GENERATION_MODEL = "gemini-3.1-flash-lite-preview";
+const PRO_MODEL = "gemini-3.1-pro-preview";
 
 let ai: GoogleGenAI | null = null;
 
@@ -19,14 +20,19 @@ function getAI(): GoogleGenAI {
 
 /**
  * Generate report section text from a prompt string.
+ * Pass `usePro: true` for heavyweight sections like comp discussion narratives.
  */
-export async function generateReportSection(prompt: string): Promise<string> {
+export async function generateReportSection(
+  prompt: string,
+  options?: { usePro?: boolean },
+): Promise<string> {
+  const model = options?.usePro ? PRO_MODEL : GENERATION_MODEL;
   const response = await getAI().models.generateContent({
-    model: GENERATION_MODEL,
+    model,
     contents: prompt,
     config: {
       temperature: 0.7,
-      maxOutputTokens: 4096,
+      maxOutputTokens: options?.usePro ? 8192 : 4096,
     },
   });
   return response.text ?? "";

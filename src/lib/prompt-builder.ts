@@ -1,4 +1,5 @@
 import type { PostgrestResponse } from "@supabase/supabase-js";
+import { buildDiscussionPrompt } from "~/lib/discussion-prompt";
 import {
   getKnowledgeForSection,
   getSimilarPastSections,
@@ -27,6 +28,8 @@ const SECTION_DOCUMENT_MAP: Record<SectionKey, string[]> = {
   neighborhood: ["neighborhood_map"],
   "subject-site-summary": ["flood_map", "deed"],
   "highest-best-use": [],
+  "discussion-of-land-sales": [],
+  "discussion-of-improved-sales": [],
 };
 
 /**
@@ -72,6 +75,31 @@ async function gatherContext(
   excludedDocIds?: string[],
   excludePhotoContext?: boolean,
 ): Promise<PromptContext> {
+  if (
+    sectionKey === "discussion-of-land-sales" ||
+    sectionKey === "discussion-of-improved-sales"
+  ) {
+    const compType = sectionKey === "discussion-of-land-sales" ? "land" : "sales";
+    const [discussion, knowledgeBase] = await Promise.all([
+      buildDiscussionPrompt(projectId, compType),
+      getKnowledgeForSection(sectionKey),
+    ]);
+
+    const systemParts = [discussion.systemPrompt];
+    if (knowledgeBase.systemPrompt.trim().length > 0) {
+      systemParts.push(knowledgeBase.systemPrompt);
+    }
+
+    return {
+      systemPrompt: systemParts.join("\n\n---\n\n"),
+      examples: knowledgeBase.examples,
+      extraKnowledge: knowledgeBase.knowledge,
+      sectionPrompt: discussion.userPrompt,
+      similarPastSections: [],
+      similarProjectContext: [],
+    };
+  }
+
   const [
     knowledgeBase,
     projectData,

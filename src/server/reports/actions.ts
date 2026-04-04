@@ -12,6 +12,8 @@ export const reportSectionSchema = z.enum([
   "subject-site-summary",
   "highest-best-use",
   "ownership",
+  "discussion-of-land-sales",
+  "discussion-of-improved-sales",
 ]);
 
 export const reportActionSchema = z.enum([
@@ -192,7 +194,10 @@ async function handleGenerate(
     excludePhotoContext,
   });
 
-  const generatedContent = await generateReportSection(prompt);
+  const usePro =
+    sectionKey === "discussion-of-land-sales" ||
+    sectionKey === "discussion-of-improved-sales";
+  const generatedContent = await generateReportSection(prompt, { usePro });
 
   if (!generatedContent.trim()) {
     return {

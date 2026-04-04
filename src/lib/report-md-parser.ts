@@ -38,6 +38,8 @@ export const REPORT_MD_SECTION_KEYS = [
   "cost-approach",
   "sales-comparison-land",
   "sales-comparison-improved",
+  "discussion-of-land-sales",
+  "discussion-of-improved-sales",
 ] as const;
 
 export type ReportMdSectionKey = (typeof REPORT_MD_SECTION_KEYS)[number];
