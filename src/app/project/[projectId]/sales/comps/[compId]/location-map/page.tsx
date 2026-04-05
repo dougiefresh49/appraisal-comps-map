@@ -80,6 +80,8 @@ export default function SalesCompLocationMapPage({
     }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
@@ -105,6 +107,13 @@ export default function SalesCompLocationMapPage({
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mapReadOnly, setMapReadOnly] = useState(true);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
 
   const applyProjectState = useCallback(
     (proj?: ProjectData) => {
@@ -140,14 +149,16 @@ export default function SalesCompLocationMapPage({
             : null,
       );
 
-      setMapCenter(
-        mapState.mapCenter
-          ? { ...mapState.mapCenter }
-          : initialMarkerPos
-            ? { ...initialMarkerPos }
-            : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(mapState.mapZoom);
+      const nextCenter = mapState.mapCenter
+        ? { ...mapState.mapCenter }
+        : initialMarkerPos
+          ? { ...initialMarkerPos }
+          : { ...DEFAULT_MAP_CENTER };
+      const nextZoom = mapState.mapZoom ?? 17;
+      persistedMapViewportRef.current = { center: nextCenter, zoom: nextZoom };
+      mapCameraEditedWhileUnlockedRef.current = false;
+      setMapCenter(nextCenter);
+      setMapZoom(nextZoom);
       setBubbleSize(mapState.bubbleSize);
       setHideUI(mapState.hideUI);
       setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
@@ -189,6 +200,18 @@ export default function SalesCompLocationMapPage({
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
+  useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
   // Hydrate local state from hook-provided project (first load only)
   useEffect(() => {
     if (isStateHydrated || isLoading || !project) return;
@@ -198,6 +221,13 @@ export default function SalesCompLocationMapPage({
 
   const persistCurrentProjectState = useCallback(() => {
     const mapId = compLocationMapId(compId);
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
 
     const compMarker: MapMarker = {
       id: `marker-${compId}-${mapId}`,
@@ -215,8 +245,8 @@ export default function SalesCompLocationMapPage({
       id: mapId,
       type: "comp-location",
       linkedCompId: compId,
-      mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-      mapZoom,
+      mapCenter: centerForSave,
+      mapZoom: zoomForSave,
       bubbleSize,
       hideUI,
       documentFrameSize,
@@ -250,6 +280,14 @@ export default function SalesCompLocationMapPage({
         maps: updatedMaps,
       };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     bubblePosition,
     circleRadius,
@@ -258,8 +296,6 @@ export default function SalesCompLocationMapPage({
     hideUI,
     isSubjectTailPinned,
     labelSize,
-    mapCenter,
-    mapZoom,
     markerPosition,
     polygonPath,
     streetLabels,
@@ -270,10 +306,52 @@ export default function SalesCompLocationMapPage({
     updateProject,
   ]);
 
+  const persistCurrentProjectStateRef = useRef(persistCurrentProjectState);
+  useEffect(() => {
+    persistCurrentProjectStateRef.current = persistCurrentProjectState;
+  }, [persistCurrentProjectState]);
+
   useEffect(() => {
     if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      persistCurrentProjectStateRef.current();
+    }, 1500);
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [isStateHydrated, mapReadOnly, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
     persistCurrentProjectState();
-  }, [isStateHydrated, persistCurrentProjectState]);
+  }, [isStateHydrated, mapReadOnly, persistCurrentProjectState]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        persistCurrentProjectStateRef.current();
+      }
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -303,6 +381,7 @@ export default function SalesCompLocationMapPage({
         const location = result.geometry.location;
         const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setMarkerPosition(newPosition);
         setBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -473,6 +552,7 @@ export default function SalesCompLocationMapPage({
       >
         {({ readOnly }) => (
           <>
+      {!readOnly ? (
       <PropertyInfoPanel
         heading={`Sales Comp ${compNumber ? `#${compNumber}` : compId} Map`}
         propertyInfo={propertyInfo}
@@ -507,8 +587,9 @@ export default function SalesCompLocationMapPage({
         onIsCollapsedChange={setIsCollapsed}
         readOnly={mapReadOnly}
       />
+      ) : null}
 
-      {isCollapsed && !hideUI && (
+      {!readOnly && isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
           <button
             type="button"
@@ -562,19 +643,24 @@ export default function SalesCompLocationMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
-            gestureHandling={readOnly ? "none" : "auto"}
+            mapTypeControl={readOnly || !hideUI}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
-              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onZoomChanged={(e) => {
-              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onClick={(e) => {

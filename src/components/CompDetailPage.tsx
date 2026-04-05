@@ -15,6 +15,7 @@ import { useProject } from "~/hooks/useProject";
 import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
 import {
   getComparablesByType,
+  mapTypeForCompType,
   type ComparableType,
   type ComparableParsedDataStatus,
 } from "~/utils/projectStore";
@@ -32,11 +33,11 @@ type SectionDef = { title: string; fields: FieldDef[] };
 function mapBannerImageType(compType: ComparableType): string {
   switch (compType) {
     case "Land":
-      return "land";
+      return "comps-land";
     case "Sales":
-      return "sales";
+      return "comps-sales";
     case "Rentals":
-      return "rentals";
+      return "comps-rentals";
   }
 }
 
@@ -591,6 +592,7 @@ export function CompDetailPage({
         <MapBanner
           projectId={projectId}
           imageType={mapBannerImageType(compType)}
+          mapType={mapTypeForCompType(compType)}
           editHref={locationMapHref}
           height="h-48"
         />

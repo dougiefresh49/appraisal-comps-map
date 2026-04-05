@@ -149,6 +149,7 @@ async function processDocument(
       await supabase
         .from("project_documents")
         .update({
+          processed_at: new Date().toISOString(),
           structured_data: {
             processing_error:
               err instanceof Error ? err.message : "Unknown error",

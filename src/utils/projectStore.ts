@@ -114,6 +114,8 @@ export interface MapView {
   documentFrameSize: number;
   drawings: MapDrawings;
   markers: MapMarker[];
+  /** Google Drive file ID for the map banner preview image in reports/maps/. */
+  imageFileId?: string;
 }
 
 // ============================================================
@@ -407,11 +409,27 @@ export function getCompMarker(
   return mapView.markers.find((m) => m.compId === compId);
 }
 
+/** Parses `Comparable.number` for numeric sort; non-numeric / empty sorts last. */
+function comparableNumberSortKey(comp: Comparable): number {
+  const raw = comp.number?.trim();
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+}
+
 export function getComparablesByType(
   project: ProjectData,
   type: ComparableType,
 ): Comparable[] {
-  return project.comparables.filter((c) => c.type === type);
+  const list = project.comparables.filter((c) => c.type === type);
+  return [...list].sort((a, b) => {
+    const ka = comparableNumberSortKey(a);
+    const kb = comparableNumberSortKey(b);
+    if (ka !== kb) return ka - kb;
+    return a.address.localeCompare(b.address, undefined, {
+      sensitivity: "base",
+    });
+  });
 }
 
 // ============================================================
@@ -732,6 +750,10 @@ function normalizeMapView(m: Partial<MapView>): MapView {
     markers: Array.isArray(m.markers)
       ? m.markers.map((mk) => normalizeMarker(mk, id))
       : [],
+    imageFileId:
+      typeof m.imageFileId === "string" && m.imageFileId.trim() !== ""
+        ? m.imageFileId.trim()
+        : undefined,
   };
 }
 

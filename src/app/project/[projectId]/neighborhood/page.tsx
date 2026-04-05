@@ -7,7 +7,16 @@ import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
+import {
+  BorrowNeighborhoodPanel,
+  BorrowPanelToggle,
+  type BorrowedMapData,
+} from "~/components/BorrowNeighborhoodPanel";
 import { useSubjectData } from "~/hooks/useSubjectData";
+import { useReportSection } from "~/hooks/useReportSection";
+import { useProject } from "~/hooks/useProject";
+import { deleteMapMarker } from "~/lib/supabase-queries";
+import { getMapByType, updateMapInProject } from "~/utils/projectStore";
 import type { SubjectDataRow } from "~/types/comp-data";
 
 interface NeighborhoodPageProps {
@@ -18,7 +27,10 @@ export default function NeighborhoodPage({ params }: NeighborhoodPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const [isBorrowPanelOpen, setIsBorrowPanelOpen] = useState(false);
   const { subjectData, saveSubjectData } = useSubjectData(decodedProjectId);
+  const { updateContent } = useReportSection(decodedProjectId, "neighborhood");
+  const { project, updateProject } = useProject(decodedProjectId);
 
   const [boundaries, setBoundaries] = useState({
     north: "",
@@ -62,18 +74,58 @@ export default function NeighborhoodPage({ params }: NeighborhoodPageProps) {
     [subjectData, saveSubjectData],
   );
 
+  const handleApplyMapData = useCallback(
+    async (borrowed: BorrowedMapData) => {
+      if (!project) return;
+      const nh = getMapByType(project, "neighborhood");
+      if (!nh) return;
+      const targetMapId = nh.id;
+      const compIds = new Set(project.comparables.map((c) => c.id));
+      const oldMarkerIds = nh.markers.map((m) => m.id);
+      await Promise.all(oldMarkerIds.map((id) => deleteMapMarker(id)));
+      const remappedMarkers = borrowed.markers.map((mk, i) => ({
+        id:
+          typeof crypto.randomUUID === "function"
+            ? `borrow-${crypto.randomUUID()}`
+            : `borrow-${targetMapId}-${i}-${Date.now()}`,
+        mapId: targetMapId,
+        compId: mk.compId && compIds.has(mk.compId) ? mk.compId : undefined,
+        markerPosition: mk.markerPosition,
+        bubblePosition: mk.bubblePosition,
+        isTailPinned: mk.isTailPinned,
+        pinnedTailTipPosition: mk.pinnedTailTipPosition,
+      }));
+      updateProject((p) => ({
+        ...p,
+        maps: updateMapInProject(p, targetMapId, (m) => ({
+          ...m,
+          mapCenter: borrowed.mapCenter,
+          mapZoom: borrowed.mapZoom,
+          bubbleSize: borrowed.bubbleSize,
+          drawings: borrowed.drawings,
+          markers: remappedMarkers,
+        })),
+      }));
+    },
+    [project, updateProject],
+  );
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-8">
       <MapBanner
         projectId={decodedProjectId}
         imageType="neighborhood"
+        mapType="neighborhood"
         editHref={`/project/${projectId}/neighborhood-map`}
       />
 
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Neighborhood Boundaries
-        </h3>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Neighborhood Boundaries
+          </h3>
+          <BorrowPanelToggle onClick={() => setIsBorrowPanelOpen(true)} />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           {(["north", "south", "east", "west"] as const).map((dir) => (
             <div key={dir}>
@@ -110,6 +162,21 @@ export default function NeighborhoodPage({ params }: NeighborhoodPageProps) {
         sectionKey="neighborhood"
         isOpen={isDocPanelOpen}
         onClose={() => setIsDocPanelOpen(false)}
+      />
+
+      <BorrowNeighborhoodPanel
+        projectId={decodedProjectId}
+        isOpen={isBorrowPanelOpen}
+        onClose={() => setIsBorrowPanelOpen(false)}
+        onApplyBoundaries={(b) => {
+          void saveBoundaries(b);
+        }}
+        onApplyNarrative={(text) => {
+          void updateContent(text);
+        }}
+        onApplyMapData={(data) => {
+          void handleApplyMapData(data);
+        }}
       />
     </div>
   );

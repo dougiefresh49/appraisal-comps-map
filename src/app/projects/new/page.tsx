@@ -1,6 +1,6 @@
 "use client";
 
-import { addDays, format, isValid, parse, parseISO } from "date-fns";
+import { addDays, format, isValid, parse } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
@@ -14,6 +14,7 @@ import type { EngagementData } from "~/lib/engagement-parser";
 import { ProfileMenu } from "~/components/ProfileMenu";
 import { useAuth } from "~/hooks/useAuth";
 import { createClient } from "~/utils/supabase/client";
+import { parseEngagementDateToDate } from "~/utils/parse-engagement-date";
 
 type WizardStep =
   | "select-folder"
@@ -34,7 +35,7 @@ interface ProcessingTask {
   id: string;
   label: string;
   type: "project" | "doc" | "photos";
-  status: "done" | "queued" | "background";
+  status: "done" | "queued" | "background" | "stuck";
   isCritical: boolean;
 }
 
@@ -197,19 +198,40 @@ export default function NewProjectPage() {
     };
   }, [showProcessingModal, projectId]);
 
-  // Auto-redirect when all critical tasks are done
+  // Auto-redirect when all critical tasks are done (or timed-out)
   useEffect(() => {
     if (!showProcessingModal || !projectId) return;
     const criticalTasks = processingTasks.filter((t) => t.isCritical);
     if (criticalTasks.length === 0) return;
-    const allCriticalDone = criticalTasks.every((t) => t.status === "done");
-    if (allCriticalDone) {
+    const allResolved = criticalTasks.every(
+      (t) => t.status === "done" || t.status === "stuck",
+    );
+    if (allResolved) {
       const timer = setTimeout(() => {
         router.push(`/project/${projectId}`);
       }, 1200);
       return () => clearTimeout(timer);
     }
   }, [showProcessingModal, processingTasks, projectId, router]);
+
+  // Mark critical tasks as stuck after 60s so the modal doesn't hang forever
+  useEffect(() => {
+    if (!showProcessingModal) return;
+    const hasQueued = processingTasks.some(
+      (t) => t.isCritical && t.status === "queued",
+    );
+    if (!hasQueued) return;
+    const timer = setTimeout(() => {
+      setProcessingTasks((prev) =>
+        prev.map((t) =>
+          t.isCritical && t.status === "queued"
+            ? { ...t, status: "stuck" }
+            : t,
+        ),
+      );
+    }, 60_000);
+    return () => clearTimeout(timer);
+  }, [showProcessingModal, processingTasks]);
 
   const filteredProjects = availableProjects.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -1429,8 +1451,11 @@ function ProcessingStatusModal({
   onGoToDashboard,
 }: ProcessingStatusModalProps) {
   const criticalTasks = tasks.filter((t) => t.isCritical);
-  const doneCritical = criticalTasks.filter((t) => t.status === "done").length;
-  const allCriticalDone = criticalTasks.length > 0 && doneCritical === criticalTasks.length;
+  const resolvedCritical = criticalTasks.filter(
+    (t) => t.status === "done" || t.status === "stuck",
+  ).length;
+  const allCriticalDone = criticalTasks.length > 0 && resolvedCritical === criticalTasks.length;
+  const hasStuck = criticalTasks.some((t) => t.status === "stuck");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/90 backdrop-blur-sm">
@@ -1459,12 +1484,12 @@ function ProcessingStatusModal({
           <div className="mb-6">
             <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
               <span>Processing documents</span>
-              <span>{doneCritical} / {criticalTasks.length}</span>
+              <span>{resolvedCritical} / {criticalTasks.length}</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
               <div
                 className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
-                style={{ width: `${criticalTasks.length > 0 ? (doneCritical / criticalTasks.length) * 100 : 0}%` }}
+                style={{ width: `${criticalTasks.length > 0 ? (resolvedCritical / criticalTasks.length) * 100 : 0}%` }}
               />
             </div>
           </div>
@@ -1486,6 +1511,11 @@ function ProcessingStatusModal({
         <div className="mt-8 border-t border-gray-800 pt-6">
           {allCriticalDone ? (
             <div className="text-center">
+              {hasStuck && (
+                <p className="mb-2 text-xs text-amber-400/80">
+                  Some documents failed to process. You can reprocess them from the project dashboard.
+                </p>
+              )}
               <p className="mb-3 text-sm text-green-400">Redirecting to dashboard...</p>
               <button
                 type="button"
@@ -1562,6 +1592,18 @@ function ProcessingTaskRow({
         </span>
       ),
     },
+    stuck: {
+      icon: (
+        <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
+      ),
+      badge: (
+        <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-400">
+          Timed out
+        </span>
+      ),
+    },
   };
 
   const config = statusConfig[task.status];
@@ -1574,14 +1616,18 @@ function ProcessingTaskRow({
     <div className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors ${
       task.status === "done"
         ? "bg-green-950/20"
-        : task.status === "background"
-          ? "bg-blue-950/10"
-          : "bg-gray-800/40"
+        : task.status === "stuck"
+          ? "bg-amber-950/20"
+          : task.status === "background"
+            ? "bg-blue-950/10"
+            : "bg-gray-800/40"
     }`}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="shrink-0">{config.icon}</div>
         <span className={`truncate text-sm ${
-          task.status === "done" ? "text-gray-300" : "text-gray-400"
+          task.status === "done" ? "text-gray-300"
+          : task.status === "stuck" ? "text-amber-300/80"
+          : "text-gray-400"
         }`}>
           {label}
         </span>
@@ -1619,31 +1665,6 @@ function inferDocumentType(fileName: string, _mimeType: string): string {
 }
 
 const DATE_PARSE_REF = new Date(2000, 0, 1);
-
-function parseEngagementDateToDate(value: string): Date | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const d = parse(trimmed, "yyyy-MM-dd", DATE_PARSE_REF);
-    return isValid(d) ? d : null;
-  }
-
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
-    const d = parse(trimmed, "M/d/yyyy", DATE_PARSE_REF);
-    return isValid(d) ? d : null;
-  }
-
-  const iso = parseISO(trimmed);
-  if (isValid(iso)) return iso;
-
-  for (const fmt of ["MMMM d, yyyy", "MMM d, yyyy"] as const) {
-    const d = parse(trimmed, fmt, DATE_PARSE_REF);
-    if (isValid(d)) return d;
-  }
-
-  return null;
-}
 
 function reportDueDateIsUnset(raw: string): boolean {
   const d = parseEngagementDateToDate(raw);

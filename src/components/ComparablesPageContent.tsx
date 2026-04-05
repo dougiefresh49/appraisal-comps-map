@@ -23,11 +23,11 @@ interface ComparablesPageContentProps {
 function mapBannerImageType(compType: ComparableType): string {
   switch (compType) {
     case "Land":
-      return "land";
+      return "comps-land";
     case "Sales":
-      return "sales";
+      return "comps-sales";
     case "Rentals":
-      return "rentals";
+      return "comps-rentals";
   }
 }
 
@@ -169,6 +169,7 @@ export function ComparablesPageContent({
       <MapBanner
         projectId={projectId}
         imageType={mapBannerImageType(type)}
+        mapType={mapTypeForCompType(type)}
         editHref={comparablesMapHref}
         height="h-48"
       />

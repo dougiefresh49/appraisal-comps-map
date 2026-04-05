@@ -81,6 +81,8 @@ export default function LandCompLocationMapPage({
     }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [tailDirection, setTailDirection] = useState<"left" | "right">("right");
   const [hideUI, setHideUI] = useState(false);
@@ -105,6 +107,13 @@ export default function LandCompLocationMapPage({
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mapReadOnly, setMapReadOnly] = useState(true);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
 
   const applyProjectState = useCallback(
     (proj?: ProjectData) => {
@@ -140,14 +149,16 @@ export default function LandCompLocationMapPage({
             : null,
       );
 
-      setMapCenter(
-        mapState.mapCenter
-          ? { ...mapState.mapCenter }
-          : initialMarkerPos
-            ? { ...initialMarkerPos }
-            : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(mapState.mapZoom);
+      const nextCenter = mapState.mapCenter
+        ? { ...mapState.mapCenter }
+        : initialMarkerPos
+          ? { ...initialMarkerPos }
+          : { ...DEFAULT_MAP_CENTER };
+      const nextZoom = mapState.mapZoom ?? 17;
+      persistedMapViewportRef.current = { center: nextCenter, zoom: nextZoom };
+      mapCameraEditedWhileUnlockedRef.current = false;
+      setMapCenter(nextCenter);
+      setMapZoom(nextZoom);
       setBubbleSize(mapState.bubbleSize);
       setHideUI(mapState.hideUI);
       setDocumentFrameSize(mapState.documentFrameSize ?? 1.0);
@@ -189,6 +200,18 @@ export default function LandCompLocationMapPage({
     bubblePositionRef.current = bubblePosition;
   }, [bubblePosition]);
 
+  useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
   // Hydrate local state from hook-provided project (once)
   useEffect(() => {
     if (!project || hasHydrated.current) return;
@@ -199,6 +222,13 @@ export default function LandCompLocationMapPage({
   // Persist local state back to the project via the hook
   const persistState = useCallback(() => {
     const mapId = compLocationMapId(compId);
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
 
     updateProject((prev) => {
       const baseProject = normalizeProjectData(prev);
@@ -219,8 +249,8 @@ export default function LandCompLocationMapPage({
         id: mapId,
         type: "comp-location",
         linkedCompId: compId,
-        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-        mapZoom,
+        mapCenter: centerForSave,
+        mapZoom: zoomForSave,
         bubbleSize,
         hideUI,
         documentFrameSize,
@@ -252,6 +282,14 @@ export default function LandCompLocationMapPage({
 
       return { ...baseProject, maps: updatedMaps };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     bubblePosition,
     circleRadius,
@@ -260,8 +298,6 @@ export default function LandCompLocationMapPage({
     hideUI,
     isSubjectTailPinned,
     labelSize,
-    mapCenter,
-    mapZoom,
     markerPosition,
     polygonPath,
     streetLabels,
@@ -272,11 +308,52 @@ export default function LandCompLocationMapPage({
     updateProject,
   ]);
 
-  // Auto-persist whenever local state changes (after initial hydration)
+  const persistStateRef = useRef(persistState);
+  useEffect(() => {
+    persistStateRef.current = persistState;
+  }, [persistState]);
+
   useEffect(() => {
     if (!hasHydrated.current) return;
+    if (mapReadOnly) return;
+
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      persistStateRef.current();
+    }, 1500);
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [mapReadOnly, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
     persistState();
-  }, [persistState]);
+  }, [mapReadOnly, persistState]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        persistStateRef.current();
+      }
+    };
+  }, []);
 
   const handleAddressSearch = async (address: string) => {
     // Reuse address search logic
@@ -298,6 +375,7 @@ export default function LandCompLocationMapPage({
         const location = result.geometry.location;
         const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setMarkerPosition(newPosition);
         setBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -479,6 +557,7 @@ export default function LandCompLocationMapPage({
       >
         {({ readOnly }) => (
           <>
+      {!readOnly ? (
       <PropertyInfoPanel
         heading={`Land Comp ${compNumber ? `#${compNumber}` : compId} Map`}
         propertyInfo={propertyInfo}
@@ -513,8 +592,9 @@ export default function LandCompLocationMapPage({
         onIsCollapsedChange={setIsCollapsed}
         readOnly={mapReadOnly}
       />
+      ) : null}
 
-      {isCollapsed && !hideUI && (
+      {!readOnly && isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
           <button
             type="button"
@@ -569,24 +649,28 @@ export default function LandCompLocationMapPage({
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={false}
             zoomControl={!hideUI}
-            mapTypeControl={!hideUI}
+            mapTypeControl={readOnly || !hideUI}
             streetViewControl={!hideUI}
             fullscreenControl={!hideUI}
             scaleControl={!hideUI}
             rotateControl={!hideUI}
-            gestureHandling={readOnly ? "none" : "auto"}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
-              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onZoomChanged={(e) => {
-              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onClick={(e) => {

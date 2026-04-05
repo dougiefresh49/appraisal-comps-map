@@ -44,8 +44,15 @@ interface ProjectListRow {
   name: string;
   property_type: string | null;
   client_company: string | null;
+  effective_date: string | null;
+  report_due_date: string | null;
   updated_at: string;
-  subject_data: { core: Record<string, unknown> }[] | null;
+  // Supabase returns a single object (not array) for unique-FK one-to-one relationships.
+  // Type as union so we handle both the runtime shape and older data gracefully.
+  subject_data:
+    | { core: Record<string, unknown> }
+    | { core: Record<string, unknown> }[]
+    | null;
 }
 
 interface ComparableRow {
@@ -79,6 +86,7 @@ interface MapRow {
   hide_ui: boolean;
   document_frame_size: number;
   drawings: MapDrawings;
+  image_file_id: string | null;
 }
 
 interface MapMarkerRow {
@@ -143,6 +151,7 @@ function mapViewFromRow(row: MapRow, markers: MapMarker[]): MapView {
     documentFrameSize: row.document_frame_size,
     drawings: row.drawings,
     markers,
+    imageFileId: row.image_file_id ?? undefined,
   };
 }
 
@@ -154,31 +163,62 @@ export interface ProjectListItem {
   id: string;
   name: string;
   address?: string;
+  city?: string;
   propertyType?: string;
   clientCompany?: string;
+  effectiveDate?: string;
+  reportDueDate?: string;
   updatedAt: string;
 }
 
-export async function fetchProjectsList(): Promise<ProjectListItem[]> {
+export interface FetchProjectsListOptions {
+  /** When true, include rows with `is_reference = true` (e.g. Reference Library). Default false. */
+  includeReferenceProjects?: boolean;
+}
+
+export async function fetchProjectsList(
+  options?: FetchProjectsListOptions,
+): Promise<ProjectListItem[]> {
   const supabase = createClient();
-  const listResult = (await supabase
+  let q = supabase
     .from("projects")
-    .select("id, name, property_type, client_company, updated_at, subject_data(core)")
-    .is("archived_at", null)
-    .order("updated_at", { ascending: false })) as PostgrestResponse<ProjectListRow>;
+    .select(
+      "id, name, property_type, client_company, effective_date, report_due_date, updated_at, subject_data(core)",
+    )
+    .is("archived_at", null);
+
+  if (options?.includeReferenceProjects !== true) {
+    q = q.or("is_reference.is.null,is_reference.eq.false");
+  }
+
+  const listResult = (await q.order("updated_at", {
+    ascending: false,
+  })) as PostgrestResponse<ProjectListRow>;
 
   if (listResult.error) throw listResult.error;
 
   return (listResult.data ?? []).map((row) => {
-    const core = row.subject_data?.[0]?.core;
+    // subject_data is one-to-one (unique FK) — Supabase returns an object, not an array.
+    // Guard for both shapes in case the runtime ever differs.
+    const sd = row.subject_data;
+    const core: Record<string, unknown> | undefined = sd == null
+      ? undefined
+      : Array.isArray(sd)
+        ? sd[0]?.core
+        : sd.core;
     const addr = core && typeof core === "object" ? core.Address : undefined;
-    const address = typeof addr === "string" ? addr : undefined;
+    const address = typeof addr === "string" && addr.trim() ? addr.trim() : undefined;
+    const cityRaw = core && typeof core === "object" ? core.City : undefined;
+    const city = typeof cityRaw === "string" ? cityRaw : undefined;
     return {
       id: row.id,
       name: row.name,
       address: address ?? undefined,
+      city: city?.trim() ? city.trim() : undefined,
       propertyType: row.property_type ?? undefined,
       clientCompany: row.client_company ?? undefined,
+      effectiveDate: row.effective_date ?? undefined,
+      reportDueDate: row.report_due_date ?? undefined,
       updatedAt: row.updated_at,
     };
   });
@@ -453,6 +493,7 @@ export async function upsertMapView(
     hide_ui: mapView.hideUI,
     document_frame_size: mapView.documentFrameSize,
     drawings: mapView.drawings,
+    image_file_id: mapView.imageFileId ?? null,
   });
   if (mapError) throw mapError;
 

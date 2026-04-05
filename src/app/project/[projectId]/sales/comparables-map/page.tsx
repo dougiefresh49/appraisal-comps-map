@@ -98,6 +98,8 @@ export default function SalesComparablesMapPage({
     () => ({ ...DEFAULT_MAP_CENTER }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
@@ -128,6 +130,12 @@ export default function SalesComparablesMapPage({
 
   const hasHydratedRef = useRef(false);
   const [mapReadOnly, setMapReadOnly] = useState(true);
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
@@ -167,12 +175,17 @@ export default function SalesComparablesMapPage({
           ),
         ),
       );
-      setMapCenter(
-        mapView.mapCenter
-          ? { ...mapView.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(mapView.mapZoom ?? 17);
+      const nextCenter = mapView.mapCenter
+        ? { ...mapView.mapCenter }
+        : { ...DEFAULT_MAP_CENTER };
+      const nextZoom = mapView.mapZoom ?? 17;
+      persistedMapViewportRef.current = {
+        center: nextCenter,
+        zoom: nextZoom,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+      setMapCenter(nextCenter);
+      setMapZoom(nextZoom);
       setBubbleSize(mapView.bubbleSize ?? 1.0);
       setHideUI(mapView.hideUI ?? false);
       setDocumentFrameSize(mapView.documentFrameSize ?? 1.0);
@@ -195,6 +208,19 @@ export default function SalesComparablesMapPage({
     subjectBubblePositionRef.current = subjectBubblePosition;
   }, [subjectBubblePosition]);
 
+  useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
   // Hydrate local state from the project hook on first load
   useEffect(() => {
     if (hasHydratedRef.current) return;
@@ -205,6 +231,14 @@ export default function SalesComparablesMapPage({
   }, [isLoading, project, applyProjectState]);
 
   const persistState = useCallback(() => {
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
+
     updateProject((baseProject) => {
       const normalized = normalizeProjectData(baseProject);
       const mapId =
@@ -253,8 +287,8 @@ export default function SalesComparablesMapPage({
 
       const updatedMaps = updateMapInProject(normalized, mapId, (m) => ({
         ...m,
-        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-        mapZoom,
+        mapCenter: centerForSave,
+        mapZoom: zoomForSave,
         bubbleSize,
         hideUI,
         documentFrameSize,
@@ -269,14 +303,20 @@ export default function SalesComparablesMapPage({
         maps: updatedMaps,
       };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     updateProject,
     comparables,
     documentFrameSize,
     hideUI,
     isSubjectTailPinned,
-    mapCenter,
-    mapZoom,
     bubbleSize,
     subjectBubblePosition,
     subjectInfo,
@@ -284,11 +324,54 @@ export default function SalesComparablesMapPage({
     subjectPinnedTailTipPosition,
   ]);
 
-  // Auto-persist when component state changes (after initial hydration)
+  const persistStateRef = useRef(persistState);
+  useEffect(() => {
+    persistStateRef.current = persistState;
+  }, [persistState]);
+
+  // Debounced persist for map camera only (pan/zoom)
   useEffect(() => {
     if (!hasHydratedRef.current) return;
+    if (mapReadOnly) return;
+
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      persistStateRef.current();
+    }, 1500);
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [mapReadOnly, mapCenter, mapZoom]);
+
+  // Immediate persist when editor state changes (markers, comps, UI, etc.)
+  useEffect(() => {
+    if (!hasHydratedRef.current) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
     persistState();
-  }, [persistState]);
+  }, [mapReadOnly, persistState]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        persistStateRef.current();
+      }
+    };
+  }, []);
 
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
@@ -343,6 +426,7 @@ export default function SalesComparablesMapPage({
         const location = results[0]!.geometry.location;
         const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setSubjectMarkerPosition(newPosition);
         setSubjectBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -461,6 +545,7 @@ export default function SalesComparablesMapPage({
       >
         {({ readOnly }) => (
           <>
+      {!readOnly ? (
       <ComparablesPanel
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
@@ -499,6 +584,7 @@ export default function SalesComparablesMapPage({
         onOpenLandMap={undefined}
         readOnly={mapReadOnly}
       />
+      ) : null}
 
       <div className="relative min-h-0 flex-1">
         <APIProvider
@@ -510,19 +596,24 @@ export default function SalesComparablesMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
-            gestureHandling={readOnly ? "none" : "auto"}
+            mapTypeControl={readOnly || !hideUI}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
-              if (readOnly) return;
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onZoomChanged={(e) => {
-              if (readOnly) return;
               const zoom = e.detail.zoom;
               if (zoom) {
                 setMapZoom(zoom);
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onClick={(e) => {

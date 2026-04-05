@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ChangeEvent,
+} from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import { useAuth } from "~/hooks/useAuth";
+import { normalizeProjectData } from "~/utils/projectStore";
 
 interface SeedResult {
   message?: string;
@@ -9,6 +16,500 @@ interface SeedResult {
   imported?: number;
   total?: number;
   results?: { file: string; sectionsExtracted: number; error?: string }[];
+}
+
+interface LegacyJsonImportResponse {
+  maps?: number;
+  markers?: number;
+  compsDisplayUpdated?: number;
+  compMatches?: { legacyId: string; dbId: string; matchType: string }[];
+  unmatchedLegacyComps?: string[];
+  error?: string;
+}
+
+interface BackfillCompsResponse {
+  ok?: boolean;
+  error?: string;
+  phaseA?: { discovered: number; skipped: number; errors: string[] };
+  phaseB?: {
+    compsAssigned: number;
+    parcelsCreated: number;
+    improvementsCreated: number;
+    errors: string[];
+  };
+  phaseC?: { compsCreated: number; errors: string[] };
+  phaseD?: { historicalMarked: number };
+  phaseE?: { apnPatched: number; folderFound: number; imagesFound: number; errors: string[] };
+  elapsed_ms?: number;
+}
+
+function CompBackfillPanel() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [force, setForce] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [result, setResult] = useState<BackfillCompsResponse | null>(null);
+
+  const runBackfill = async (phaseOverride?: string) => {
+    setIsRunning(true);
+    setResult(null);
+    const p = phaseOverride ?? "all";
+    setProgress(p === "E" ? "Running Phase E (enrich)…" : "Starting Phase A…");
+    try {
+      const res = await fetch("/api/seed/backfill-comps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: p, force }),
+      });
+      const data = (await res.json()) as BackfillCompsResponse;
+      if (!res.ok) {
+        setProgress(null);
+        setResult({
+          error: (data as { error?: string }).error ?? `HTTP ${res.status}`,
+        });
+        return;
+      }
+      setProgress(p === "E" ? "Done (Phase E)." : "Done (A → E).");
+      setResult(data);
+    } catch (err) {
+      setProgress(null);
+      setResult({
+        error: err instanceof Error ? err.message : "Request failed",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const allErrors = [
+    ...(result?.phaseA?.errors ?? []),
+    ...(result?.phaseB?.errors ?? []),
+    ...(result?.phaseC?.errors ?? []),
+    ...(result?.phaseE?.errors ?? []),
+  ];
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Comp Backfill &amp; Cleanup
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Re-assign Reference Library comps to per-project references, create
+          comps from extracted report data, and discover Drive folders.
+        </p>
+      </div>
+
+      <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={force}
+          onChange={(e) => setForce(e.target.checked)}
+          disabled={isRunning}
+          className="rounded border-gray-300 dark:border-gray-600"
+        />
+        Force re-run (re-discover{" "}
+        <code className="text-xs">folder_structure</code> even if set)
+      </label>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void runBackfill()}
+          disabled={isRunning}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+        >
+          {isRunning ? "Running…" : "Run Full Backfill (A–E)"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void runBackfill("E")}
+          disabled={isRunning}
+          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300 dark:disabled:bg-gray-600"
+        >
+          {isRunning ? "Running…" : "Enrich Only (APN + Folders + Images)"}
+        </button>
+      </div>
+
+      {progress && !result?.error && (
+        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{progress}</p>
+      )}
+
+      {result && (
+        <div
+          className={`mt-3 rounded-md border p-3 text-sm ${
+            result.error
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          }`}
+        >
+          {result.error && <p className="font-medium">Error: {result.error}</p>}
+          {!result.error && result.ok && (
+            <>
+              <p className="font-medium text-gray-900 dark:text-gray-100">Summary</p>
+              <ul className="mt-2 space-y-1 text-xs text-gray-700 dark:text-gray-300">
+                <li>
+                  Phase A — discovered: {result.phaseA?.discovered ?? 0}, skipped:{" "}
+                  {result.phaseA?.skipped ?? 0}
+                </li>
+                <li>
+                  Phase B — comps assigned: {result.phaseB?.compsAssigned ?? 0},
+                  parcels: {result.phaseB?.parcelsCreated ?? 0}, improvements:{" "}
+                  {result.phaseB?.improvementsCreated ?? 0}
+                </li>
+                <li>Phase C — comps created: {result.phaseC?.compsCreated ?? 0}</li>
+                <li>
+                  Phase D — historical marked:{" "}
+                  {result.phaseD?.historicalMarked ?? 0}
+                </li>
+                <li>
+                  Phase E — APN patched: {result.phaseE?.apnPatched ?? 0},
+                  folders found: {result.phaseE?.folderFound ?? 0}, images
+                  found: {result.phaseE?.imagesFound ?? 0}
+                </li>
+                {result.elapsed_ms !== undefined && (
+                  <li>
+                    Elapsed: {(result.elapsed_ms / 1000).toFixed(1)}s
+                  </li>
+                )}
+              </ul>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Raw JSON
+                </summary>
+                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </details>
+            </>
+          )}
+        </div>
+      )}
+
+      {allErrors.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-medium">Phase warnings / errors</p>
+          <ul className="mt-1 max-h-36 list-disc space-y-0.5 overflow-y-auto pl-4">
+            {allErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function unwrapLegacyExport(parsed: unknown): {
+  wrapperName: string | null;
+  inner: Record<string, unknown>;
+} {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      wrapperName: null,
+      inner: (parsed as Record<string, unknown>) ?? {},
+    };
+  }
+  const keys = Object.keys(parsed as Record<string, unknown>);
+  if (keys.length === 1) {
+    const outerKey = keys[0]!;
+    const innerVal = (parsed as Record<string, unknown>)[outerKey];
+    if (
+      innerVal &&
+      typeof innerVal === "object" &&
+      !Array.isArray(innerVal)
+    ) {
+      const o = innerVal as Record<string, unknown>;
+      if ("subject" in o || "location" in o || "comparables" in o) {
+        return { wrapperName: outerKey, inner: o };
+      }
+    }
+  }
+  return { wrapperName: null, inner: parsed as Record<string, unknown> };
+}
+
+function ImportLegacyLocalStoragePanel() {
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>(
+    [],
+  );
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState("");
+  const [fileLabel, setFileLabel] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [wrapperName, setWrapperName] = useState<string | null>(null);
+  const [legacyInner, setLegacyInner] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [result, setResult] = useState<LegacyJsonImportResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setProjectsLoading(true);
+      setProjectsError(null);
+      try {
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
+        );
+        const { data, error } = await supabase
+          .from("projects")
+          .select("id, name")
+          .is("archived_at", null)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        if (!cancelled) {
+          setProjects(
+            (data ?? []) as { id: string; name: string }[],
+          );
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setProjectsError(
+            e instanceof Error ? e.message : "Failed to load projects",
+          );
+          setProjects([]);
+        }
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setResult(null);
+    setLegacyInner(null);
+    setPreviewText(null);
+    setParseError(null);
+    setWrapperName(null);
+    setFileLabel(file?.name ?? null);
+
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const parsed: unknown = JSON.parse(text);
+        const { wrapperName: wn, inner } = unwrapLegacyExport(parsed);
+        setWrapperName(wn);
+        setLegacyInner(inner);
+
+        const normalized = normalizeProjectData(inner);
+        const land = normalized.comparables.filter((c) => c.type === "Land")
+          .length;
+        const sales = normalized.comparables.filter((c) => c.type === "Sales")
+          .length;
+        const rentals = normalized.comparables.filter(
+          (c) => c.type === "Rentals",
+        ).length;
+        const mapCount = normalized.maps.length;
+        setPreviewText(
+          `${land} Land, ${sales} Sales, ${rentals} Rental comps (will match for display name update where possible), ${mapCount} maps`,
+        );
+        setParseError(null);
+      } catch (err) {
+        setLegacyInner(null);
+        setPreviewText(null);
+        setParseError(
+          err instanceof Error ? err.message : "Could not parse JSON",
+        );
+      }
+    };
+    reader.onerror = () => {
+      setParseError("Failed to read file");
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const runImport = async () => {
+    if (!projectId.trim() || !legacyInner) return;
+    setIsImporting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/seed/import-legacy-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: projectId.trim(),
+          legacyJson: legacyInner,
+        }),
+      });
+      const data = (await res.json()) as LegacyJsonImportResponse;
+      if (!res.ok) {
+        setResult({ error: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      setResult(data);
+    } catch (err) {
+      setResult({
+        error: err instanceof Error ? err.message : "Request failed",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const canImport =
+    Boolean(projectId.trim() && legacyInner && !parseError && previewText);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Import Legacy JSON Map Data
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Upload an export from the old app. Imports all map data (shapes,
+          markers, drawings, labels) and updates{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            addressForDisplay
+          </code>{" "}
+          on matched comparables. Does not create or overwrite existing
+          comparable data.
+        </p>
+      </div>
+
+      {projectsLoading ? (
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          Loading projects…
+        </p>
+      ) : projectsError ? (
+        <p className="mb-3 text-sm text-red-700 dark:text-red-300">
+          {projectsError}
+        </p>
+      ) : (
+        <label className="mb-3 block text-sm text-gray-700 dark:text-gray-300">
+          <span className="mb-1 block font-medium">Target project</span>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            disabled={isImporting}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+          >
+            <option value="">Select a project…</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <label className="mb-3 block text-sm text-gray-700 dark:text-gray-300">
+        <span className="mb-1 block font-medium">
+          Legacy JSON file (.json)
+        </span>
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={onFileChange}
+          disabled={isImporting}
+          className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700 dark:text-gray-400"
+        />
+      </label>
+
+      {fileLabel && (
+        <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+          File: <span className="font-medium">{fileLabel}</span>
+        </p>
+      )}
+
+      {wrapperName && (
+        <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+          Detected wrapper key:{" "}
+          <span className="font-medium text-gray-800 dark:text-gray-200">
+            {wrapperName}
+          </span>
+        </p>
+      )}
+
+      {parseError && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {parseError}
+        </div>
+      )}
+
+      {previewText && !parseError && (
+        <p className="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-200">
+          Preview: {previewText}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => void runImport()}
+        disabled={!canImport || isImporting || projectsLoading || !!projectsError}
+        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+      >
+        {isImporting ? "Importing…" : "Import"}
+      </button>
+
+      {result && (
+        <div
+          className={`mt-3 rounded-md border p-3 text-sm ${
+            result.error
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          }`}
+        >
+          {result.error && <p>Error: {result.error}</p>}
+          {!result.error &&
+            result.maps !== undefined &&
+            result.markers !== undefined && (
+              <>
+                <p className="font-medium">Import complete</p>
+                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                  <li>Maps imported: {result.maps}</li>
+                  <li>Markers imported: {result.markers}</li>
+                  <li>
+                    Comp display names updated:{" "}
+                    {result.compsDisplayUpdated ?? 0}
+                  </li>
+                </ul>
+                {result.unmatchedLegacyComps &&
+                  result.unmatchedLegacyComps.length > 0 && (
+                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                      <p className="font-medium">
+                        No DB match (display name not updated)
+                      </p>
+                      <ul className="mt-1 max-h-28 list-disc space-y-0.5 overflow-y-auto pl-4">
+                        {result.unmatchedLegacyComps.map((addr, i) => (
+                          <li key={i}>{addr}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                {result.compMatches && result.compMatches.length > 0 && (
+                  <details className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                    <summary className="cursor-pointer font-medium text-gray-800 dark:text-gray-200">
+                      Comp matches ({result.compMatches.length})
+                    </summary>
+                    <ul className="mt-1 max-h-36 list-disc space-y-0.5 overflow-y-auto pl-4 font-mono text-[11px]">
+                      {result.compMatches.map((m, i) => (
+                        <li key={i}>
+                          {m.matchType}: {m.legacyId.slice(0, 12)}… →{" "}
+                          {m.dbId.slice(0, 8)}…
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface PatternResult {
@@ -1312,10 +1813,10 @@ export default function SeedPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Seed / Import Tools
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           One-time import operations. These are safe to re-run — they skip if
           data already exists.
         </p>
@@ -1337,6 +1838,10 @@ export default function SeedPage() {
         <DiscussionBackfillPanel />
 
         <ReportDueDateBackfillPanel />
+
+        <CompBackfillPanel />
+
+        <ImportLegacyLocalStoragePanel />
 
         <ForceImportPanel />
 

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { normalizeProjectData, type ProjectData } from "~/utils/projectStore";
+import {
+  normalizeProjectData,
+  type Comparable,
+  type MapView,
+  type ProjectData,
+} from "~/utils/projectStore";
 import { createClient } from "~/utils/supabase/client";
 import {
   fetchProject,
@@ -159,7 +164,7 @@ async function persistChanges(
 
     for (const comp of next.comparables) {
       const prevComp = prev.comparables.find((c) => c.id === comp.id);
-      if (!prevComp || prevComp !== comp) {
+      if (!prevComp || !shallowEqualComp(prevComp, comp)) {
         await upsertComparable(projectId, comp);
       }
     }
@@ -175,7 +180,7 @@ async function persistChanges(
 
     for (const map of next.maps) {
       const prevMap = prev.maps.find((m) => m.id === map.id);
-      if (!prevMap || prevMap !== map) {
+      if (!prevMap || !shallowEqualMap(prevMap, map)) {
         await upsertMapView(projectId, map);
       }
     }
@@ -188,4 +193,36 @@ async function persistChanges(
   } catch (err) {
     console.error("Failed to persist project changes to Supabase", err);
   }
+}
+
+function shallowEqualComp(a: Comparable, b: Comparable): boolean {
+  return (
+    a.id === b.id &&
+    a.type === b.type &&
+    a.number === b.number &&
+    a.address === b.address &&
+    a.addressForDisplay === b.addressForDisplay &&
+    a.folderId === b.folderId &&
+    a.instrumentNumber === b.instrumentNumber &&
+    a.parsedDataStatus === b.parsedDataStatus &&
+    JSON.stringify(a.apn) === JSON.stringify(b.apn) &&
+    JSON.stringify(a.images) === JSON.stringify(b.images)
+  );
+}
+
+function shallowEqualMap(a: MapView, b: MapView): boolean {
+  return (
+    a.id === b.id &&
+    a.type === b.type &&
+    a.linkedCompId === b.linkedCompId &&
+    a.mapCenter.lat === b.mapCenter.lat &&
+    a.mapCenter.lng === b.mapCenter.lng &&
+    a.mapZoom === b.mapZoom &&
+    a.bubbleSize === b.bubbleSize &&
+    a.hideUI === b.hideUI &&
+    a.documentFrameSize === b.documentFrameSize &&
+    a.imageFileId === b.imageFileId &&
+    JSON.stringify(a.drawings) === JSON.stringify(b.drawings) &&
+    JSON.stringify(a.markers) === JSON.stringify(b.markers)
+  );
 }
