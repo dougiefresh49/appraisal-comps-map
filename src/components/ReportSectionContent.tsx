@@ -4,62 +4,68 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { type ReportSection } from "~/server/reports/actions";
+import { useReportSection } from "~/hooks/useReportSection";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
 });
 
-type ReportAction = "generate" | "get" | "update" | "regenerate";
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 interface ReportSectionContentProps {
+  projectId: string;
   projectFolderId?: string;
   section: ReportSection;
   title: string;
   description?: string;
+  /** Shown inside the dashed empty state above the generate button */
+  emptyStateNote?: ReactNode;
+  /** Document IDs to exclude from AI generation context */
+  excludedDocIds?: Set<string>;
+  /** When true, photo analyses will be omitted from the AI generation prompt */
+  excludePhotoContext?: boolean;
 }
-
-interface RequestState {
-  isLoading: boolean;
-  isSaving: boolean;
-  isGenerating: boolean;
-  isRegenerating: boolean;
-}
-
-const DEFAULT_STATE: RequestState = {
-  isLoading: false,
-  isSaving: false,
-  isGenerating: false,
-  isRegenerating: false,
-};
 
 export function ReportSectionContent({
+  projectId,
   projectFolderId,
   section,
   title,
   description,
+  emptyStateNote,
+  excludedDocIds,
+  excludePhotoContext,
 }: ReportSectionContentProps) {
-  const [content, setContent] = useState<string>("");
-  const [exists, setExists] = useState<boolean | null>(null);
-  const [state, setState] = useState<RequestState>(DEFAULT_STATE);
+  const {
+    section: sectionData,
+    content,
+    exists: hasContent,
+    isLoading,
+    updateContent,
+    refreshSection,
+  } = useReportSection(projectId, section);
+
+  const [editContent, setEditContent] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
   const [regenerationContext, setRegenerationContext] = useState("");
-
-  const hasContent = useMemo(() => {
-    const trimmed = content.trim();
-    if (exists === false) return false;
-    if (exists === true) return trimmed.length > 0;
-    return trimmed.length > 0;
-  }, [content, exists]);
-
-  const updateState = useCallback((partial: Partial<RequestState>) => {
-    setState((prev) => ({ ...prev, ...partial }));
-  }, []);
 
   const resetTransient = () => {
     setError(null);
@@ -76,136 +82,119 @@ export function ReportSectionContent({
       await navigator.clipboard.writeText(content);
       setMessage("Copied to clipboard.");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to copy content.";
-      setError(message);
+      setError(
+        err instanceof Error ? err.message : "Failed to copy content.",
+      );
     }
   }, [content]);
 
-  const postAction = useCallback(
-    async (
-      action: ReportAction,
-      nextContent?: string,
-      context?: string,
-      previousContent?: string,
-    ) => {
-      if (!projectFolderId) {
-        setError("Missing Project Folder ID for this project.");
-        return null;
-      }
+  const handleStartEdit = () => {
+    setEditContent(content);
+    setIsEditing(true);
+  };
 
-      resetTransient();
+  const handleSave = async () => {
+    resetTransient();
+    setIsSaving(true);
+    try {
+      await updateContent(editContent);
+      setMessage("Saved successfully.");
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-      const flags: Partial<RequestState> = {
-        isLoading: action === "get",
-        isSaving: action === "update",
-        isGenerating: action === "generate",
-        isRegenerating: action === "regenerate",
-      };
-      updateState(flags);
-
-      try {
-        const body: Record<string, unknown> = {
-          projectFolderId,
-          action,
-          section,
-          content: nextContent,
-        };
-
-        if (action === "regenerate") {
-          if (previousContent) {
-            body.previousContent = previousContent;
-          }
-          if (context) {
-            body.regenerationContext = context;
-          }
-        }
-
-        const response = await fetch("/api/report-content", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        const payload = (await response.json()) as {
-          content?: string;
-          error?: string;
-          exists?: boolean;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Failed to process request");
-        }
-
-        const received = payload.content ?? "";
-        const existsFlag =
-          typeof payload.exists === "boolean"
-            ? payload.exists
-            : received.trim().length > 0;
-        setContent(received);
-        setExists(existsFlag);
-
-        if (action === "update") {
-          setMessage("Saved successfully.");
-          setIsEditing(false);
-        } else if (action === "generate") {
-          setMessage("Content generated.");
-          // Refresh content immediately after a successful generate.
-          void postAction("get");
-        } else if (action === "regenerate") {
-          setMessage("Content regenerated.");
-          setIsEditing(false);
-          // Refresh content immediately after a successful regenerate.
-          void postAction("get");
-        } else {
-          setMessage(null);
-        }
-
-        return received;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Unexpected error occurred";
-        setError(message);
-        setExists(null);
-        return null;
-      } finally {
-        updateState(DEFAULT_STATE);
-      }
-    },
-    [projectFolderId, section, updateState],
-  );
-
-  useEffect(() => {
+  const callGenerateApi = async (
+    action: "generate" | "regenerate",
+    previousContent?: string,
+    context?: string,
+  ) => {
     if (!projectFolderId) {
-      setExists(null);
+      setError("Project Folder ID is required for generation.");
       return;
     }
-    void postAction("get");
-  }, [postAction, projectFolderId]);
 
-  const isBusy =
-    state.isLoading ||
-    state.isSaving ||
-    state.isGenerating ||
-    state.isRegenerating;
+    resetTransient();
+    if (action === "regenerate") {
+      setIsRegenerating(true);
+    } else {
+      setIsGenerating(true);
+    }
+
+    try {
+      const body: Record<string, unknown> = {
+        projectId,
+        projectFolderId,
+        action,
+        section,
+      };
+
+      if (previousContent) body.previousContent = previousContent;
+      if (context) body.regenerationContext = context;
+      if (excludedDocIds && excludedDocIds.size > 0) {
+        body.excludedDocIds = Array.from(excludedDocIds);
+      }
+      if (excludePhotoContext) {
+        body.excludePhotoContext = true;
+      }
+
+      const response = await fetch("/api/report-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const payload = (await response.json()) as {
+        content?: string;
+        error?: string;
+        exists?: boolean;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to process request");
+      }
+
+      setMessage(
+        action === "generate"
+          ? "Content generated."
+          : "Content regenerated.",
+      );
+      setIsEditing(false);
+      void refreshSection();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setIsGenerating(false);
+      setIsRegenerating(false);
+    }
+  };
+
+  const isBusy = isLoading || isSaving || isGenerating || isRegenerating;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            {title}
+          </h1>
           {description ? (
-            <p className="text-sm text-gray-500">{description}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {description}
+            </p>
           ) : null}
         </div>
-        <div className="text-xs text-gray-500">
-          {state.isLoading
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {isLoading
             ? "Loading..."
-            : state.isSaving
+            : isSaving
               ? "Saving..."
-              : state.isGenerating
+              : isGenerating
                 ? "Generating..."
-                : state.isRegenerating
+                : isRegenerating
                   ? "Regenerating..."
                   : null}
         </div>
@@ -222,22 +211,27 @@ export function ReportSectionContent({
         </div>
       ) : null}
 
-      {!projectFolderId ? (
+      {!projectId ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Add a Project Folder ID to the project to enable report actions.
+          A project must be selected to enable report actions.
         </div>
       ) : null}
 
       {!isBusy && !hasContent ? (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
-          <p className="mb-3 text-sm text-gray-600">
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center dark:border-gray-600 dark:bg-gray-900/80">
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
             No content found for this section.
           </p>
+          {emptyStateNote ? (
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              {emptyStateNote}
+            </p>
+          ) : null}
           <button
             type="button"
-            onClick={() => postAction("generate")}
+            onClick={() => callGenerateApi("generate")}
             className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            disabled={!projectFolderId}
+            disabled={!projectFolderId || isBusy}
           >
             Generate Content
           </button>
@@ -245,20 +239,20 @@ export function ReportSectionContent({
       ) : null}
 
       {hasContent ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => setIsEditing((prev) => !prev)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isBusy || !projectFolderId}
+              onClick={() => (isEditing ? setIsEditing(false) : handleStartEdit())}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              disabled={isBusy}
             >
               {isEditing ? "Cancel Edit" : "Edit"}
             </button>
             <button
               type="button"
               onClick={() => setShowRegenerateDialog(true)}
-              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
               disabled={isBusy || !projectFolderId}
             >
               Regenerate
@@ -266,7 +260,7 @@ export function ReportSectionContent({
             <button
               type="button"
               onClick={handleCopy}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               disabled={isBusy || !hasContent}
             >
               Copy
@@ -276,16 +270,16 @@ export function ReportSectionContent({
           {isEditing ? (
             <div className="space-y-4" data-color-mode="light">
               <MDEditor
-                value={content}
-                onChange={(value) => setContent(value ?? "")}
+                value={editContent}
+                onChange={(value) => setEditContent(value ?? "")}
                 height={480}
               />
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => postAction("update", content)}
+                  onClick={handleSave}
                   className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
-                  disabled={isBusy || !projectFolderId}
+                  disabled={isBusy}
                 >
                   Save
                 </button>
@@ -301,47 +295,66 @@ export function ReportSectionContent({
             </div>
           ) : (
             <div
-              className="prose max-w-none rounded-md border border-gray-100 bg-gray-50 p-4 text-gray-900"
+              className="prose max-w-none rounded-md border border-gray-100 bg-gray-50 p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-100"
               data-color-mode="light"
             >
               <MarkdownPreview source={content} />
             </div>
           )}
+
+          {/* Last generated timestamp */}
+          {sectionData?.updatedAt && !isEditing ? (
+            <p className="mt-3 text-right text-xs text-gray-400 dark:text-gray-500">
+              Last generated:{" "}
+              <span className="text-gray-500 dark:text-gray-400">
+                {formatTimestamp(sectionData.updatedAt)}
+              </span>
+            </p>
+          ) : null}
         </div>
       ) : null}
 
-      {/* Regenerate Dialog */}
       {showRegenerateDialog && (
-        <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
-          <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Regenerate Content
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Provide additional context to guide the regeneration. The
                 previous content will be included automatically.
               </p>
+              {excludedDocIds && excludedDocIds.size > 0 && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {excludedDocIds.size} document{excludedDocIds.size !== 1 ? "s" : ""} excluded from context
+                </p>
+              )}
+              {excludePhotoContext && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Photo context excluded
+                </p>
+              )}
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Additional Context (Optional)
               </label>
               <textarea
                 value={regenerationContext}
                 onChange={(e) => setRegenerationContext(e.target.value)}
                 placeholder="e.g., Make it more concise, focus on X aspect, add information about Y..."
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                 rows={6}
               />
             </div>
 
-            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-              <p className="mb-1 text-xs font-medium text-gray-600">
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+              <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
                 Previous Content (will be sent automatically):
               </p>
-              <p className="line-clamp-3 text-xs text-gray-500">
+              <p className="line-clamp-3 text-xs text-gray-500 dark:text-gray-400">
                 {content.substring(0, 200)}
                 {content.length > 200 ? "..." : ""}
               </p>
@@ -354,7 +367,7 @@ export function ReportSectionContent({
                   setShowRegenerateDialog(false);
                   setRegenerationContext("");
                 }}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                 disabled={isBusy}
               >
                 Cancel
@@ -363,11 +376,10 @@ export function ReportSectionContent({
                 type="button"
                 onClick={() => {
                   setShowRegenerateDialog(false);
-                  void postAction(
+                  void callGenerateApi(
                     "regenerate",
-                    undefined,
-                    regenerationContext.trim() || undefined,
                     content,
+                    regenerationContext.trim() || undefined,
                   );
                   setRegenerationContext("");
                 }}

@@ -52,6 +52,8 @@ interface PropertyInfoPanelProps {
   onDocumentFrameSizeChange?: (size: number) => void; // For land comp document frame size
   onCaptureScreenshot?: () => void;
   onOpenGis?: (apn: string) => void;
+  /** When true, map editing controls are disabled (view-only / another user holds lock). */
+  readOnly?: boolean;
 }
 
 export function PropertyInfoPanel({
@@ -85,6 +87,7 @@ export function PropertyInfoPanel({
   onDocumentFrameSizeChange,
   onCaptureScreenshot,
   onOpenGis,
+  readOnly = false,
 }: PropertyInfoPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
 
@@ -160,6 +163,7 @@ export function PropertyInfoPanel({
           <input
             type="text"
             value={searchAddress}
+            readOnly={readOnly}
             onChange={(e) => handleAddressChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -170,8 +174,10 @@ export function PropertyInfoPanel({
             className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-950 dark:text-gray-200 dark:focus:border-blue-400"
           />
           <button
+            type="button"
+            disabled={readOnly}
             onClick={handleSearch}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
           >
             Search
           </button>
@@ -186,6 +192,7 @@ export function PropertyInfoPanel({
         <input
           type="text"
           value={propertyInfo.addressForDisplay ?? ""}
+          readOnly={readOnly}
           onChange={(e) =>
             onPropertyInfoChange({
               ...propertyInfo,
@@ -206,6 +213,7 @@ export function PropertyInfoPanel({
           <input
             type="text"
             value={propertyInfo.acres || ""}
+            readOnly={readOnly}
             onChange={(e) => handleAcresChange(e.target.value)}
             placeholder="9.834"
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-950 dark:text-gray-200 dark:focus:border-blue-400"
@@ -229,8 +237,10 @@ export function PropertyInfoPanel({
               </div>
             ))}
             <button
+                type="button"
+                disabled={readOnly}
                 onClick={() => handleOpenGis(apn)}
-                className="w-full rounded-md border border-indigo-500 text-indigo-700 bg-indigo-50 px-3 py-2 text-xs hover:bg-indigo-100 transition-colors dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
+                className="w-full rounded-md border border-indigo-500 text-indigo-700 bg-indigo-50 px-3 py-2 text-xs hover:bg-indigo-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
             >
                 🌐 Open GIS Overlay
             </button>
@@ -247,6 +257,7 @@ export function PropertyInfoPanel({
             </label>
             <textarea
               value={propertyInfo.legalDescription}
+              readOnly={readOnly}
               onChange={(e) => handleLegalDescriptionChange(e.target.value)}
               placeholder="GUNSMOKE SUB BLOCK 1 LOT 1 & 2"
               rows={4}
@@ -262,11 +273,13 @@ export function PropertyInfoPanel({
         </label>
         <div className="flex gap-2">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => {
               // Reposition tail tip: enter pin mode - user will click on map to place tail tip
               onIsRepositioningTailChange(true);
             }}
-            className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isRepositioningTail
                 ? "animate-pulse border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -277,6 +290,8 @@ export function PropertyInfoPanel({
               : "📍 Reposition Tail Tip"}
           </button>
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => {
               // Toggle tail pinning on/off
               onIsTailPinnedChange(!isTailPinned);
@@ -291,7 +306,7 @@ export function PropertyInfoPanel({
                 onIsRepositioningTailChange(false);
               }
             }}
-            className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isTailPinned
                 ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -328,12 +343,14 @@ export function PropertyInfoPanel({
               </label>
               {streetLabels.length > 1 && (
                 <button
+                  type="button"
+                  disabled={readOnly}
                   onClick={() => {
                     onStreetLabelsChange(
                       streetLabels.filter((l) => l.id !== label.id),
                     );
                   }}
-                  className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  className="text-xs text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Remove
                 </button>
@@ -342,6 +359,7 @@ export function PropertyInfoPanel({
             <input
               type="text"
               value={label.text}
+              readOnly={readOnly}
               onChange={(e) => {
                 onStreetLabelsChange(
                   streetLabels.map((l) =>
@@ -355,6 +373,8 @@ export function PropertyInfoPanel({
           </div>
         ))}
         <button
+          type="button"
+          disabled={readOnly}
           onClick={() => {
             const newLabel: StreetLabelData = {
               id: `label-${Date.now()}-${Math.random()}`,
@@ -365,7 +385,7 @@ export function PropertyInfoPanel({
             };
             onStreetLabelsChange([...streetLabels, newLabel]);
           }}
-          className="w-full rounded-md border-2 border-blue-500 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+          className="w-full rounded-md border-2 border-blue-500 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
         >
           Add Label +
         </button>
@@ -378,8 +398,10 @@ export function PropertyInfoPanel({
         </label>
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => onBubbleSizeChange(Math.max(0.5, bubbleSize - 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Decrease bubble size"
           >
             −
@@ -388,10 +410,12 @@ export function PropertyInfoPanel({
             {Math.round(bubbleSize * 100)}%
           </span>
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() =>
               onBubbleSizeChange(Math.min(1.667, bubbleSize + 0.1))
             }
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Increase bubble size"
           >
             +
@@ -410,8 +434,10 @@ export function PropertyInfoPanel({
           </label>
           <div className="flex gap-2">
             <button
+              type="button"
+              disabled={readOnly}
               onClick={() => onTailDirectionChange("left")}
-              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 tailDirection === "left"
                   ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -420,8 +446,10 @@ export function PropertyInfoPanel({
               ← Left
             </button>
             <button
+              type="button"
+              disabled={readOnly}
               onClick={() => onTailDirectionChange("right")}
-              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex-1 rounded-md border-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 tailDirection === "right"
                   ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -440,8 +468,10 @@ export function PropertyInfoPanel({
         </label>
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => onLabelSizeChange(Math.max(0.5, labelSize - 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Decrease label size"
           >
             −
@@ -450,8 +480,10 @@ export function PropertyInfoPanel({
             {Math.round(labelSize * 100)}%
           </span>
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => onLabelSizeChange(Math.min(2.0, labelSize + 0.1))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Increase label size"
           >
             +
@@ -468,8 +500,10 @@ export function PropertyInfoPanel({
           Screenshot Mode
         </label>
         <button
+          type="button"
+          disabled={readOnly}
           onClick={() => onHideUIChange(!hideUI)}
-          className={`w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+          className={`w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             hideUI
               ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300"
               : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -482,8 +516,10 @@ export function PropertyInfoPanel({
         {onShowDocumentOverlayChange && (
           <>
             <button
+              type="button"
+              disabled={readOnly}
               onClick={() => onShowDocumentOverlayChange(!showDocumentOverlay)}
-              className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors ${
+              className={`mt-2 w-full rounded-md border-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 showDocumentOverlay
                   ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -504,12 +540,14 @@ export function PropertyInfoPanel({
                   </label>
                   <div className="flex items-center gap-3">
                     <button
+                      type="button"
+                      disabled={readOnly}
                       onClick={() =>
                         onDocumentFrameSizeChange(
                           Math.max(0.5, documentFrameSize - 0.1),
                         )
                       }
-                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       title="Decrease frame size"
                     >
                       −
@@ -518,12 +556,14 @@ export function PropertyInfoPanel({
                       {Math.round(documentFrameSize * 100)}%
                     </span>
                     <button
+                      type="button"
+                      disabled={readOnly}
                       onClick={() =>
                         onDocumentFrameSizeChange(
                           Math.min(2.0, documentFrameSize + 0.1),
                         )
                       }
-                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       title="Increase frame size"
                     >
                       +
@@ -532,8 +572,10 @@ export function PropertyInfoPanel({
                   
                   {onCaptureScreenshot && (
                     <button
+                        type="button"
+                        disabled={readOnly}
                         onClick={onCaptureScreenshot}
-                        className="mt-3 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600"
+                        className="mt-3 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
                     >
                         📸 Capture Screenshot
                     </button>

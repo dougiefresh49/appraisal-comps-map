@@ -1,0 +1,174 @@
+[
+  {
+    "data": {
+      "report-inputs-A1:C29": [
+        {
+          "row_number": 2,
+          "variableName": "ReportDate",
+          "label": "Date of Report",
+          "value": "12/27/2025"
+        },
+        {
+          "row_number": 3,
+          "variableName": "ReportEffectiveDate",
+          "label": "Effective Date",
+          "value": "12/05/2025"
+        },
+        {
+          "row_number": 4,
+          "variableName": "ReportExposureTime",
+          "label": "Exposure time",
+          "value": "3-18"
+        },
+        {
+          "row_number": 5,
+          "variableName": "ReportFinalValue",
+          "label": "Final Value",
+          "value": "=INDEX(ReconciliationChartRange, ROWS(ReconciliationChartRange), COLUMNS(ReconciliationChartRange))"
+        },
+        {
+          "row_number": 6,
+          "variableName": "ReportFinalValueWords",
+          "label": "Final Value (words)",
+          "value": "=askGemini(\"write this number out in sentence form in all caps. example would be FIVE HUNDRED FORTY THOUSAND DOLLARS. make sure to include the word dollars at the end\", ROUND(C5))"
+        },
+        {
+          "row_number": 7,
+          "variableName": "ReportTaxesNew",
+          "label": "New Tax from final value",
+          "value": "=TEXT(SUM(TaxEntities[Rate])*(C5/100), \"$#,##0.00\")"
+        },
+        {
+          "row_number": 8,
+          "variableName": "ReportTaxesYear",
+          "label": "Tax Year",
+          "value": 2024
+        },
+        {
+          "row_number": 9,
+          "variableName": "ReportHighestBestUse",
+          "label": "Highest and Best Use",
+          "value": "Commercial"
+        },
+        {
+          "row_number": 10,
+          "variableName": "IncomeAppValueFinal",
+          "label": "Income Approach Value",
+          "value": "=INDEX(IncomeScheduleMarketRange, ROWS(IncomeScheduleMarketRange), COLUMNS(IncomeScheduleMarketRange))\n"
+        },
+        {
+          "row_number": 11,
+          "variableName": "IncomeAppValueWeight",
+          "label": "Income Approach Weight",
+          "value": "=FILTER(ReconciliationInputs[value], ReconciliationInputs[variableName] = \"IncomeAppValueWeight\")"
+        },
+        {
+          "row_number": 12,
+          "variableName": "SalesAppValueRounded",
+          "label": "Sales Approach Value",
+          "value": "=INDEX(CompSalesAdjustmentsRange, ROWS(CompSalesAdjustmentsRange), COLUMNS(CompSalesAdjustmentsRange))\n"
+        },
+        {
+          "row_number": 13,
+          "variableName": "SalesAppValueWeight",
+          "label": "Sales Approach Weight",
+          "value": "=FILTER(ReconciliationInputs[value], ReconciliationInputs[variableName] = \"SalesAppValueWeight\")"
+        },
+        {
+          "row_number": 14,
+          "variableName": "ImprovedLandValueRounded",
+          "label": "Improved Land Value",
+          "value": "=INDEX(CompLandAdjustmentsRange, ROWS(CompLandAdjustmentsRange), COLUMNS(CompLandAdjustmentsRange))\n"
+        },
+        {
+          "row_number": 15,
+          "variableName": "ExcessLandValueRounded",
+          "label": "Excess Land Value",
+          "value": "=INDEX(CompExcessLandAdjustmentsRange, ROWS(CompExcessLandAdjustmentsRange), COLUMNS(CompExcessLandAdjustmentsRange))\n"
+        },
+        {
+          "row_number": 16,
+          "variableName": "ExcessLandDiscountRate",
+          "label": "Excess Land Combined Discount",
+          "value": 0
+        },
+        {
+          "row_number": 17,
+          "variableName": "CostAppValueRounded",
+          "label": "Cost Approach Value",
+          "value": "=INDEX(CostScheduleRange, ROWS(CostScheduleRange), COLUMNS(CostScheduleRange))"
+        },
+        {
+          "row_number": 18,
+          "variableName": "CostAppValueWeight",
+          "label": "Cost Approach Weight",
+          "value": "=FILTER(ReconciliationInputs[value], ReconciliationInputs[variableName] = \"CostAppValueWeight\")"
+        },
+        {
+          "row_number": 19,
+          "variableName": "TaxAuthoritiesList",
+          "label": "Tax Authorities List",
+          "value": "=ARRAYFORMULA(JOIN(\", \", FILTER(TaxEntities[Entity], TaxEntities[Entity] <> \"\")))"
+        },
+        {
+          "row_number": 20,
+          "variableName": "SubjectTaxTotal",
+          "label": "Subject Total Taxes",
+          "value": "=SUM(Subject[Total Taxes])"
+        },
+        {
+          "row_number": 21,
+          "variableName": "SubjectAppraisedTotal",
+          "label": "Subject Appraised Total",
+          "value": "=SUM(Subject[County Appraised Value])"
+        },
+        {
+          "row_number": 22,
+          "variableName": "InsurancePricePerSf",
+          "label": "Insurance Price per SF",
+          "value": 1.25
+        },
+        {
+          "row_number": 23,
+          "variableName": "VacancyRate",
+          "label": "Vacancy Rate for Pro Forma",
+          "value": 0.1
+        },
+        {
+          "row_number": 24,
+          "variableName": "PercentIncPerMonth",
+          "label": "Percent Price Increase / Month",
+          "value": 0.5
+        },
+        {
+          "row_number": 25,
+          "variableName": "IncomeNoiReduction",
+          "label": "Encumbered NOI Reduction",
+          "value": "=GET_NOI(IncomeScheduleMarketRange) - GET_NOI(IncomeScheduleContractRange)"
+        },
+        {
+          "row_number": 26,
+          "variableName": "RentalMcAdjPerYr",
+          "label": "Rentals Market Adjustment per year",
+          "value": 0.06
+        },
+        {
+          "row_number": 27,
+          "variableName": "SalesAdjPerSf",
+          "label": "Price per change in sf"
+        },
+        {
+          "row_number": 28,
+          "variableName": "LandAdjPerSf",
+          "label": "Price per change in SF",
+          "value": 0.00000133
+        },
+        {
+          "row_number": 29,
+          "variableName": "SubjectEffectiveAgeOvrRd",
+          "label": "Subject Effective Age Over Ride"
+        }
+      ]
+    }
+  }
+]

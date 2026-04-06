@@ -10,8 +10,12 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<ReportRequest>;
 
+    const projectId =
+      typeof body.projectId === "string" ? body.projectId : "";
     const projectFolderId =
-      typeof body.projectFolderId === "string" ? body.projectFolderId : "";
+      typeof body.projectFolderId === "string"
+        ? body.projectFolderId
+        : undefined;
     const action = reportActionSchema.safeParse(body.action).success
       ? body.action!
       : undefined;
@@ -36,13 +40,30 @@ export async function POST(request: Request) {
         ? body.regenerationContext
         : undefined;
 
+    const excludedDocIds: string[] | undefined = Array.isArray(body.excludedDocIds)
+      ? (body.excludedDocIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : undefined;
+
+    const excludePhotoContext: boolean | undefined =
+      typeof body.excludePhotoContext === "boolean" ? body.excludePhotoContext : undefined;
+
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "projectId is required" },
+        { status: 400 },
+      );
+    }
+
     const result = await runReportAction({
+      projectId,
       projectFolderId,
       action: action ?? "get",
       section: section ?? "neighborhood",
       content,
       previousContent,
       regenerationContext,
+      excludedDocIds,
+      excludePhotoContext,
     });
 
     if (!result.ok) {
@@ -55,6 +76,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       content: result.content ?? "",
       exists: result.exists ?? false,
+      version: result.version,
     });
   } catch (error) {
     return NextResponse.json(

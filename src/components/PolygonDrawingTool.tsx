@@ -84,12 +84,12 @@ export function PolygonDrawingTool({
   useEffect(() => {
     if (!drawingManager) return;
 
-    if (isDrawing) {
+    if (isDrawing && !readOnly) {
       drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
     } else {
       drawingManager.setDrawingMode(null);
     }
-  }, [isDrawing, drawingManager]);
+  }, [isDrawing, drawingManager, readOnly]);
 
   // Render polygon from path
   useEffect(() => {

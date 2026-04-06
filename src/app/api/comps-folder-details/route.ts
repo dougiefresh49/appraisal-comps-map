@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
-import { env } from "~/env";
+import { getGoogleToken } from "~/utils/supabase/server";
+import {
+  getFolderMetadata,
+  listFolderChildren,
+  downloadFile,
+} from "~/lib/drive-api";
 
 interface FolderDetailsRequest {
   type: string;
@@ -13,37 +15,54 @@ interface FolderDetailsRequest {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as FolderDetailsRequest;
-    const { projectFolderId, folderId, type } = body;
+    const { folderId } = body;
 
-    const n8nUrl = `${env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL}/comps-folder-details`;
-
-    console.log("Fetching folder details from n8n:", n8nUrl);
-
-    const n8nResponse = await fetch(n8nUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        projectFolderId,
-        folderId,
-        type,
-      }),
-    });
-
-    if (!n8nResponse.ok) {
-       console.error("n8n response error:", n8nResponse.status, n8nResponse.statusText);
-       throw new Error(`Failed to fetch from n8n: ${n8nResponse.statusText}`);
+    if (!folderId) {
+      return NextResponse.json(
+        { error: "folderId is required" },
+        { status: 400 },
+      );
     }
 
-    const data = await n8nResponse.json();
+    const { token, error: driveAuthError, code } = await getGoogleToken();
+    if (!token) {
+      return NextResponse.json(
+        {
+          error:
+            driveAuthError ??
+            "Not authenticated — please sign in again to grant Drive access",
+          code,
+        },
+        { status: 401 },
+      );
+    }
 
-    return NextResponse.json(data);
+    // Get the folder name
+    const metadata = await getFolderMetadata(token, folderId);
+
+    // List files in the folder
+    const files = await listFolderChildren(token, folderId, { filesOnly: true });
+
+    // Find parsed.json if it exists
+    const parsedJsonFile = files.find((f) => f.name === "parsed.json");
+
+    let parsedContent: unknown = null;
+    if (parsedJsonFile) {
+      const buffer = await downloadFile(token, parsedJsonFile.id);
+      const text = new TextDecoder().decode(buffer);
+      try {
+        parsedContent = JSON.parse(text) as unknown;
+      } catch {
+        parsedContent = null;
+      }
+    }
+
+    return NextResponse.json({ name: metadata.name, parsedContent, files });
   } catch (error) {
     console.error("Error fetching folder details:", error);
     return NextResponse.json(
       { error: "Failed to fetch folder details" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

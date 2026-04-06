@@ -26,10 +26,16 @@ export function SupabaseAuthProvider({
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  const signIn = useCallback(async () => {
+  const signIn = useCallback(async (nextPath?: string) => {
+    const next = nextPath?.startsWith("/") ? nextPath : "/projects";
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        queryParams: { access_type: "offline" },
+        scopes:
+          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
+      },
     });
   }, [supabase]);
 

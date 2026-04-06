@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState, use } from "react";
 import { useProject } from "~/hooks/useProject";
-import { env } from "~/env";
-import { upsertProjectMetadata } from "~/lib/supabase-queries";
+import { useSubjectData } from "~/hooks/useSubjectData";
 
 interface CoverPageProps {
   params: Promise<{
@@ -14,6 +13,7 @@ interface CoverPageProps {
 export default function ProjectCoverPage({ params }: CoverPageProps) {
   const { projectId } = use(params);
   const { project, isLoading, updateProject } = useProject(projectId);
+  const { subjectData } = useSubjectData(projectId);
 
   const [clientCompany, setClientCompany] = useState("");
   const [clientName, setClientName] = useState("");
@@ -63,8 +63,9 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
     );
   }
 
+  const core = subjectData?.core as Record<string, unknown> | undefined;
   const subjectAddress =
-    project.subject.addressForDisplay ?? project.subject.address ?? "";
+    (core?.Address as string) ?? "";
 
   /* eslint-disable @next/next/no-img-element */
   return (
@@ -151,7 +152,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                   </div>
                 ) : (
                   <div className="space-y-2 text-xs text-gray-500">
-                    <div>Data fetched from webhook</div>
+                    <div>Data fetched from Drive</div>
                     {subjectPhotoUrl && (
                       <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
                         <div className="font-semibold">Image URL:</div>
@@ -172,21 +173,19 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                     if (!project?.projectFolderId) return;
                     setIsLoadingCoverData(true);
                     try {
-                      const response = await fetch(
-                        env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL +
-                          "/subject-photo-data",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            projectFolderId: project.projectFolderId,
-                          }),
-                        },
-                      );
+                      const response = await fetch("/api/cover-data", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          projectFolderId: project.projectFolderId,
+                          subjectPhotosFolderId:
+                            project.folderStructure?.subjectPhotosFolderId ?? undefined,
+                        }),
+                      });
 
                       if (!response.ok) {
                         throw new Error(
-                          `Failed to fetch subject photo data: ${response.statusText}`,
+                          `Failed to fetch cover data: ${response.statusText}`,
                         );
                       }
 
@@ -196,18 +195,6 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       };
 
                       if (photoData) {
-                        if (photoData.subjectPhotosFolderId) {
-                          updateProject((prev) => ({
-                            ...prev,
-                            subjectPhotosFolderId:
-                              photoData.subjectPhotosFolderId,
-                          }));
-                          await upsertProjectMetadata(projectId, {
-                            subjectPhotosFolderId:
-                              photoData.subjectPhotosFolderId,
-                          });
-                        }
-
                         if (photoData.subjectPhotoBase64) {
                           setSubjectPhotoUrl(
                             `data:image/jpeg;base64,${photoData.subjectPhotoBase64}`,

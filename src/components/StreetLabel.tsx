@@ -14,6 +14,7 @@ interface StreetLabelProps {
   onEditToggle?: () => void;
   hideUI?: boolean;
   sizeMultiplier?: number; // Size multiplier for the label
+  readOnly?: boolean;
 }
 
 export function StreetLabel({
@@ -27,6 +28,7 @@ export function StreetLabel({
   onEditToggle,
   hideUI = false,
   sizeMultiplier = 1.0,
+  readOnly = false,
 }: StreetLabelProps) {
 
   const [isRotating, setIsRotating] = useState(false);
@@ -80,6 +82,7 @@ export function StreetLabel({
 
   const handleRotationStart = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (readOnly) return;
     if (!labelRef.current) return;
 
     const rect = labelRef.current.getBoundingClientRect();
@@ -95,13 +98,16 @@ export function StreetLabel({
   return (
     <AdvancedMarker
       position={position}
-      draggable={!isRotating}
+      draggable={!readOnly && !isRotating}
       // onDragStart={() => setIsDragging(true)}
-      onDragEnd={handleDragEnd}
+      onDragEnd={(e) => {
+        if (readOnly) return;
+        handleDragEnd(e);
+      }}
     >
       <div
         ref={labelRef}
-        className="relative inline-block cursor-move select-none"
+        className={`relative inline-block select-none ${readOnly ? "cursor-default" : "cursor-move"}`}
         style={{
           transform: `rotate(${rotation}deg)`,
           transformOrigin: "center center",
@@ -147,7 +153,7 @@ export function StreetLabel({
         </div>
 
         {/* Rotation Handle */}
-        {!hideUI && (
+        {!hideUI && !readOnly && (
           <div
             ref={rotationHandleRef}
             className="absolute top-1/2 right-0 z-10 h-6 w-6 translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-blue-500 bg-white shadow-lg active:cursor-grabbing"

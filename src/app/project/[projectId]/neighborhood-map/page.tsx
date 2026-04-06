@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useRef, useEffect, useCallback, use } from "react";
 import "~/utils/injectCanvasHack";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
@@ -12,7 +13,9 @@ import { StreetLabel } from "~/components/StreetLabel";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapDrawingControls } from "~/components/MapDrawingControls";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
+import { registerMapContext } from "~/lib/map-context";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -77,6 +80,8 @@ export default function NeighborhoodMapPage({
     }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [documentFrameSize, setDocumentFrameSize] = useState(1.0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [bubbleSize, setBubbleSize] = useState(1.0);
@@ -93,6 +98,13 @@ export default function NeighborhoodMapPage({
   const markerPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const bubblePositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -126,10 +138,14 @@ export default function NeighborhoodMapPage({
         center: { ...circle.center },
       })),
     );
-    setMapCenter(
-      mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
-    );
-    setMapZoom(mapView.mapZoom);
+    const nextCenter = mapView.mapCenter
+      ? { ...mapView.mapCenter }
+      : { ...DEFAULT_MAP_CENTER };
+    const nextZoom = mapView.mapZoom ?? 17;
+    persistedMapViewportRef.current = { center: nextCenter, zoom: nextZoom };
+    mapCameraEditedWhileUnlockedRef.current = false;
+    setMapCenter(nextCenter);
+    setMapZoom(nextZoom);
     setBubbleSize(mapView.bubbleSize);
     setTailDirection(mapView.drawings.tailDirection);
     setHideUI(mapView.hideUI);
@@ -160,6 +176,19 @@ export default function NeighborhoodMapPage({
   }, [bubblePosition]);
 
   useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
+  useEffect(() => {
     if (isStateHydrated) return;
     if (!project) return;
 
@@ -168,6 +197,14 @@ export default function NeighborhoodMapPage({
   }, [applyProjectState, isStateHydrated, project]);
 
   const persistCurrentProjectState = useCallback(() => {
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
+
     updateProject((prev) => {
       const updatedSubject: SubjectInfo = {
         address: propertyInfo.address ?? "",
@@ -190,8 +227,8 @@ export default function NeighborhoodMapPage({
 
       const updatedMaps = updateMapInProject(prev, MAP_ID, (m) => ({
         ...m,
-        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-        mapZoom,
+        mapCenter: centerForSave,
+        mapZoom: zoomForSave,
         bubbleSize,
         hideUI,
         documentFrameSize,
@@ -216,6 +253,14 @@ export default function NeighborhoodMapPage({
         maps: updatedMaps,
       };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     updateProject,
     bubblePosition,
@@ -226,8 +271,6 @@ export default function NeighborhoodMapPage({
     hideUI,
     isSubjectTailPinned,
     labelSize,
-    mapCenter,
-    mapZoom,
     markerPosition,
     polygonPath,
     propertyInfo,
@@ -236,15 +279,52 @@ export default function NeighborhoodMapPage({
     tailDirection,
   ]);
 
+  const persistCurrentProjectStateRef = useRef(persistCurrentProjectState);
+  useEffect(() => {
+    persistCurrentProjectStateRef.current = persistCurrentProjectState;
+  }, [persistCurrentProjectState]);
+
   useEffect(() => {
     if (!isStateHydrated) return;
+    if (mapReadOnly) return;
 
-    const timeoutId = window.setTimeout(() => {
-      persistCurrentProjectState();
-    }, 1000);
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      persistCurrentProjectStateRef.current();
+    }, 1500);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [isStateHydrated, persistCurrentProjectState]);
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [isStateHydrated, mapReadOnly, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
+    persistCurrentProjectState();
+  }, [isStateHydrated, mapReadOnly, persistCurrentProjectState]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        persistCurrentProjectStateRef.current();
+      }
+    };
+  }, []);
 
   const handleAddressSearch = async (address: string) => {
     if (!address.trim()) return;
@@ -271,6 +351,7 @@ export default function NeighborhoodMapPage({
           lng: location.lng(),
         };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setMarkerPosition(newPosition);
         setBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -388,6 +469,7 @@ export default function NeighborhoodMapPage({
         link.download = "neighborhood.png";
         link.click();
       }
+      void registerMapContext(decodedProjectId, "neighborhood_map", {});
     } catch (error) {
       console.error("Screenshot failed:", error);
       alert("Failed to capture screenshot. Please try manually.");
@@ -403,7 +485,22 @@ export default function NeighborhoodMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="relative flex h-screen w-full flex-col">
+      <Link
+        href={`/project/${projectId}/neighborhood`}
+        className="absolute top-4 left-4 z-[100] inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-200"
+      >
+        ← Back to Neighborhood
+      </Link>
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="neighborhood-map"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
+      {!readOnly ? (
       <PropertyInfoPanel
         propertyInfo={propertyInfo}
         onPropertyInfoChange={setPropertyInfo}
@@ -433,13 +530,17 @@ export default function NeighborhoodMapPage({
         documentFrameSize={documentFrameSize}
         onDocumentFrameSizeChange={setDocumentFrameSize}
         onCaptureScreenshot={handleCaptureScreenshot}
+        readOnly={mapReadOnly}
       />
+      ) : null}
 
-      {isCollapsed && !hideUI && (
+      {!readOnly && isCollapsed && !hideUI && (
         <div className="absolute bottom-6 left-16 z-[70] flex flex-col gap-2 rounded-lg bg-white p-2 shadow-lg dark:bg-gray-800">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={() => setHideUI(!hideUI)}
-            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
+            className="rounded-md border border-gray-300 p-2 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
             title="Toggle UI Visibility"
           >
             {hideUI ? "Show UI" : "Hide UI"}
@@ -448,10 +549,12 @@ export default function NeighborhoodMapPage({
           {showDocumentOverlay && (
             <div className="flex items-center gap-2 rounded-md border border-gray-300 p-1 dark:border-gray-600">
               <button
+                type="button"
+                disabled={readOnly}
                 onClick={() =>
                   setDocumentFrameSize(Math.max(0.5, documentFrameSize - 0.1))
                 }
-                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="h-8 w-8 rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-700"
                 title="Decrease Frame Size"
               >
                 -
@@ -460,10 +563,12 @@ export default function NeighborhoodMapPage({
                 {Math.round(documentFrameSize * 100)}%
               </span>
               <button
+                type="button"
+                disabled={readOnly}
                 onClick={() =>
                   setDocumentFrameSize(Math.min(2.0, documentFrameSize + 0.1))
                 }
-                className="h-8 w-8 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="h-8 w-8 rounded hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-700"
                 title="Increase Frame Size"
               >
                 +
@@ -473,7 +578,7 @@ export default function NeighborhoodMapPage({
         </div>
       )}
 
-      <div id="neighborhood-map-container" className="relative flex-1">
+      <div id="neighborhood-map-container" className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -483,10 +588,15 @@ export default function NeighborhoodMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
+            mapTypeControl={readOnly || !hideUI}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onZoomChanged={(e) => {
@@ -494,8 +604,12 @@ export default function NeighborhoodMapPage({
               if (zoom) {
                 setMapZoom(zoom);
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -531,6 +645,7 @@ export default function NeighborhoodMapPage({
               onIsDrawingChange={setIsDrawing}
               polygonPath={polygonPath}
               onPolygonPathChange={setPolygonPath}
+              readOnly={readOnly}
               hideUI={hideUI}
             />
 
@@ -539,8 +654,9 @@ export default function NeighborhoodMapPage({
             {markerPosition && !hideUI && (
               <AdvancedMarker
                 position={markerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -567,7 +683,9 @@ export default function NeighborhoodMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -595,6 +713,7 @@ export default function NeighborhoodMapPage({
                 tailDirection={tailDirection}
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -635,6 +754,7 @@ export default function NeighborhoodMapPage({
                 }}
                 hideUI={hideUI}
                 sizeMultiplier={labelSize}
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -656,8 +776,12 @@ export default function NeighborhoodMapPage({
           circles={circles}
           onClearCircles={() => setCircles([])}
           hideUI={hideUI}
+          readOnly={readOnly}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
 import {
   normalizeProjectData,
@@ -97,6 +98,8 @@ export default function RentalsComparablesMapPage({
     () => ({ ...DEFAULT_MAP_CENTER }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
@@ -125,6 +128,13 @@ export default function RentalsComparablesMapPage({
     lng: number;
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyProjectState = useCallback(
     (projectData?: ProjectData, typeOverride?: ComparableType) => {
@@ -164,12 +174,17 @@ export default function RentalsComparablesMapPage({
           ),
         ),
       );
-      setMapCenter(
-        mapView.mapCenter
-          ? { ...mapView.mapCenter }
-          : { ...DEFAULT_MAP_CENTER },
-      );
-      setMapZoom(mapView.mapZoom ?? 17);
+      const nextCenter = mapView.mapCenter
+        ? { ...mapView.mapCenter }
+        : { ...DEFAULT_MAP_CENTER };
+      const nextZoom = mapView.mapZoom ?? 17;
+      persistedMapViewportRef.current = {
+        center: nextCenter,
+        zoom: nextZoom,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+      setMapCenter(nextCenter);
+      setMapZoom(nextZoom);
       setBubbleSize(mapView.bubbleSize ?? 1.0);
       setHideUI(mapView.hideUI ?? false);
       setDocumentFrameSize(mapView.documentFrameSize ?? 1.0);
@@ -192,6 +207,19 @@ export default function RentalsComparablesMapPage({
     subjectBubblePositionRef.current = subjectBubblePosition;
   }, [subjectBubblePosition]);
 
+  useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
   // Hydrate local state from the project loaded by the hook (first load only)
   useEffect(() => {
     if (isStateHydrated) return;
@@ -203,6 +231,14 @@ export default function RentalsComparablesMapPage({
   }, [project, isLoading, applyProjectState, isStateHydrated]);
 
   const persistToProject = useCallback(() => {
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
+
     const mapId = WELL_KNOWN_MAP_IDS[mapTypeForCompType(PAGE_COMPARABLE_TYPE)];
 
     const updatedSubject: SubjectInfo = {
@@ -249,8 +285,8 @@ export default function RentalsComparablesMapPage({
 
       const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
         ...m,
-        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-        mapZoom,
+        mapCenter: centerForSave,
+        mapZoom: zoomForSave,
         bubbleSize,
         hideUI,
         documentFrameSize,
@@ -265,13 +301,19 @@ export default function RentalsComparablesMapPage({
         maps: updatedMaps,
       };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     comparables,
     documentFrameSize,
     hideUI,
     isSubjectTailPinned,
-    mapCenter,
-    mapZoom,
     bubbleSize,
     subjectBubblePosition,
     subjectInfo,
@@ -280,16 +322,52 @@ export default function RentalsComparablesMapPage({
     updateProject,
   ]);
 
-  // Auto-persist local state changes (skip the first render after hydration)
-  const isFirstPersistRef = useRef(true);
+  const persistToProjectRef = useRef(persistToProject);
+  useEffect(() => {
+    persistToProjectRef.current = persistToProject;
+  }, [persistToProject]);
+
   useEffect(() => {
     if (!isStateHydrated) return;
-    if (isFirstPersistRef.current) {
-      isFirstPersistRef.current = false;
-      return;
+    if (mapReadOnly) return;
+
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      persistToProjectRef.current();
+    }, 1500);
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [isStateHydrated, mapReadOnly, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
     }
     persistToProject();
-  }, [isStateHydrated, persistToProject]);
+  }, [isStateHydrated, mapReadOnly, persistToProject]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        persistToProjectRef.current();
+      }
+    };
+  }, []);
 
   const handleActiveTypeChange = useCallback(
     (type: ComparableType) => {
@@ -344,6 +422,7 @@ export default function RentalsComparablesMapPage({
         const location = results[0]!.geometry.location;
         const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setSubjectMarkerPosition(newPosition);
         setSubjectBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -453,7 +532,16 @@ export default function RentalsComparablesMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full flex-col">
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="comparables-map-rentals"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
+      {!readOnly ? (
       <ComparablesPanel
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
@@ -490,9 +578,11 @@ export default function RentalsComparablesMapPage({
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
         // No Land Map link
         onOpenLandMap={undefined}
+        readOnly={mapReadOnly}
       />
+      ) : null}
 
-      <div className="relative flex-1">
+      <div className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -502,10 +592,15 @@ export default function RentalsComparablesMapPage({
             zoom={mapZoom}
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={hideUI}
+            mapTypeControl={readOnly || !hideUI}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onZoomChanged={(e) => {
@@ -513,8 +608,12 @@ export default function RentalsComparablesMapPage({
               if (zoom) {
                 setMapZoom(zoom);
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -559,8 +658,9 @@ export default function RentalsComparablesMapPage({
             {subjectMarkerPosition && !hideUI && (
               <AdvancedMarker
                 position={subjectMarkerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -584,7 +684,9 @@ export default function RentalsComparablesMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -612,6 +714,7 @@ export default function RentalsComparablesMapPage({
                 tailDirection="right"
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -635,6 +738,7 @@ export default function RentalsComparablesMapPage({
                 isTailPinned={comp.isTailPinned}
                 pinnedTailTipPosition={comp.pinnedTailTipPosition}
                 color="#9333ea"
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -644,6 +748,9 @@ export default function RentalsComparablesMapPage({
           size={documentFrameSize}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }

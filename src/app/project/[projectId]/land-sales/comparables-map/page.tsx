@@ -9,6 +9,7 @@ import { ComparablesPanel } from "~/components/ComparablesPanel";
 import { formatDistanceAndDirection } from "~/utils/mapUtils";
 import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
+import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
 import {
   normalizeProjectData,
@@ -94,6 +95,8 @@ export default function LandComparablesMapPage({
     () => ({ ...DEFAULT_MAP_CENTER }),
   );
   const [mapZoom, setMapZoom] = useState(17);
+  const mapCenterRef = useRef(mapCenter);
+  const mapZoomRef = useRef(mapZoom);
   const [bubbleSize, setBubbleSize] = useState(1.0);
   const [hideUI, setHideUI] = useState(false);
   const [showDocumentOverlay, setShowDocumentOverlay] = useState(false);
@@ -120,6 +123,15 @@ export default function LandComparablesMapPage({
     lng: number;
   } | null>(null);
   const [isStateHydrated, setIsStateHydrated] = useState(false);
+  const [mapReadOnly, setMapReadOnly] = useState(true);
+  /** Last map camera persisted to the project (or loaded from it); exploratory read-only pans do not update this. */
+  const persistedMapViewportRef = useRef({
+    center: { ...DEFAULT_MAP_CENTER } as { lat: number; lng: number },
+    zoom: 17,
+  });
+  /** True after the user changes pan/zoom while the map lock is held (editing). */
+  const mapCameraEditedWhileUnlockedRef = useRef(false);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -156,10 +168,17 @@ export default function LandComparablesMapPage({
       }),
     );
 
-    setMapCenter(
-      mapView.mapCenter ? { ...mapView.mapCenter } : { ...DEFAULT_MAP_CENTER },
-    );
-    setMapZoom(mapView.mapZoom ?? 17);
+    const nextCenter = mapView.mapCenter
+      ? { ...mapView.mapCenter }
+      : { ...DEFAULT_MAP_CENTER };
+    const nextZoom = mapView.mapZoom ?? 17;
+    persistedMapViewportRef.current = {
+      center: nextCenter,
+      zoom: nextZoom,
+    };
+    mapCameraEditedWhileUnlockedRef.current = false;
+    setMapCenter(nextCenter);
+    setMapZoom(nextZoom);
     setBubbleSize(mapView.bubbleSize ?? 1.0);
     setHideUI(mapView.hideUI ?? false);
     setDocumentFrameSize(mapView.documentFrameSize ?? 1.0);
@@ -180,6 +199,19 @@ export default function LandComparablesMapPage({
   }, [subjectBubblePosition]);
 
   useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+  }, [mapZoom]);
+
+  const mapReadOnlyRef = useRef(mapReadOnly);
+  useEffect(() => {
+    mapReadOnlyRef.current = mapReadOnly;
+  }, [mapReadOnly]);
+
+  useEffect(() => {
     if (isStateHydrated) return;
     if (isLoading) return;
     if (!project) return;
@@ -189,6 +221,14 @@ export default function LandComparablesMapPage({
   }, [project, isLoading, isStateHydrated, applyProjectState]);
 
   const saveProject = useCallback(() => {
+    const cameraDirty = mapCameraEditedWhileUnlockedRef.current;
+    const persistedCam = persistedMapViewportRef.current;
+    const liveCenter = mapCenterRef.current;
+    const centerForSave = cameraDirty
+      ? (liveCenter ? { ...liveCenter } : { ...DEFAULT_MAP_CENTER })
+      : { ...persistedCam.center };
+    const zoomForSave = cameraDirty ? mapZoomRef.current : persistedCam.zoom;
+
     updateProject((baseProject) => {
       const updatedSubject: SubjectInfo = {
         address: subjectInfo.address ?? "",
@@ -237,8 +277,8 @@ export default function LandComparablesMapPage({
 
       const updatedMaps = updateMapInProject(baseProject, mapId, (m) => ({
         ...m,
-        mapCenter: mapCenter ? { ...mapCenter } : { ...DEFAULT_MAP_CENTER },
-        mapZoom,
+        mapCenter: centerForSave,
+        mapZoom: zoomForSave,
         bubbleSize,
         hideUI,
         documentFrameSize,
@@ -252,14 +292,20 @@ export default function LandComparablesMapPage({
         maps: updatedMaps,
       };
     });
+
+    if (cameraDirty) {
+      persistedMapViewportRef.current = {
+        center: centerForSave,
+        zoom: zoomForSave,
+      };
+      mapCameraEditedWhileUnlockedRef.current = false;
+    }
   }, [
     updateProject,
     comparables,
     documentFrameSize,
     hideUI,
     isSubjectTailPinned,
-    mapCenter,
-    mapZoom,
     bubbleSize,
     subjectBubblePosition,
     subjectInfo,
@@ -278,10 +324,52 @@ export default function LandComparablesMapPage({
     [projectId],
   );
 
+  const saveProjectRef = useRef(saveProject);
+  useEffect(() => {
+    saveProjectRef.current = saveProject;
+  }, [saveProject]);
+
   useEffect(() => {
     if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+    }
+    debouncedSaveRef.current = setTimeout(() => {
+      debouncedSaveRef.current = null;
+      saveProjectRef.current();
+    }, 1500);
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+    };
+  }, [isStateHydrated, mapReadOnly, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    if (!isStateHydrated) return;
+    if (mapReadOnly) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
     saveProject();
-  }, [isStateHydrated, saveProject]);
+  }, [isStateHydrated, mapReadOnly, saveProject]);
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      if (!mapReadOnlyRef.current) {
+        saveProjectRef.current();
+      }
+    };
+  }, []);
 
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
@@ -325,6 +413,7 @@ export default function LandComparablesMapPage({
         const location = results[0]!.geometry.location;
         const newPosition = { lat: location.lat(), lng: location.lng() };
         setMapCenter(newPosition);
+        mapCameraEditedWhileUnlockedRef.current = true;
         setSubjectMarkerPosition(newPosition);
         setSubjectBubblePosition({
           lat: newPosition.lat + 0.001,
@@ -436,7 +525,16 @@ export default function LandComparablesMapPage({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full flex-col">
+      <MapLockGuard
+        projectId={decodedProjectId}
+        pageKey="comparables-map-land"
+        onReadOnlyChange={setMapReadOnly}
+        bodyClassName="relative flex min-h-0 flex-1 flex-row"
+      >
+        {({ readOnly }) => (
+          <>
+      {!readOnly ? (
       <ComparablesPanel
         subjectInfo={subjectInfo}
         onSubjectInfoChange={(info) =>
@@ -472,9 +570,11 @@ export default function LandComparablesMapPage({
         isRepositioningSubjectTail={isRepositioningSubjectTail}
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
         onOpenLandMap={undefined}
+        readOnly={mapReadOnly}
       />
+      ) : null}
 
-      <div className="relative flex-1">
+      <div className="relative min-h-0 flex-1">
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}
@@ -485,15 +585,19 @@ export default function LandComparablesMapPage({
             mapId={env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
             disableDefaultUI={false}
             zoomControl={!hideUI}
-            mapTypeControl={!hideUI}
+            mapTypeControl={readOnly || !hideUI}
             streetViewControl={!hideUI}
             fullscreenControl={!hideUI}
             scaleControl={!hideUI}
             rotateControl={!hideUI}
+            gestureHandling="auto"
             onCenterChanged={(e) => {
               const center = e.detail.center;
               if (center) {
                 setMapCenter({ lat: center.lat, lng: center.lng });
+              }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
               }
             }}
             onZoomChanged={(e) => {
@@ -501,8 +605,12 @@ export default function LandComparablesMapPage({
               if (zoom) {
                 setMapZoom(zoom);
               }
+              if (!readOnly) {
+                mapCameraEditedWhileUnlockedRef.current = true;
+              }
             }}
             onClick={(e) => {
+              if (readOnly) return;
               if (e.detail.latLng) {
                 const lat = e.detail.latLng.lat;
                 const lng = e.detail.latLng.lng;
@@ -547,8 +655,9 @@ export default function LandComparablesMapPage({
             {subjectMarkerPosition && !hideUI && (
               <AdvancedMarker
                 position={subjectMarkerPosition}
-                draggable
+                draggable={!readOnly}
                 onDragEnd={(e) => {
+                  if (readOnly) return;
                   if (e.latLng) {
                     const newPosition = {
                       lat: e.latLng.lat(),
@@ -572,7 +681,9 @@ export default function LandComparablesMapPage({
                   }
                 }}
               >
-                <div className="h-4 w-4 cursor-grab rounded-full border-2 border-white bg-red-600 shadow-lg active:cursor-grabbing" />
+                <div
+                  className={`h-4 w-4 rounded-full border-2 border-white bg-red-600 shadow-lg ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                />
               </AdvancedMarker>
             )}
 
@@ -600,6 +711,7 @@ export default function LandComparablesMapPage({
                 tailDirection="right"
                 isTailPinned={isSubjectTailPinned}
                 pinnedTailTipPosition={subjectPinnedTailTipPosition}
+                readOnly={readOnly}
               />
             )}
 
@@ -623,6 +735,7 @@ export default function LandComparablesMapPage({
                 isTailPinned={comp.isTailPinned}
                 pinnedTailTipPosition={comp.pinnedTailTipPosition}
                 color="#10b981"
+                readOnly={readOnly}
               />
             ))}
           </Map>
@@ -632,6 +745,9 @@ export default function LandComparablesMapPage({
           size={documentFrameSize}
         />
       </div>
+          </>
+        )}
+      </MapLockGuard>
     </div>
   );
 }

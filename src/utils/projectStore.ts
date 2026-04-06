@@ -1,3 +1,5 @@
+import { sortComparables } from "~/utils/comparable-sort";
+
 // ============================================================
 // Core Primitive Types
 // ============================================================
@@ -60,6 +62,12 @@ export type MapType =
   | "comp-location";
 
 /** Property data for a comparable. No map visualization state. */
+export type ComparableParsedDataStatus =
+  | "none"
+  | "processing"
+  | "parsed"
+  | "error";
+
 export interface Comparable {
   id: string;
   type: ComparableType;
@@ -70,6 +78,8 @@ export interface Comparable {
   instrumentNumber?: string;
   folderId?: string;
   images?: ImageData[];
+  /** Synced from Supabase `comparables.parsed_data_status`. */
+  parsedDataStatus?: ComparableParsedDataStatus;
 }
 
 /** Position of a subject or comparable on a specific map. */
@@ -106,21 +116,79 @@ export interface MapView {
   documentFrameSize: number;
   drawings: MapDrawings;
   markers: MapMarker[];
+  /** Google Drive file ID for the map banner preview image in reports/maps/. */
+  imageFileId?: string;
 }
 
 // ============================================================
 // ProjectData (normalized shape)
 // ============================================================
 
+/** Drive subfolder IDs discovered at project setup (JSONB on `projects`). */
+export interface ProjectFolderStructure {
+  subjectFolderId?: string;
+  subjectPhotosFolderId?: string;
+  subjectSketchesFolderId?: string;
+  reportsFolderId?: string;
+  reportMapsFolderId?: string;
+  costReportFolderId?: string;
+  engagementFolderId?: string;
+  compsFolderIds?: {
+    land?: string;
+    sales?: string;
+    rentals?: string;
+  };
+}
+
+export interface ProjectApproaches {
+  salesComparison: { land: boolean; sales: boolean };
+  income: boolean;
+  cost: boolean;
+}
+
+export const DEFAULT_APPROACHES: ProjectApproaches = {
+  salesComparison: { land: true, sales: true },
+  income: true,
+  cost: true,
+};
+
+/** DB/client raw shape: any missing or non-false value enables the approach. */
+export function normalizeProjectApproaches(raw?: unknown): ProjectApproaches {
+  const rawApproaches = raw as Record<string, unknown> | null | undefined;
+  const salesComp = (rawApproaches?.salesComparison ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    salesComparison: {
+      land: salesComp.land !== false,
+      sales: salesComp.sales !== false,
+    },
+    income: rawApproaches?.income !== false,
+    cost: rawApproaches?.cost !== false,
+  };
+}
+
 export interface ProjectData {
+  /** Derived from subject_data.core at fetch time — NOT a DB column on projects. */
   subject: SubjectInfo;
   comparables: Comparable[];
   maps: MapView[];
-  subjectPhotosFolderId?: string;
   projectFolderId?: string;
   clientCompany?: string;
   clientName?: string;
   propertyType?: string;
+  folderStructure?: ProjectFolderStructure;
+  effectiveDate?: string;
+  reportDueDate?: string;
+  exposureTime?: string;
+  highestBestUse?: string;
+  /** Corresponds to `insurance_price_per_sf` on `projects`. */
+  insurancePricePerSf?: number;
+  /** Corresponds to `vacancy_rate` on `projects`. */
+  vacancyRate?: number;
+  /** Report appraisal approaches (JSONB on `projects`). */
+  approaches?: ProjectApproaches;
 }
 
 export type ProjectsMap = Record<string, ProjectData>;
@@ -384,7 +452,8 @@ export function getComparablesByType(
   project: ProjectData,
   type: ComparableType,
 ): Comparable[] {
-  return project.comparables.filter((c) => c.type === type);
+  const list = project.comparables.filter((c) => c.type === type);
+  return sortComparables(list);
 }
 
 // ============================================================
@@ -597,7 +666,6 @@ function migrateLegacyProject(legacy: LegacyProjectData): ProjectData {
     subject,
     comparables,
     maps,
-    subjectPhotosFolderId: legacy.subjectPhotosFolderId,
     projectFolderId: legacy.projectFolderId,
     clientCompany: legacy.clientCompany,
     clientName: legacy.clientName,
@@ -706,6 +774,10 @@ function normalizeMapView(m: Partial<MapView>): MapView {
     markers: Array.isArray(m.markers)
       ? m.markers.map((mk) => normalizeMarker(mk, id))
       : [],
+    imageFileId:
+      typeof m.imageFileId === "string" && m.imageFileId.trim() !== ""
+        ? m.imageFileId.trim()
+        : undefined,
   };
 }
 
@@ -715,6 +787,16 @@ function normalizeComparableEntity(
 ): Comparable {
   const resolvedType =
     c.type && COMPARABLE_TYPES.includes(c.type) ? c.type : fallbackType;
+  const status = c.parsedDataStatus;
+  const validStatuses: ComparableParsedDataStatus[] = [
+    "none",
+    "processing",
+    "parsed",
+    "error",
+  ];
+  const parsedDataStatus =
+    status && validStatuses.includes(status) ? status : undefined;
+
   return {
     id:
       typeof c.id === "string" && c.id.trim().length > 0
@@ -732,6 +814,7 @@ function normalizeComparableEntity(
         : undefined,
     folderId: c.folderId,
     images: c.images,
+    parsedDataStatus,
   };
 }
 
@@ -807,15 +890,57 @@ function normalizeNewShape(data?: Partial<ProjectData>): ProjectData {
     }
   }
 
+  const rawFs = data as Partial<ProjectData> & {
+    folder_structure?: ProjectFolderStructure;
+  };
+  const folderStructure =
+    data?.folderStructure ?? rawFs.folder_structure;
+
+  const rawNums = data as Partial<ProjectData> & {
+    exposure_time?: string | null;
+    highest_best_use?: string | null;
+    insurance_price_per_sf?: number | string | null;
+    vacancy_rate?: number | string | null;
+  };
+  const insurancePricePerSf =
+    data?.insurancePricePerSf ??
+    (typeof rawNums.insurance_price_per_sf === "number"
+      ? rawNums.insurance_price_per_sf
+      : rawNums.insurance_price_per_sf != null &&
+          rawNums.insurance_price_per_sf !== ""
+        ? Number(rawNums.insurance_price_per_sf)
+        : undefined);
+  const vacancyRate =
+    data?.vacancyRate ??
+    (typeof rawNums.vacancy_rate === "number"
+      ? rawNums.vacancy_rate
+      : rawNums.vacancy_rate != null && rawNums.vacancy_rate !== ""
+        ? Number(rawNums.vacancy_rate)
+        : undefined);
+
   return {
     subject,
     comparables,
     maps,
-    subjectPhotosFolderId: data?.subjectPhotosFolderId,
     projectFolderId: data?.projectFolderId,
     clientCompany: data?.clientCompany,
     clientName: data?.clientName,
     propertyType: data?.propertyType,
+    folderStructure,
+    effectiveDate: data?.effectiveDate,
+    reportDueDate: data?.reportDueDate,
+    exposureTime: data?.exposureTime ?? rawNums.exposure_time ?? undefined,
+    highestBestUse:
+      data?.highestBestUse ?? rawNums.highest_best_use ?? undefined,
+    insurancePricePerSf:
+      insurancePricePerSf != null && !Number.isNaN(insurancePricePerSf)
+        ? insurancePricePerSf
+        : undefined,
+    vacancyRate:
+      vacancyRate != null && !Number.isNaN(vacancyRate)
+        ? vacancyRate
+        : undefined,
+    approaches: normalizeProjectApproaches(data?.approaches),
   };
 }
 

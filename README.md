@@ -24,7 +24,7 @@ A comprehensive Next.js application for managing commercial appraisal reports, v
 - **Google Drive Integration**: Fetch property photos directly from a Google Drive folder.
 - **Organization**: Drag and drop to reorder photos for the report.
 - **Labeling**: Inline editing of photo labels.
-- **Sync**: Save changes back to Google Drive via n8n webhook or manual JSON export.
+- **Sync**: Persist photo metadata via Supabase and Drive (see app server actions).
 
 ### 📝 Report Generation
 
@@ -55,9 +55,6 @@ NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=your_google_maps_map_id
 
 # Google Drive API (Required for Photo Features)
 GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
-
-# n8n Webhook (Optional - for saving photo data)
-N8N_WEBHOOK_BASE_URL=https://your-n8n-instance.com/webhook/
 ```
 
 ### 2. Google Maps Setup
@@ -115,7 +112,7 @@ src/
 ├── utils/
 │   ├── mapUtils.ts      # Geocoding & Map Helpers
 │   └── projectStore.ts  # State Management Logic
-└── server/              # Server Actions (Drive/n8n)
+└── server/              # Server Actions (Drive, photos, etc.)
 ```
 
 ## Usage Guide

@@ -1,35 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import { type Comparable, type ComparableType } from "~/utils/projectStore";
+import {
+  type Comparable,
+  type ComparableParsedDataStatus,
+  type ComparableType,
+} from "~/utils/projectStore";
+import { useState } from "react";
 
 interface ComparablesListProps {
   projectId: string;
   type: ComparableType;
+  typeSlug: string;
   comparables: Comparable[];
   onAdd: () => void;
   onRemove: (id: string) => void;
-  onChange: (id: string, field: "address" | "addressForDisplay" | "apn", value: string) => void;
-  onAddressSearch: (id: string, address: string) => void;
+  onChange: (
+    id: string,
+    field: "address" | "addressForDisplay" | "apn",
+    value: string,
+  ) => void;
 }
 
+function parsedStatusBadgeClass(
+  status: ComparableParsedDataStatus | undefined,
+): string {
+  switch (status ?? "none") {
+    case "parsed":
+      return "bg-emerald-950/80 text-emerald-300 ring-1 ring-emerald-800/80";
+    case "processing":
+      return "bg-blue-950/80 text-blue-300 ring-1 ring-blue-800/80 animate-pulse";
+    case "error":
+      return "bg-red-950/80 text-red-300 ring-1 ring-red-800/80";
+    default:
+      return "bg-gray-800/80 text-gray-400 ring-1 ring-gray-700";
+  }
+}
 
-
-import { useState } from "react";
+function formatParsedLabel(status: ComparableParsedDataStatus | undefined) {
+  return (status ?? "none") as string;
+}
 
 export function ComparablesList({
   projectId,
   type,
+  typeSlug,
   comparables,
   onAdd,
   onRemove,
   onChange,
-  onAddressSearch,
 }: ComparablesListProps) {
-  const [expandedPhotosIds, setExpandedPhotosIds] = useState<Set<string>>(new Set());
+  const [expandedPhotosIds, setExpandedPhotosIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const togglePhotos = (id: string) => {
-    setExpandedPhotosIds(current => {
+    setExpandedPhotosIds((current) => {
       const next = new Set(current);
       if (next.has(id)) {
         next.delete(id);
@@ -46,24 +72,17 @@ export function ComparablesList({
         <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
           {type} Comparables ({comparables.length})
         </h3>
-        <div className="flex gap-2">
-            <button
-              onClick={onAdd}
-              className="rounded-md border border-blue-500 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
-            >
-              + Add {type}
-            </button>
-            <button
-                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-                title="Refresh (Placeholder)"
-              >
-                🔄
-            </button>
-        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="rounded-md border border-blue-500/60 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-200 transition hover:bg-blue-900/40 dark:border-blue-600 dark:text-blue-300"
+        >
+          + Add {type}
+        </button>
       </div>
 
       {comparables.length === 0 ? (
-        <div className="rounded-md border border-dashed border-gray-300 bg-white p-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        <div className="rounded-lg border border-dashed border-gray-600 bg-gray-900/40 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
           No {type.toLowerCase()} comparables yet.
         </div>
       ) : (
@@ -71,40 +90,53 @@ export function ComparablesList({
           {comparables.map((comparable, index) => (
             <div
               key={comparable.id}
-              className="group relative flex flex-col rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+              className="group relative flex flex-col rounded-lg border border-gray-700 bg-gray-900/50 p-4 shadow-sm ring-1 ring-black/20 transition hover:border-gray-600 hover:shadow-md"
             >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  {type} # {index + 1}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                  {type} #{comparable.number ?? index + 1}
                 </span>
-                <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${parsedStatusBadgeClass(comparable.parsedDataStatus)}`}
+                >
+                  {formatParsedLabel(comparable.parsedDataStatus)}
+                </span>
+                <div className="ml-auto flex flex-wrap items-center gap-1.5">
                   {comparable.images && comparable.images.length > 0 && (
-                     <button
-                        onClick={() => togglePhotos(comparable.id)}
-                        className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition ${
-                            expandedPhotosIds.has(comparable.id)
-                            ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500" 
-                            : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                        }`}
-                     >
-                        Photos ({comparable.images.length})
-                     </button>
+                    <button
+                      type="button"
+                      onClick={() => togglePhotos(comparable.id)}
+                      className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition ${
+                        expandedPhotosIds.has(comparable.id)
+                          ? "border-blue-500 bg-blue-950/50 text-blue-300"
+                          : "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700"
+                      }`}
+                    >
+                      Photos ({comparable.images.length})
+                    </button>
                   )}
                   {(type === "Land" || type === "Sales") && (
                     <Link
-                      href={`/project/${projectId}/${type === "Land" ? "land-sales" : "sales"}/comps/${comparable.id}/location-map`}
-                      className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition hover:bg-opacity-100 ${
-                        type === "Land" 
-                          ? "border-green-600 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/40"
-                          : "border-purple-600 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/40"
+                      href={`/project/${projectId}/${typeSlug}/comps/${comparable.id}/location-map`}
+                      className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition ${
+                        type === "Land"
+                          ? "border-green-700 bg-green-950/40 text-green-300 hover:bg-green-950/60"
+                          : "border-purple-700 bg-purple-950/40 text-purple-300 hover:bg-purple-950/60"
                       }`}
                     >
                       Map
                     </Link>
                   )}
+                  <Link
+                    href={`/project/${projectId}/${typeSlug}/comps/${comparable.id}`}
+                    className="rounded border border-sky-700 bg-sky-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300 transition hover:bg-sky-950/60"
+                  >
+                    Details
+                  </Link>
                   <button
+                    type="button"
                     onClick={() => onRemove(comparable.id)}
-                    className="text-[10px] font-medium text-red-600 hover:text-red-700 opacity-50 transition group-hover:opacity-100 dark:text-red-400 dark:hover:text-red-300"
+                    className="text-[10px] font-medium text-red-400 opacity-60 transition group-hover:opacity-100 hover:text-red-300"
                   >
                     Remove
                   </button>
@@ -112,60 +144,39 @@ export function ComparablesList({
               </div>
 
               <div className="flex-1 space-y-3">
-                {/* Address Field */}
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
                     Address
                   </label>
-                  <div className="flex gap-1">
-                    <input
-                      type="text"
-                      value={comparable.address}
-                      onChange={(event) =>
-                        onChange(comparable.id, "address", event.target.value)
-                      }
-                      onKeyDown={(e) => {
-                           if (e.key === "Enter" && comparable.address.trim()) {
-                             onAddressSearch(comparable.id, comparable.address);
-                           }
-                      }}
-                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:focus:border-blue-400"
-                      placeholder="Enter address..."
-                    />
-                     <button
-                        onClick={() => {
-                          if (comparable.address.trim()) {
-                            onAddressSearch(comparable.id, comparable.address);
-                          }
-                        }}
-                        className="flex items-center justify-center rounded border border-gray-200 bg-gray-50 px-2 text-gray-600 hover:bg-gray-100 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                        title="Search Address"
-                      >
-                         🔍
-                      </button>
-                  </div>
+                  <p className="min-h-[1.75rem] rounded-md border border-gray-800 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200">
+                    {comparable.address?.trim()
+                      ? comparable.address
+                      : "—"}
+                  </p>
                 </div>
 
-                {/* Display Address Field */}
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
                     Display Address
                   </label>
                   <input
                     type="text"
                     value={comparable.addressForDisplay}
                     onChange={(event) =>
-                      onChange(comparable.id, "addressForDisplay", event.target.value)
+                      onChange(
+                        comparable.id,
+                        "addressForDisplay",
+                        event.target.value,
+                      )
                     }
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:focus:border-blue-400"
+                    className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
                     placeholder="Same as address"
                   />
                 </div>
 
-                {/* APN Field */}
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">
-                    APN (Comma separated)
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    APN (comma separated)
                   </label>
                   <input
                     type="text"
@@ -173,46 +184,62 @@ export function ComparablesList({
                     onChange={(event) =>
                       onChange(comparable.id, "apn", event.target.value)
                     }
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:focus:border-blue-400"
+                    className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
                     placeholder="e.g. 123-456, 789-012"
                   />
                 </div>
+
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    Number
+                  </label>
+                  <p className="rounded-md border border-gray-800 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200">
+                    {comparable.number ?? String(index + 1)}
+                  </p>
+                </div>
               </div>
 
-               {/* Image Grid */}
-               {expandedPhotosIds.has(comparable.id) && comparable.images && (
-                   <div className="mt-4 border-t pt-3 dark:border-gray-700">
-                       <h4 className="mb-2 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Photos</h4>
-                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                           {comparable.images.map((image) => (
-                               <div key={image.id} className="flex flex-col space-y-1">
-                                   <div className="relative aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800">
-                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                       <img 
-                                           src={image.webViewUrl ?? `https://drive.google.com/thumbnail?id=${image.id}&sz=w800`} 
-                                           alt={image.name} 
-                                           className="h-full w-full object-cover transition hover:scale-105"
-                                           loading="lazy"
-                                       />
-                                   </div>
-                                   <div className="flex flex-col px-0.5">
-                                        <span className="truncate text-[10px] font-medium text-gray-600 dark:text-gray-400" title={image.name}>
-                                            {image.name}
-                                        </span>
-                                        <a 
-                                            href={image.webViewLink} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-[10px] text-blue-600 hover:underline dark:text-blue-400"
-                                        >
-                                            Open ↗
-                                        </a>
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   </div>
-               )}
+              {expandedPhotosIds.has(comparable.id) && comparable.images && (
+                <div className="mt-4 border-t border-gray-800 pt-3">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase text-gray-500">
+                    Photos
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {comparable.images.map((image) => (
+                      <div key={image.id} className="flex flex-col space-y-1">
+                        <div className="relative aspect-square overflow-hidden rounded-md border border-gray-700 bg-gray-800">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={
+                              image.webViewUrl ??
+                              `https://drive.google.com/thumbnail?id=${image.id}&sz=w800`
+                            }
+                            alt={image.name}
+                            className="h-full w-full object-cover transition hover:scale-105"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="flex flex-col px-0.5">
+                          <span
+                            className="truncate text-[10px] font-medium text-gray-400"
+                            title={image.name}
+                          >
+                            {image.name}
+                          </span>
+                          <a
+                            href={image.webViewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-blue-400 hover:underline"
+                          >
+                            Open ↗
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

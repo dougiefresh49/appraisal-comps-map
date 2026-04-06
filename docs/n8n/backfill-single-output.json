@@ -1,0 +1,27 @@
+[
+  {
+    "id": "ff75e71b-d96c-4972-9e50-4ca1c12e85a8",
+    "project_id": "b377f836-eb35-4780-8524-554aad80d9ce",
+    "file_name": "PXL_20250522_164933641~2.jpg",
+    "category": "Building Exterior",
+    "label": "Subject Front",
+    "description": "The subject property is a single-story commercial retail building featuring a tan brick veneer exterior and a multi-level hipped roof with brown asphalt shingles. The building appears to be in average condition, with a prominent front entrance, a wooden bench, and several storefront windows, situated on a large, level gravel lot with mature trees at the property boundary.",
+    "improvements_observed": {
+      "roof": "Hipped roof with asphalt shingles",
+      "parking": "Gravel lot with space for approximately 10+ vehicles",
+      "stories": "1",
+      "landscaping": "Mature trees and minimal lawn area",
+      "exterior_walls": "Tan brick veneer",
+      "site_improvements": "Large gravel lot and signage",
+      "construction_quality": "Average"
+    },
+    "property_type": "Retail Building",
+    "subject_address": "1604 S Burleson Ave, McCamey, TX 79752",
+    "project_folder_id": "1-PsMbp4u-j__hEde--3SEu6vrq-6f5H8",
+    "created_at": "2026-04-01T05:28:44.384302+00:00",
+    "updated_at": "2026-04-01T05:28:44.384302+00:00",
+    "file_id": "153INtwqTtBG0IHI4H908Wt4Es6XHzJhX",
+    "sort_order": 0,
+    "is_included": true
+  }
+]

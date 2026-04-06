@@ -29,6 +29,12 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Seed API routes self-protect against production misuse internally.
+  // Bypass auth middleware so these can be called via curl in development.
+  if (request.nextUrl.pathname.startsWith("/api/seed/")) {
+    return NextResponse.next({ request });
+  }
+
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&

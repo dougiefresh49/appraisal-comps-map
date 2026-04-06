@@ -19,6 +19,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@google/genai": "^1.46.0",
     "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.0",
@@ -28,6 +29,7 @@
     "@uiw/react-md-editor": "^4.0.11",
     "@uiw/react-textarea-code-editor": "^3.1.1",
     "@vis.gl/react-google-maps": "^1.5.3",
+    "date-fns": "4.1.0",
     "html-to-image": "^1.11.13",
     "next": "^15.5.13",
     "react": "^19.0.0",
@@ -36,6 +38,7 @@
     "react-json-view": "^1.21.3",
     "react-syntax-highlighter": "^16.1.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.34.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -49,6 +52,7 @@
     "postcss": "^8.5.3",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
+    "supabase": "^2.84.4",
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0"
