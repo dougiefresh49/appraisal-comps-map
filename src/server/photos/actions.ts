@@ -1,6 +1,15 @@
 import "server-only";
 import { z } from "zod";
 import { env } from "~/env";
+import {
+  listFolderChildren,
+  findChildByName,
+} from "~/lib/drive-api";
+import {
+  analyzeProjectPhotos,
+  buildSubjectPhotoContext,
+} from "~/lib/photo-analyzer";
+import { createClient, createServiceClient, getGoogleToken } from "~/utils/supabase/server";
 
 // Schema for photo input data with webViewUrl (final merged format)
 export const PhotoInputSchema = z.object({
@@ -181,4 +190,160 @@ export async function saveChanges(
   }
 }
 
+/**
+ * Triggers photo analysis for a project's subject photos folder.
+ *
+ * Loads subject_data.core for context, then runs photo-analyzer (Gemini) on
+ * each image. Results are written to photo_analyses asynchronously.
+ */
+export async function triggerPhotoAnalysis(
+  projectFolderId: string,
+  projectId?: string,
+): Promise<{ success: boolean; totalPhotos?: number; error?: string }> {
+  try {
+    if (!projectFolderId) {
+      return { success: false, error: "Project Folder ID is required" };
+    }
 
+    const { token, error: driveAuthError } = await getGoogleToken();
+    if (!token) {
+      return {
+        success: false,
+        error:
+          driveAuthError ??
+          "Not authenticated — please sign in again to grant Drive access",
+      };
+    }
+
+    const photosFolderId = await resolveSubjectPhotosFolderId(
+      token,
+      projectFolderId,
+    );
+
+    let resolvedProjectId = projectId;
+    if (!resolvedProjectId) {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("project_folder_id", projectFolderId)
+        .single();
+      resolvedProjectId = (data as { id: string } | null)?.id ?? undefined;
+    }
+
+    if (!resolvedProjectId) {
+      return {
+        success: false,
+        error:
+          "Could not resolve project ID from folder. Pass projectId explicitly.",
+      };
+    }
+
+    const supabase = await createClient();
+    const { data: subjectRow } = await supabase
+      .from("subject_data")
+      .select("core")
+      .eq("project_id", resolvedProjectId)
+      .single();
+
+    const core =
+      (subjectRow as { core: Record<string, unknown> } | null)?.core ?? {};
+    const subjectContext = buildSubjectPhotoContext(core);
+
+    const { data: projectRow } = await supabase
+      .from("projects")
+      .select("property_type, name")
+      .eq("id", resolvedProjectId)
+      .single();
+
+    const row = projectRow as {
+      property_type: string | null;
+      name: string | null;
+    } | null;
+
+    const propertyType =
+      (typeof core.propertyType === "string" ? core.propertyType : null) ??
+      row?.property_type ??
+      "Commercial";
+
+    const subjectAddress =
+      (typeof core.address === "string" ? core.address : null) ??
+      (typeof core.siteAddress === "string" ? core.siteAddress : null) ??
+      row?.name ??
+      "Unknown Address";
+
+    const serviceClient = createServiceClient();
+
+    const allFiles = await listFolderChildren(token, photosFolderId, {
+      filesOnly: true,
+    });
+    const imageExtensions = new Set([
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "gif",
+      "heic",
+      "heif",
+      "tif",
+      "tiff",
+    ]);
+    const imageFiles = allFiles.filter((f) => {
+      if (f.mimeType?.startsWith("image/")) return true;
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      return imageExtensions.has(ext);
+    });
+    const totalPhotos = imageFiles.length;
+
+    void analyzeProjectPhotos(
+      resolvedProjectId,
+      photosFolderId,
+      token,
+      serviceClient,
+      {
+        propertyType,
+        subjectAddress,
+        subjectContext,
+        concurrency: 2,
+      },
+    ).catch((err) => {
+      console.error("[triggerPhotoAnalysis] Background analysis failed:", err);
+    });
+
+    return { success: true, totalPhotos };
+  } catch (error) {
+    console.error("Error triggering photo analysis:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+}
+
+async function resolveSubjectPhotosFolderId(
+  token: string,
+  projectFolderId: string,
+): Promise<string> {
+  const projectChildren = await listFolderChildren(token, projectFolderId, {
+    foldersOnly: true,
+  });
+
+  const subjectFolder = projectChildren.find(
+    (f) => f.name.toLowerCase() === "subject",
+  );
+  if (!subjectFolder) {
+    throw new Error("Could not find 'subject' folder in project Drive folder");
+  }
+
+  const photosFolder = await findChildByName(
+    token,
+    subjectFolder.id,
+    "photos",
+    "application/vnd.google-apps.folder",
+  );
+  if (!photosFolder) {
+    throw new Error("Could not find 'photos' subfolder inside subject folder");
+  }
+
+  return photosFolder.id;
+}
