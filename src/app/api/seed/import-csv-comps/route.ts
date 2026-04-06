@@ -130,6 +130,7 @@ export async function POST(request: Request) {
     }
 
     const force = body.force === true;
+    // Local-only folder (gitignored): place Sheet CSV exports here for seed import.
     const csvDir = path.join(
       process.cwd(),
       "docs",

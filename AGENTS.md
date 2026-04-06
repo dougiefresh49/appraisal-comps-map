@@ -97,7 +97,7 @@ docs/
     parser-type-defs.md   # TypeScript interfaces for Gemini parsing + Apps Script importer
     named-functions.md    # Google Sheets named functions with formulas
     report-data - ai-prompts.csv  # AI prompts from spreadsheet
-    sheets-exported--html/        # HTML exports of every spreadsheet tab (38 files)
+    # sheets-exported--html|csv/ — optional local exports (.gitignored; not in repo)
   n8n/
     workflows/            # Exported n8n workflow JSON files
     gemini-node-prompts/  # Prompts used in n8n Gemini nodes
@@ -188,7 +188,7 @@ See `.cursor/skills/n8n-appraisal-sheet-formulas/reference.md` for the full shee
 |----------|-----------------|-------------|
 | `docs/report-data-spreadsheet/parser-type-defs.md` | TypeScript interfaces for `LandSaleData`, `SaleData`, `RentalData`, `SubjectData`, `SubjectTax`, `ParcelImprovement`, `ParcelData`, `TaxEntity` | Building comp detail forms, comp parsing prompts, subject editors |
 | `docs/report-data-spreadsheet/named-functions.md` | Google Sheets named functions with formulas (`AC_TO_SF`, `CALC_MONTHLY_INCREASE`, `GET_NOI`, etc.) | Implementing calculated fields |
-| `docs/report-data-spreadsheet/sheets-exported--html/` | HTML exports of every spreadsheet tab (38 files) | Understanding field names, layouts, data types for any sheet tab |
+| *(optional)* `docs/report-data-spreadsheet/sheets-exported--html/` | HTML tab exports you generate locally (gitignored) | Same as above — open `{sheetName}.html` in a browser |
 | `docs/cost-report-examples/` | SwiftEstimator cost report HTML | Building the cost report viewer page |
 | `docs/n8n/workflows/` | Exported n8n workflow JSON files | Understanding legacy n8n flows being replaced |
 | `docs/issues/` | Open issue tracker (017-034) with priorities, complexity, dependencies | Picking work items |

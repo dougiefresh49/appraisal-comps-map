@@ -52,3 +52,7 @@ docs/examples/screenshots/
 docs/old-local-data-backups/
 docs/past-reports/
 docs/plans/
+
+# Large Sheet tab exports (keep local only; regenerate from Google Sheets as needed)
+docs/report-data-spreadsheet/sheets-exported--html/
+docs/report-data-spreadsheet/sheets-exported--csv/

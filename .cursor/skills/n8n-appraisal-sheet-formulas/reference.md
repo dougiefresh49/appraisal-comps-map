@@ -54,6 +54,6 @@ For these `sheetName` values only, **do not** send `range`; the workflow returns
 - comp-parcels
 - comp-parcel-improvements
 
-## Local HTML filenames
+## Local HTML filenames (optional)
 
-Under `docs/report-data-spreadsheet/sheets-exported--html/`, each export is `{sheetName}.html` with the same spelling and spacing as the list above (e.g. `land comps.html`, `income-schedule--market.html`, `adj vals.html`).
+If present locally under `docs/report-data-spreadsheet/sheets-exported--html/` (gitignored), each export is `{sheetName}.html` with the same spelling and spacing as the list above (e.g. `land comps.html`, `income-schedule--market.html`, `adj vals.html`).

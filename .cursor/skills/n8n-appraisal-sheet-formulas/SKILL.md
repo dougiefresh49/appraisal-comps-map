@@ -107,9 +107,9 @@ curl -sS -X POST 'https://dougiefreshdesigns.app.n8n.cloud/webhook/get-formulas'
   -d '{"spreadsheetId":"1L0ymDuvJ2VyMMDeZ18eLHVa3-BqfSzkTGJRLKC-gheg","inputs":[{"sheetName":"report-inputs","range":"A1:C10"}]}'
 ```
 
-## HTML layout reference (local)
+## HTML layout reference (local, optional)
 
-Static exports of each tab live under the repo folder `docs/report-data-spreadsheet/sheets-exported--html/`. Filename is **`{sheetName}.html`** (spaces preserved, e.g. `sale comps.html`). Open in a browser to understand layout and pick ranges.
+If you export tabs from Google Sheets as HTML, put them under `docs/report-data-spreadsheet/sheets-exported--html/` (gitignored in this repo). Filename is **`{sheetName}.html`** (spaces preserved, e.g. `sale comps.html`). Open in a browser to understand layout and pick ranges.
 
 ## Sheet name catalog
 
