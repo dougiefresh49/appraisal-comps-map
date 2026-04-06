@@ -13,7 +13,6 @@ interface ComparablesListProps {
   type: ComparableType;
   typeSlug: string;
   comparables: Comparable[];
-  onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (
     id: string,
@@ -46,7 +45,6 @@ export function ComparablesList({
   type,
   typeSlug,
   comparables,
-  onAdd,
   onRemove,
   onChange,
 }: ComparablesListProps) {
@@ -68,19 +66,6 @@ export function ComparablesList({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-          {type} Comparables ({comparables.length})
-        </h3>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="rounded-md border border-blue-500/60 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-200 transition hover:bg-blue-900/40 dark:border-blue-600 dark:text-blue-300"
-        >
-          + Add {type}
-        </button>
-      </div>
-
       {comparables.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-600 bg-gray-900/40 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
           No {type.toLowerCase()} comparables yet.

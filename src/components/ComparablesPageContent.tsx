@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowDownTrayIcon,
+  ArrowsUpDownIcon,
+  PlusIcon,
+} from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { MergeCompsDialog, type MergeConflict } from "./MergeCompsDialog";
 import { ComparablesList } from "./ComparablesList";
+import { ReorderCompsDialog } from "./ReorderCompsDialog";
 import { MapBanner } from "~/components/MapBanner";
 import { CompAddFlow } from "~/components/CompAddFlow";
 import { ExportJsonDialog } from "~/components/ExportJsonDialog";
@@ -92,6 +98,7 @@ export function ComparablesPageContent({
     null,
   );
   const [showAddFlow, setShowAddFlow] = useState(false);
+  const [showReorderDialog, setShowReorderDialog] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   if (isLoading) {
@@ -166,6 +173,27 @@ export function ComparablesPageContent({
     }));
   };
 
+  const handleReorderSave = async (orderedIds: string[]) => {
+    const res = await fetch("/api/comps/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, compType: type, orderedIds }),
+    });
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Reorder failed");
+    }
+    // Optimistically apply new numbers to local state
+    updateProject((proj: ProjectData) => ({
+      ...proj,
+      comparables: proj.comparables.map((comp) => {
+        const newNumber = orderedIds.indexOf(comp.id);
+        if (comp.type !== type || newNumber === -1) return comp;
+        return { ...comp, number: String(newNumber + 1) };
+      }),
+    }));
+  };
+
   const handleRemoveComparable = (id: string) => {
     updateProject((proj: ProjectData) => {
       const mType = mapTypeForCompType(type);
@@ -207,21 +235,33 @@ export function ComparablesPageContent({
             Manage {type.toLowerCase()} comparables.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setIsExportDialogOpen(true)}
             title="Export comp data as JSON for AppScript importer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 dark:border-gray-700"
+            aria-label="Export JSON"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 dark:border-gray-700"
           >
-            Export JSON
+            <ArrowDownTrayIcon className="h-5 w-5" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowReorderDialog(true)}
+            title="Reorder comparables (drag to change comp numbers)"
+            aria-label="Reorder comparables"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
+          >
+            <ArrowsUpDownIcon className="h-5 w-5" aria-hidden />
           </button>
           <button
             type="button"
             onClick={handleAddComparable}
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+            title="Add comparable"
+            aria-label="Add comparable"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 dark:bg-blue-600 dark:hover:bg-blue-500"
           >
-            + Add Comp
+            <PlusIcon className="h-5 w-5" strokeWidth={2} aria-hidden />
           </button>
         </div>
       </div>
@@ -241,7 +281,6 @@ export function ComparablesPageContent({
         type={type}
         typeSlug={typeSlug}
         comparables={comparables}
-        onAdd={handleAddComparable}
         onRemove={handleRemoveComparable}
         onChange={handleComparableChange}
       />
@@ -263,6 +302,16 @@ export function ComparablesPageContent({
         isOpen={isExportDialogOpen}
         onClose={() => setIsExportDialogOpen(false)}
       />
+
+      {showReorderDialog && (
+        <ReorderCompsDialog
+          projectId={projectId}
+          type={type}
+          comparables={comparables}
+          onSave={handleReorderSave}
+          onClose={() => setShowReorderDialog(false)}
+        />
+      )}
     </div>
   );
 }
