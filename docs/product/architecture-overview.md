@@ -13,7 +13,6 @@
 | AI / LLM | Google Gemini (`@google/genai`) |
 | Embeddings | Gemini `text-embedding-004` (768-d vectors) |
 | Vector Search | pgvector extension in Supabase |
-| Automation | n8n (webhook-based, being phased out) |
 | Package Manager | pnpm |
 
 ---
@@ -41,7 +40,6 @@ flowchart TB
         GMaps["Google Maps Platform"]
         GDrive["Google Drive API"]
         GeminiAPI["Google Gemini API"]
-        N8N["n8n Cloud"]
     end
 
     UI -->|"direct queries + realtime subscriptions"| SB_Client
@@ -56,14 +54,11 @@ flowchart TB
     UI --> Maps
     Maps --> GMaps
     SB_Client -->|"Google OAuth"| GAuth
-    API -->|"webhook calls"| N8N
-    N8N -->|"reads/writes"| GDrive
     ServerActions -->|"file download"| GDrive
 
-    style N8N stroke-dasharray: 5 5
 ```
 
-> **Dashed border on n8n** = being phased out. Document processing and report generation now happen directly in the Next.js server.
+> **TODO — coming soon:** Optional Google Sheets integration notes (comp alignment, export). Core AI and document flows run in the Next.js server.
 
 ---
 
@@ -88,18 +83,18 @@ All persistent project data lives in Supabase PostgreSQL. See [database-schema.m
 | `project_documents` | Uploaded/ingested documents + AI extraction + embeddings |
 | `knowledge_base` | Curated AI prompts/examples + embeddings |
 
-### Google Drive (direct API + narrow n8n)
+### Google Drive (direct API)
 
 | Data | Format | Access Pattern |
 |------|--------|---------------|
 | Project root folders (picker) | Folder IDs under configured parent | `GET /api/projects/list-drive-roots` → `listFolderChildren` (user OAuth); parent from `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` |
-| Subject photos | Image files in Drive folder | **Analysis:** n8n reads/processes → Supabase `photo_analyses`. **Previews / cover:** Next.js server uses Drive API with user OAuth |
+| Subject photos | Image files in Drive folder | **Analysis:** in-app (`photo-analyzer.ts`, Gemini) → Supabase `photo_analyses`. **Previews / cover:** Next.js server uses Drive API with user OAuth |
 | `input.json` | JSON in subject photos folder | `exportInputJson` writes via Drive API (`uploadOrUpdateFile`) for Google Apps Script |
 | Comp folders | PDFs, images | List/metadata/download via `drive-api.ts`; parsing via `POST /api/comps/parse` (Gemini) |
 
-### Google Spreadsheet (legacy comp / sheet workflows)
+### Google Spreadsheet
 
-The spreadsheet still backs **optional** n8n routes (`comps-data`, `comps-exists`). Subject property data and rich comp payloads are primarily in Supabase (`subject_data`, `comp_parsed_data`); sheet integration is shrinking as the app owns more state in Postgres.
+**TODO — coming soon.** Project rows may store `spreadsheet_id`; first-class Sheets API documentation and any legacy alignment live here when written.
 
 ---
 
@@ -163,19 +158,11 @@ Server Supabase client (`src/utils/supabase/server.ts`) is used by:
 |--------|---------|
 | `src/server/reports/actions.ts` | Read/write `report_sections`, `report_section_history` |
 | `src/server/documents/actions.ts` | Read/write `project_documents` |
-| `src/server/photos/actions.ts` | Read `photo_analyses`, export `input.json` to Drive, trigger n8n photo analysis |
+| `src/server/photos/actions.ts` | Read `photo_analyses`, export `input.json` to Drive, trigger in-app photo analysis (Gemini) |
 | `src/lib/prompt-builder.ts` | Read `knowledge_base`, `projects`, `project_documents`, `photo_analyses`, `report_sections` |
 | `src/app/api/seed/*` | Write `knowledge_base`, `report_sections` |
 
-### What Calls n8n (Still Active)
-
-| Entry point | n8n Endpoint | Purpose |
-|-------------|-------------|---------|
-| `POST /api/photos/process` | `/subject-photos-analyze` | Trigger photo analysis workflow |
-| `POST /api/comps-data` | `/comps-data` | Load comps + image map from Spreadsheet (legacy) |
-| `POST /api/comps-exists` | `/comps-exists` | Check if comp exists in Spreadsheet |
-
-### What Calls Gemini Directly (No n8n)
+### What Calls Gemini Directly
 
 | Module | Gemini Feature | Model |
 |--------|---------------|-------|

@@ -49,7 +49,7 @@ Saves the chosen appraisal spreadsheet ID on the project.
 
 ### `GET /api/projects/list-drive-roots`
 
-Lists **immediate child folders** of the Drive parent configured for appraisal project roots (same purpose the legacy n8n `/projects-new` webhook served).
+Lists **immediate child folders** of the Drive parent configured for appraisal project roots (new-project wizard picker).
 
 **Query / body:** None.
 
@@ -106,7 +106,7 @@ Lists comp subfolders under the project’s comps root for a given type.
 | `projectFolderId` | string | Yes |
 | `type` | string | Yes |
 
-**External calls:** Google Drive API (no n8n)
+**External calls:** Google Drive API
 
 ### `POST /api/comps-folder-details`
 
@@ -118,32 +118,11 @@ Loads metadata (and file listing) for one comp folder.
 | `folderId` | string | Yes |
 | `type` | string | Yes |
 
-**External calls:** Google Drive API (no n8n)
+**External calls:** Google Drive API
 
-### `POST /api/comps-data`
+### Spreadsheet-oriented comp routes (removed)
 
-Loads comparable rows + image map from the **Google Spreadsheet** via n8n.
-
-| Field | Type | Required |
-|-------|------|----------|
-| `projectFolderId` | string | Yes |
-| `type` | string | Yes | `land`, `sales`, `rentals` |
-
-**External calls:** n8n `/comps-data` (uses `NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL` in this route)
-
-### `POST /api/comps-exists`
-
-Checks whether a comp already exists in the sheet.
-
-| Field | Type | Required |
-|-------|------|----------|
-| `reportFolderId` | string | Yes |
-| `type` | string | Yes |
-| `query` | string | Yes |
-| `instrumentNumber` | string | No |
-| `apn` | string | No |
-
-**External calls:** n8n `/comps-exists` (`NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL`)
+**TODO — coming soon.** Direct Google Sheets integration or a documented replacement for legacy “refresh comps from sheet” / “comp exists in sheet” flows may be added later. Comp data in the app is stored in Supabase (`comparables`, `comp_parsed_data`).
 
 ---
 
@@ -166,15 +145,18 @@ Resolves the subject photos folder, finds the cover image (e.g. “Subject Front
 
 ### `POST /api/photos/process`
 
-Starts the **n8n** subject photo analysis workflow.
+Triggers in-app subject photo analysis: resolves the subject photos folder in Drive, queues images for classification/description via Gemini (`photo-analyzer.ts`), and upserts rows in `photo_analyses` (progress visible via Realtime).
 
 | Field | Type | Required |
 |-------|------|----------|
 | `projectFolderId` | string | Yes |
+| `projectId` | string | No |
 
-**Returns:** `{ success, totalPhotos?, error? }` (proxied from n8n)
+If `projectId` is omitted, it is resolved from `projects` using `project_folder_id`.
 
-**External calls:** n8n `/subject-photos-analyze` (`N8N_WEBHOOK_BASE_URL`)
+**Returns:** `{ success, totalPhotos?, error? }`
+
+**External calls:** Google Drive API, Gemini (`photo-analyzer.ts`), Supabase
 
 ### `POST /api/photos`
 
@@ -186,7 +168,7 @@ Writes `input.json` to the subject photos folder in Drive from current `photo_an
 | `projectFolderId` | string | Yes |
 | `subjectPhotosFolderId` | string | No |
 
-**External calls:** Supabase read, Google Drive API (`exportInputJson` — **no n8n**)
+**External calls:** Supabase read, Google Drive API (`exportInputJson`)
 
 ---
 
@@ -284,14 +266,6 @@ Supabase Google OAuth exchange; sets session cookies; redirects to `/projects`.
 
 ---
 
-## n8n dependency summary
+## Integration notes
 
-| Route / caller | n8n endpoint | Notes |
-|----------------|-------------|--------|
-| `POST /api/photos/process` | `/subject-photos-analyze` | |
-| `POST /api/comps-data` | `/comps-data` | |
-| `POST /api/comps-exists` | `/comps-exists` | |
-
-**No longer n8n:** `GET /api/projects/list-drive-roots` (project picker), `POST /api/photos` (input.json), `POST /api/cover-data`, `POST /api/comps/parse`, `POST /api/comps-folder-list`, `POST /api/comps-folder-details`, project discovery / engagement / flood parsing (`/api/projects/*` except list roots), `POST /api/drive/list`.
-
-**Historical note:** There is no `POST /api/comps-parser` route in the App Router; parsing is `/api/comps/parse`.
+**TODO — coming soon:** Optional Google Sheets read/write or export documentation. Parsing is `POST /api/comps/parse` (not a separate `/api/comps-parser` route).

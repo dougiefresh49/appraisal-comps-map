@@ -89,3 +89,5 @@ export const USE_TYPE_OPTIONS = ["Sale", "Extra", "Rental"] as const;
 export const HVAC_OPTIONS = ["Yes", "Office Only", "No"] as const;
 
 export const WASH_BAY_OPTIONS = ["Yes", "No"] as const;
+
+export const EXPENSE_STRUCTURE_OPTIONS = ["NNN", "NN", "N", "None"] as const;

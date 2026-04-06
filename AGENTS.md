@@ -205,16 +205,11 @@ See `docs/issues/000-index.md` for the full list, parallelization guide, and wav
 
 **Wave 3 -- Features:** 030 (comp summary tables w/ dropdown labels + add/remove rows), 031 (comp UI redesign; absorbs former 016), 032 (past report vectorization: narratives + comp data + spreadsheet import), 033 (per-section push to spreadsheet via Sheets API)
 
-**Ongoing (pre-roadmap track):** 017 (analysis pages -- context + polish), 018 (photo analysis -- remove n8n)
+**Ongoing (pre-roadmap track):** 017 (analysis pages -- context + polish), 018 (photo analysis polish)
 
 ## n8n Status
 
-Most n8n workflows have been replaced. Remaining:
-- **Photo analysis** (`/subject-photos-analyze`) -- still calls n8n to process subject photos
-- **Comp data refresh** (`/comps-data`) -- reads from Google Spreadsheet, button removed from UI but API route still exists
-- **Comp exists check** (`/comps-exists`) -- still calls n8n, will be replaced when comps are fully managed in-app
-
-Everything else (project creation, folder discovery, document processing, report generation, comp parsing, photo export, cover data, comp folder browsing) is handled directly by the webapp.
+The **webapp does not call n8n webhooks** at runtime. Legacy spreadsheet workflows and exported workflow JSON live under `docs/n8n/workflows/`. The **n8n appraisal sheet formulas** skill may still use MCP or HTTP to fetch live cell formulas from n8n for development — that is external tooling, not the Next.js app.
 
 ## Gemini API (Gemini 3+ only)
 
@@ -244,8 +239,6 @@ Defined in `src/env.js` via `@t3-oss/env-nextjs`:
 | `GOOGLE_GEMINI_API_KEY` | Gemini API key for AI features |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth for token refresh |
 | `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` | Optional. Drive folder whose children are project roots (`/projects/new` picker via `/api/projects/list-drive-roots`) |
-| `N8N_WEBHOOK_BASE_URL` | n8n server-side webhook base |
-| `NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL` | n8n client-side webhook base |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps API key |
 | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | Google Maps styled map ID |
 

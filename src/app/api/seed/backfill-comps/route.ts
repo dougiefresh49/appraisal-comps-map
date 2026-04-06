@@ -994,9 +994,9 @@ export async function POST(request: Request) {
             const cid = comp.id as string;
             const pid = comp.project_id as string;
             const raw = rawByComp.get(cid) ?? {};
-            const existingApn = comp.apn;
+            const existingApn = comp.apn as string | string[] | null | undefined;
             const existingFolderId = comp.folder_id as string | null;
-            const existingImages = comp.images;
+            const existingImages = comp.images as unknown[] | null | undefined;
             const compAddress = comp.address as string;
             const compType = comp.type as CompCandidate["type"];
 

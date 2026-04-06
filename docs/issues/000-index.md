@@ -26,10 +26,9 @@ These are one-time data operations, not code changes:
 Call `POST /api/seed/import-csv-comps` to import the 490 rows from the CSV exports into the Reference Library project. This creates comparables + comp_parsed_data + comp_parcels + comp_parcel_improvements.
 
 ### 2. Run old report import orchestrator
-Call `POST /api/seed/import-old-reports` to create the 11 reference projects, backfill PDF report sections, and fire n8n photo webhooks. This:
+Call `POST /api/seed/import-old-reports` to create the 11 reference projects and backfill report sections (prefers markdown under `docs/past-reports/` when present). This:
 - Creates 11 reference projects from `docs/past-reports/project-folder-ids.md`
-- Calls backfill-reports for each PDF with the project_id
-- Fires the n8n photo backfill webhook for each project
+- Calls backfill-reports for each file with the project_id
 
 ### 3. Push migration 023 (is_reference column)
 The 032-A agent created migration `023_reference_projects.sql`. Verify it was pushed to Supabase. If not: `npx supabase db push`.

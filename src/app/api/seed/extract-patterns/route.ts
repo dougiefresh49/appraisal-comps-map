@@ -45,8 +45,8 @@ async function fetchExtractedRows(
   return (data ?? []).map((row) => {
     const proj = Array.isArray(row.projects) ? row.projects[0] : row.projects;
     return {
-      project_id: row.project_id ?? null,
-      source_filename: row.source_filename ?? null,
+      project_id: (row.project_id as string | null | undefined) ?? null,
+      source_filename: (row.source_filename as string | null | undefined) ?? null,
       land_adjustments: row.land_adjustments as ExtractedAdjustmentGrid | null,
       sale_adjustments: row.sale_adjustments as ExtractedAdjustmentGrid | null,
       rental_adjustments: row.rental_adjustments as ExtractedAdjustmentGrid | null,

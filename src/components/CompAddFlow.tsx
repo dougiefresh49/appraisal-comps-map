@@ -40,8 +40,11 @@ export interface CompAddFlowProps {
   existingFolderIds?: string[];
   /** If provided, skip folder selection and load files from this folder. */
   initialFolderId?: string;
-  /** Called when the flow finishes successfully. Receives the comp ID. */
-  onComplete: (compId: string) => void;
+  /**
+   * Called when the flow finishes successfully. Receives the comp ID and,
+   * for cloned comps, the full Comparable so callers can update local state.
+   */
+  onComplete: (compId: string, newComp?: Comparable) => void;
   onClose: () => void;
 }
 
@@ -77,11 +80,11 @@ type ActiveTab = "drive" | "search";
 interface SearchPanelProps {
   projectId: string;
   compType: ComparableType;
-  onCloneComplete: (compId: string) => void;
+  compsFolderId?: string;
+  onCloneComplete: (compId: string, newComp: Comparable) => void;
 }
 
-function SearchPanel({ projectId, compType, onCloneComplete }: SearchPanelProps) {
-  const router = useRouter();
+function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CompSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -148,45 +151,43 @@ function SearchPanel({ projectId, compType, onCloneComplete }: SearchPanelProps)
     setCloneError(null);
 
     try {
-      const newCompId = crypto.randomUUID();
-      const supabase = createClient();
+      const res = await fetch("/api/comps/clone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceCompId: result.comp_id,
+          projectId,
+          compType,
+          compsFolderId,
+        }),
+      });
 
-      // 1. Create the new comparable row
-      const address = result.address;
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "Clone failed");
+      }
+
+      const data = (await res.json()) as {
+        compId: string;
+        address: string;
+        addressForDisplay: string;
+        apn?: string[];
+        instrumentNumber?: string;
+        folderId?: string;
+      };
+
       const newComp: Comparable = {
-        id: newCompId,
+        id: data.compId,
         type: compType,
-        address,
-        addressForDisplay: address,
-        instrumentNumber: result.instrument_number ?? undefined,
+        address: data.address,
+        addressForDisplay: data.addressForDisplay,
+        apn: data.apn,
+        instrumentNumber: data.instrumentNumber,
+        folderId: data.folderId,
         parsedDataStatus: "parsed",
       };
-      await upsertComparable(projectId, newComp);
 
-      // 2. Copy comp_parsed_data from source
-      const { error: parsedDataError } = await supabase
-        .from("comp_parsed_data")
-        .insert({
-          comp_id: newCompId,
-          project_id: projectId,
-          raw_data: result.raw_data,
-          source: "cloned",
-        });
-
-      if (parsedDataError) throw new Error(parsedDataError.message);
-
-      // 3. Update parsed_data_status on the newly inserted comparable
-      const { error: statusError } = await supabase
-        .from("comparables")
-        .update({ parsed_data_status: "parsed" })
-        .eq("id", newCompId);
-
-      if (statusError) throw new Error(statusError.message);
-
-      // 4. Navigate to the new comp's detail page
-      const typeSlug = routeSlugForCompType(compType);
-      onCloneComplete(newCompId);
-      router.push(`/project/${projectId}/${typeSlug}/comps/${newCompId}`);
+      onCloneComplete(data.compId, newComp);
     } catch (err) {
       setCloneError(err instanceof Error ? err.message : "Clone failed");
       setCloningId(null);
@@ -346,6 +347,7 @@ export function CompAddFlow({
   onComplete,
   onClose,
 }: CompAddFlowProps) {
+  const router = useRouter();
   const isAddMode = !compId;
   const existingSet = new Set(existingFolderIds ?? []);
 
@@ -596,7 +598,12 @@ export function CompAddFlow({
             <SearchPanel
               projectId={projectId}
               compType={compType}
-              onCloneComplete={onComplete}
+              compsFolderId={compsFolderId}
+              onCloneComplete={(compId, newComp) => {
+                const typeSlug = routeSlugForCompType(compType);
+                onComplete(compId, newComp);
+                router.push(`/project/${projectId}/${typeSlug}/comps/${compId}`);
+              }}
             />
           )}
 

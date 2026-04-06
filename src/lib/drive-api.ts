@@ -167,6 +167,73 @@ export async function shareDriveFile(
 }
 
 /**
+ * Finds a folder by name inside a parent, or creates it if it doesn't exist.
+ * Uses folder mimeType so the result is always a Drive folder.
+ */
+export async function findOrCreateFolder(
+  token: string,
+  parentId: string,
+  folderName: string,
+): Promise<DriveFile> {
+  const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+  const existing = await findChildByName(token, parentId, folderName, FOLDER_MIME);
+  if (existing) return existing;
+
+  const url = `${DRIVE_API_BASE}/files?fields=${encodeURIComponent("id,name,mimeType")}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: folderName,
+      mimeType: FOLDER_MIME,
+      parents: [parentId],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Drive createFolder failed (${res.status}): ${text.slice(0, 300)}`,
+    );
+  }
+
+  return (await res.json()) as DriveFile;
+}
+
+/**
+ * Copies a Drive file into a destination folder.
+ * Returns the new file metadata.
+ */
+export async function copyFile(
+  token: string,
+  sourceFileId: string,
+  destFolderId: string,
+  newName?: string,
+): Promise<DriveFile> {
+  const fields = encodeURIComponent("id,name,mimeType");
+  const url = `${DRIVE_API_BASE}/files/${encodeURIComponent(sourceFileId)}/copy?fields=${fields}`;
+  const body: Record<string, unknown> = { parents: [destFolderId] };
+  if (newName) body.name = newName;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive copyFile failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  return (await res.json()) as DriveFile;
+}
+
+/**
  * Creates or updates a file in a Drive folder.
  * Searches for an existing file by name; if found, updates its content.
  * If not found, creates a new file using multipart upload.

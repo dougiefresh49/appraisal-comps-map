@@ -7,9 +7,11 @@ import { MergeCompsDialog, type MergeConflict } from "./MergeCompsDialog";
 import { ComparablesList } from "./ComparablesList";
 import { MapBanner } from "~/components/MapBanner";
 import { CompAddFlow } from "~/components/CompAddFlow";
+import { ExportJsonDialog } from "~/components/ExportJsonDialog";
 import {
   type ComparableType,
   type ProjectData,
+  type Comparable,
   getComparablesByType,
   getMapByType,
   mapTypeForCompType,
@@ -66,6 +68,19 @@ function compsFolderKey(
   }
 }
 
+function contextForCompType(
+  compType: ComparableType,
+): "land" | "sales" | "rentals" {
+  switch (compType) {
+    case "Land":
+      return "land";
+    case "Sales":
+      return "sales";
+    case "Rentals":
+      return "rentals";
+  }
+}
+
 export function ComparablesPageContent({
   projectId,
   type,
@@ -77,6 +92,7 @@ export function ComparablesPageContent({
     null,
   );
   const [showAddFlow, setShowAddFlow] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -113,7 +129,15 @@ export function ComparablesPageContent({
     setShowAddFlow(true);
   };
 
-  const handleAddFlowComplete = (compId: string) => {
+  const handleAddFlowComplete = (compId: string, newComp?: Comparable) => {
+    // Optimistically add to local project state so the list and detail
+    // page both see it immediately — without waiting for the Realtime event.
+    if (newComp) {
+      updateProject((proj: ProjectData) => ({
+        ...proj,
+        comparables: [...proj.comparables, newComp],
+      }));
+    }
     router.push(`/project/${projectId}/${typeSlug}/comps/${compId}`);
   };
 
@@ -183,13 +207,23 @@ export function ComparablesPageContent({
             Manage {type.toLowerCase()} comparables.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleAddComparable}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
-        >
-          + Add Comp
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsExportDialogOpen(true)}
+            title="Export comp data as JSON for AppScript importer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 dark:border-gray-700"
+          >
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleAddComparable}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            + Add Comp
+          </button>
+        </div>
       </div>
 
       {mergeConflicts && mergeConflicts.length > 0 && (
@@ -223,6 +257,12 @@ export function ComparablesPageContent({
           onClose={() => setShowAddFlow(false)}
         />
       )}
+      <ExportJsonDialog
+        projectId={projectId}
+        context={contextForCompType(type)}
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+      />
     </div>
   );
 }

@@ -39,7 +39,7 @@ sequenceDiagram
 
 **Data stored:** Primarily `projects` (metadata + `folder_structure`), `comparables`, `maps`, `map_markers`, and `subject_data` as the wizard completes.
 
-**n8n dependency:** **None** for this flow. The folder picker list comes from `GET /api/projects/list-drive-roots` (Drive API with the signed-in user’s token; parent folder ID from `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID`). Discover, Drive list, engagement/flood parsing, and Supabase persistence are all in-app.
+The folder picker list comes from `GET /api/projects/list-drive-roots` (Drive API with the signed-in user’s token; parent folder ID from `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID`). Discover, Drive list, engagement/flood parsing, and Supabase persistence are all in-app.
 
 ### Restore from localStorage
 
@@ -96,7 +96,7 @@ flowchart LR
     MapContext -->|"auto-register"| DocTable
 ```
 
-**All map data is stored in Supabase** via the `useProject` hook. Changes are persisted on save. No n8n involvement.
+**All map data is stored in Supabase** via the `useProject` hook. Changes are persisted on save.
 
 **Context registration:** When a neighborhood or location map screenshot is captured, `registerMapContext()` automatically creates a `project_documents` row (if one doesn't already exist for that map type) so the map is available as context for AI report generation.
 
@@ -115,30 +115,27 @@ sequenceDiagram
     participant User
     participant PhotoGrid as PhotoGrid Component
     participant API as /api/photos/process
-    participant N8N as n8n
+    participant Actions as photos/actions.ts
     participant GDrive as Google Drive
     participant Gemini as Gemini AI
     participant Supabase
 
     User->>PhotoGrid: Click "Analyze Photos"
     PhotoGrid->>API: POST {projectFolderId}
-    API->>N8N: POST /subject-photos-analyze
-    N8N-->>API: {total: 30}
-    API-->>PhotoGrid: Total count (for progress)
+    API->>Actions: triggerPhotoAnalysis()
+    Actions->>GDrive: List + download images (subject photos folder)
+    Actions->>Gemini: Classify + label + describe (photo-analyzer)
+    Gemini-->>Actions: Per-image results
+    Actions->>Supabase: INSERT/UPDATE photo_analyses
+    API-->>PhotoGrid: { success, totalPhotos }
 
-    loop For each photo
-        N8N->>GDrive: Download photo
-        N8N->>Gemini: Classify + label + describe
-        Gemini-->>N8N: Analysis result
-        N8N->>Supabase: INSERT into photo_analyses
-        Note over PhotoGrid: Realtime subscription updates UI
-    end
+    Note over PhotoGrid: Realtime subscription updates UI as rows land
 
     User->>PhotoGrid: Reorder, toggle inclusion, edit labels
     PhotoGrid->>Supabase: UPDATE photo_analyses (sort_order, is_included, label, etc.)
 ```
 
-**n8n dependency:** Required for photo analysis (downloads from Drive, sends to Gemini, writes to Supabase).
+**Flow:** Server-side only — Drive API (user OAuth) + Gemini + Supabase.
 
 **Realtime:** `photo_analyses` table broadcasts changes so both users see live updates.
 
@@ -165,7 +162,7 @@ sequenceDiagram
 
 **Purpose:** The `input.json` file in Google Drive is consumed by Google Apps Script to insert images into the final Google Doc report.
 
-**n8n dependency:** None — export is fully server-side with the user’s Drive token.
+Export is fully server-side with the user’s Drive token.
 
 ---
 
@@ -208,7 +205,7 @@ sequenceDiagram
     API-->>RSContent: {content, version}
 ```
 
-**Key insight:** Report generation is fully server-side with **no n8n involvement**. The prompt builder assembles context from multiple Supabase tables and similar past reports (via vector search), then Gemini generates the narrative.
+**Key insight:** Report generation is fully server-side. The prompt builder assembles context from multiple Supabase tables and similar past reports (via vector search), then Gemini generates the narrative.
 
 ### Edit and Save
 
@@ -258,7 +255,7 @@ sequenceDiagram
     Note over DocManager: Realtime subscription shows "Processed"
 ```
 
-**No n8n involvement.** Document processing happens entirely in the Next.js server using Gemini for extraction and embedding generation.
+Document processing happens entirely in the Next.js server using Gemini for extraction and embedding generation.
 
 **Type-specific prompts** (`src/lib/document-prompts.ts`) instruct Gemini to extract domain-specific fields based on document type (deed, flood map, CAD, etc.).
 
@@ -266,37 +263,16 @@ sequenceDiagram
 
 ## 6. Comparables Data
 
-### Refresh Comps from Spreadsheet
+### Spreadsheet refresh (legacy)
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CompsPage as ComparablesPageContent
-    participant API as /api/comps-data
-    participant N8N as n8n
-    participant GSheet as Google Spreadsheet
-    participant Supabase
-
-    User->>CompsPage: (Legacy) refresh from sheet — if invoked
-    CompsPage->>API: POST {projectFolderId, type}
-    API->>N8N: POST /comps-data
-    N8N->>GSheet: Read comp data + images
-    GSheet-->>N8N: Data
-    N8N-->>API: {comps, imageMap}
-    API-->>CompsPage: Comp data
-
-    CompsPage->>Supabase: upsertComparable() for each comp
-```
-
-**n8n dependency:** Only this spreadsheet read path. The main comp UX is Supabase-backed (`comparables` + `comp_parsed_data`).
+**TODO — coming soon.** Optional Google Sheets read/write or export documentation. The primary comp UX is Supabase-backed (`comparables` + `comp_parsed_data`).
 
 ### Comp Parser (in-app)
 
-Adding or re-parsing a comp uses the **webapp**, not n8n:
+Adding or re-parsing a comp uses the webapp:
 
 1. **Folder listing / metadata:** `POST /api/comps-folder-list` and `POST /api/comps-folder-details` → `drive-api.ts`.
 2. **AI extraction:** `POST /api/comps/parse` → `comp-parser.ts` (Drive download + Gemini) → persists to `comp_parsed_data`.
-3. **Duplicate check (optional):** `POST /api/comps-exists` → n8n (Spreadsheet query) — still n8n today.
 
 UI entry points include `CompAddFlow`, comp detail routes under `land-sales/comps/[compId]`, `sales/comps/[compId]`, and `rentals/comps/[compId]`, plus `CompUITemplate` for template-style comp pages.
 
@@ -335,21 +311,6 @@ flowchart TB
 
 ---
 
-## Summary: n8n vs Direct
+## Summary
 
-| Feature | n8n | Direct (Supabase/Gemini/Drive) |
-|---------|-----|----------------------------------|
-| Project creation | | **Direct** — picker: `GET /api/projects/list-drive-roots`; after selection: discover + Drive list + engagement parse |
-| Cover photo data | | **Direct** (`POST /api/cover-data`) |
-| Photo analysis | **Yes** (`/subject-photos-analyze`) | |
-| Photo export (input.json) | | **Direct** (`exportInputJson` → Drive API) |
-| Comp data refresh | **Yes** (`/comps-data`) | |
-| Comp parser | | **Direct** (`POST /api/comps/parse`) |
-| Comp folder list/details | | **Direct** (Drive API) |
-| Comp duplicate check | **Yes** (`/comps-exists`) | |
-| Report generation | | **Direct** (Gemini + Supabase) |
-| Document processing | | **Direct** (upload/Drive → Gemini → Supabase) |
-| Seed/backfill | | **Direct** (local files → Gemini → Supabase) |
-| Map state | | **Direct** (Supabase only) |
-| Auth | | **Direct** (Supabase Auth + Google OAuth) |
-| Realtime collaboration | | **Direct** (Supabase Realtime) |
+**TODO — coming soon:** A consolidated “integrations” table (Supabase vs Drive vs optional Sheets). Today, core flows use **Supabase**, **Google Drive** (OAuth), and **Gemini** from Next.js; see [architecture-overview](./architecture-overview.md) and [API reference](./api-reference.md).

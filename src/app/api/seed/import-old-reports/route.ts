@@ -78,12 +78,7 @@ export async function POST(request: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000");
 
-    const n8nWebhookBase = process.env.N8N_WEBHOOK_BASE_URL ?? "";
     console.log(TAG, `Base URL: ${baseUrl}`);
-    console.log(
-      TAG,
-      `n8n webhook base: ${n8nWebhookBase || "(not configured)"}`,
-    );
 
     const results: {
       projectName: string;
@@ -92,7 +87,6 @@ export async function POST(request: Request) {
       fileMode: "markdown" | "pdf" | "no_file";
       backfill: "triggered" | "skipped" | "no_file";
       backfillDetail?: string;
-      n8nWebhook: "fired" | "skipped";
     }[] = [];
 
     for (let i = 0; i < entriesToProcess.length; i++) {
@@ -178,7 +172,6 @@ export async function POST(request: Request) {
             action: "created",
             fileMode: "no_file",
             backfill: "skipped",
-            n8nWebhook: "skipped",
           });
           continue;
         }
@@ -266,32 +259,6 @@ export async function POST(request: Request) {
         console.warn(TAG, `  Skipping backfill — no file found for ${pdfFilename}`);
       }
 
-      // ------------------------------------------------------------------
-      // Fire n8n webhook (fire-and-forget)
-      // ------------------------------------------------------------------
-      let n8nWebhook: "fired" | "skipped" = "skipped";
-      if (n8nWebhookBase) {
-        const webhookUrl = `${n8nWebhookBase}/past-report-photo-backfill`;
-        const webhookBody = {
-          project_folder_id: folderId,
-          project_id: projectId,
-        };
-        console.log(TAG, `  Firing n8n webhook: POST ${webhookUrl}`);
-        try {
-          void fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(webhookBody),
-          });
-          n8nWebhook = "fired";
-        } catch {
-          console.error(TAG, `  n8n webhook failed`);
-          n8nWebhook = "skipped";
-        }
-      } else {
-        console.log(TAG, `  Skipping n8n webhook (no N8N_WEBHOOK_BASE_URL)`);
-      }
-
       const result = {
         projectName,
         project_id: projectId,
@@ -299,7 +266,6 @@ export async function POST(request: Request) {
         fileMode,
         backfill,
         backfillDetail,
-        n8nWebhook,
       };
       results.push(result);
       console.log(TAG, `  Result:`, JSON.stringify(result));

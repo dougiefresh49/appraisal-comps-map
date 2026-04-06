@@ -503,3 +503,20 @@ export function formatAcres(value: number | null | undefined): string {
   if (value == null) return "--";
   return value.toFixed(3);
 }
+
+export function totalTaxes(
+  taxEntities: { Amount: number }[],
+  sizeMultiplier: number | null | undefined,
+): number | null {
+  if (!taxEntities.length) return null;
+  const sum = taxEntities.reduce((acc, t) => acc + (t.Amount || 0), 0);
+  return sum * (sizeMultiplier ?? 1);
+}
+
+export function estExpenses(
+  estInsurance: number | null | undefined,
+  totalTaxesVal: number | null | undefined,
+): number | null {
+  if (estInsurance == null && totalTaxesVal == null) return null;
+  return (estInsurance ?? 0) + (totalTaxesVal ?? 0);
+}

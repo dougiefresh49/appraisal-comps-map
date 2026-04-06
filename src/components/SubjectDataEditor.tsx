@@ -2,20 +2,69 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useSubjectData } from "~/hooks/useSubjectData";
-import type { SubjectData, SubjectTax, FemaData } from "~/types/comp-data";
+import { useProject } from "~/hooks/useProject";
+import { DEFAULT_APPROACHES } from "~/utils/projectStore";
+import type {
+  ExpenseStructure,
+  SubjectData,
+  SubjectTax,
+  FemaData,
+} from "~/types/comp-data";
 import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
+import { ExportJsonDialog } from "~/components/ExportJsonDialog";
 import { ToggleField } from "~/components/ToggleField";
-import { acToSf, sfToAc } from "~/lib/calculated-fields";
+import {
+  PROPERTY_RIGHTS_OPTIONS,
+  FRONTAGE_OPTIONS,
+  UTILITIES_STATUS_OPTIONS,
+  WASH_BAY_OPTIONS,
+  EXPENSE_STRUCTURE_OPTIONS,
+} from "~/types/comp-field-options";
+import {
+  acToSf,
+  sfToAc,
+  getZoneVal,
+  formatAddressLabel,
+  formatAddressLocal,
+  officePercent,
+  floorAreaRatio,
+  landBldRatio,
+  parkingRatio,
+  rentPerSfPerYear,
+  totalTaxes,
+  estExpenses,
+} from "~/lib/calculated-fields";
 
 interface SubjectDataEditorProps {
   projectId: string;
 }
 
-type CoreData = Partial<SubjectData>;
+type CoreData = Partial<SubjectData> & Record<string, unknown>;
+
+function fmtDisplayPercent(val: number | null | undefined): string | null {
+  return val != null && !Number.isNaN(val)
+    ? (val * 100).toFixed(1) + "%"
+    : null;
+}
+
+function fmtDisplayCurrency(val: number | null | undefined): string | null {
+  if (val == null || Number.isNaN(val)) return null;
+  return (
+    "$" +
+    val.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
+function fmtDisplayRatio(val: number | null | undefined): string | null {
+  return val != null && !Number.isNaN(val) ? val.toFixed(2) : null;
+}
 
 function FormField({
   label,
@@ -78,15 +127,41 @@ function SelectField({
   );
 }
 
+function ComputedField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </label>
+      <div className="w-full rounded-md border border-gray-700/50 bg-gray-800/50 px-3 py-1.5 text-sm text-gray-300">
+        {value != null && value !== "" ? String(value) : "—"}
+      </div>
+    </div>
+  );
+}
+
 function SectionCard({
   title,
   children,
+  className,
 }: {
   title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
+    <div
+      className={
+        "rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900" +
+        (className ? ` ${className}` : "")
+      }
+    >
       <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {title}
       </h3>
@@ -96,6 +171,10 @@ function SectionCard({
 }
 
 export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
+  const { project } = useProject(projectId);
+  const showIncomeLease =
+    (project?.approaches ?? DEFAULT_APPROACHES).income;
+
   const { subjectData, isLoading, error, saveSubjectData } =
     useSubjectData(projectId);
 
@@ -106,6 +185,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   useEffect(() => {
     if (subjectData) {
@@ -115,12 +195,9 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     }
   }, [subjectData]);
 
-  const updateCore = useCallback(
-    <K extends keyof CoreData>(key: K, value: CoreData[K]) => {
-      setCore((prev) => ({ ...prev, [key]: value }));
-    },
-    [],
-  );
+  const updateCore = useCallback((key: string, value: unknown) => {
+    setCore((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -172,6 +249,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             </span>
           )}
           <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+          <button
+            type="button"
+            onClick={() => setIsExportDialogOpen(true)}
+            title="Export data as JSON for AppScript importer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/80 px-2.5 py-1.5 text-xs font-medium text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300"
+          >
+            Export JSON
+          </button>
           <PushToSheetButton
             confirmDescription="subject property data to row 2 of the 'subject' sheet"
             confirmDetail="Fields from the core subject data object will be matched to column headers dynamically."
@@ -197,10 +282,13 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </div>
       </div>
 
-      {/* Two Column Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Masonry-style columns (avoids tall empty space next to short cards) */}
+      <div className="columns-1 gap-x-4 [column-fill:balance] md:columns-2">
         {/* Property Info */}
-        <SectionCard title="Property Info">
+        <SectionCard
+          title="Property Info"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <FormField
             label="Address"
             value={core.Address}
@@ -241,24 +329,69 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               onChange={(v) => updateCore("County", v)}
             />
           </div>
+          <SelectField
+            label="Property Rights"
+            value={core["Property Rights"]}
+            options={PROPERTY_RIGHTS_OPTIONS.map((o) => ({ label: o, value: o }))}
+            onChange={(v) => updateCore("Property Rights", v)}
+          />
+          <FormField
+            label="Property Type"
+            value={core["Property Type"] as string | undefined}
+            onChange={(v) => updateCore("Property Type", v || null)}
+          />
+          <FormField
+            label="Property Type Long"
+            value={core["Property Type Long"] as string | undefined}
+            onChange={(v) => updateCore("Property Type Long", v || null)}
+          />
+          <FormField
+            label="Instrument Number"
+            value={core.instrumentNumber}
+            onChange={(v) => updateCore("instrumentNumber", v || null)}
+          />
+          <ComputedField
+            label="AddressLabel"
+            value={formatAddressLabel(
+              core.Address,
+              core.City,
+              core.State,
+              core.Zip as string | number | null | undefined,
+            )}
+          />
+          <ComputedField
+            label="AddressLocal"
+            value={formatAddressLocal(
+              core.Address,
+              core.City,
+              core.County,
+              core.State,
+              core.Zip as string | number | null | undefined,
+            )}
+          />
         </SectionCard>
 
         {/* Zoning & Location */}
-        <SectionCard title="Zoning & Location">
+        <SectionCard
+          title="Zoning & Location"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <FormField
-            label="Zoning"
-            value={core.Zoning}
-            onChange={(v) => updateCore("Zoning", v || null)}
+            label="Zoning Area"
+            value={core["Zoning Area"]}
+            onChange={(v) => updateCore("Zoning Area", v)}
           />
           <FormField
             label="Zoning Description"
             value={core["Zoning Description"]}
             onChange={(v) => updateCore("Zoning Description", v)}
           />
-          <FormField
-            label="Zoning Area"
-            value={core["Zoning Area"]}
-            onChange={(v) => updateCore("Zoning Area", v)}
+          <ComputedField
+            label="Zoning"
+            value={getZoneVal(
+              core["Zoning Area"],
+              core["Zoning Description"],
+            )}
           />
           <ToggleField
             label="Corner Lot"
@@ -270,10 +403,19 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             value={core["Highway Frontage"]}
             onChange={(v) => updateCore("Highway Frontage", v)}
           />
+          <SelectField
+            label="Frontage"
+            value={core.Frontage as string | null | undefined}
+            options={FRONTAGE_OPTIONS.map((o) => ({ label: o, value: o }))}
+            onChange={(v) => updateCore("Frontage", v || null)}
+          />
         </SectionCard>
 
         {/* Physical */}
-        <SectionCard title="Physical Characteristics">
+        <SectionCard
+          title="Physical Characteristics"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <div className="grid grid-cols-2 gap-3">
             <FormField
               label="Land Size (AC)"
@@ -322,6 +464,79 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <FormField
+              label="Office Area (SF)"
+              type="number"
+              value={core["Office Area (SF)"] as number | undefined}
+              onChange={(v) =>
+                updateCore("Office Area (SF)", v ? Number(v) : null)
+              }
+            />
+            <FormField
+              label="Warehouse Area (SF)"
+              type="number"
+              value={core["Warehouse Area (SF)"] as number | undefined}
+              onChange={(v) =>
+                updateCore("Warehouse Area (SF)", v ? Number(v) : null)
+              }
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <ComputedField
+              label="Office %"
+              value={fmtDisplayPercent(
+                officePercent(
+                  core["Office Area (SF)"] as number | null | undefined,
+                  core["Building Size (SF)"],
+                ),
+              )}
+            />
+            <ComputedField
+              label="Floor Area Ratio"
+              value={fmtDisplayRatio(
+                floorAreaRatio(
+                  core["Building Size (SF)"],
+                  core["Land Size (SF)"],
+                ),
+              )}
+            />
+            <ComputedField
+              label="Land / Bld Ratio"
+              value={fmtDisplayRatio(
+                landBldRatio(
+                  core["Land Size (SF)"],
+                  core["Building Size (SF)"],
+                ),
+              )}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              label="Parking Spaces"
+              type="number"
+              value={core["Parking Spaces"] as number | undefined}
+              onChange={(v) =>
+                updateCore("Parking Spaces", v ? Number(v) : null)
+              }
+            />
+            <FormField
+              label="Parking Spaces Details"
+              value={core["Parking Spaces Details"] as string | undefined}
+              onChange={(v) =>
+                updateCore("Parking Spaces Details", v || null)
+              }
+            />
+          </div>
+          <ComputedField
+            label="Parking Ratio"
+            value={fmtDisplayRatio(
+              parkingRatio(
+                core["Parking (SF)"],
+                core["Building Size (SF)"],
+              ),
+            )}
+          />
+          <div className="grid grid-cols-3 gap-3">
+            <FormField
               label="Year Built"
               type="number"
               value={core["Year Built"]}
@@ -334,6 +549,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               type="number"
               value={core.Age}
               onChange={(v) => updateCore("Age", v ? Number(v) : null)}
+            />
+            <FormField
+              label="Effective Age"
+              type="number"
+              value={core["Effective Age"] as number | undefined}
+              onChange={(v) =>
+                updateCore("Effective Age", v ? Number(v) : null)
+              }
             />
           </div>
           <SelectField
@@ -360,7 +583,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </SectionCard>
 
         {/* Utilities */}
-        <SectionCard title="Utilities">
+        <SectionCard
+          title="Utilities"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <ToggleField
             label="Electricity"
             value={core["Utils - Electricity"] ?? false}
@@ -402,107 +628,172 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               updateCore("Surface", (v || null) as "Cleared" | "Caliche" | "Raw" | null)
             }
           />
-        </SectionCard>
-      </div>
-
-      {/* FEMA Flood Data & Neighborhood Boundaries */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <SectionCard title="FEMA Flood Data">
-          <FormField
-            label="FEMA Map Number"
-            value={fema.FemaMapNum}
-            onChange={(v) => setFema((prev) => ({ ...prev, FemaMapNum: v }))}
+          <SelectField
+            label="Overall Status"
+            value={core.Utilities as string | null | undefined}
+            options={UTILITIES_STATUS_OPTIONS.map((o) => ({
+              label: o,
+              value: o,
+            }))}
+            onChange={(v) => updateCore("Utilities", v ? v : null)}
           />
+        </SectionCard>
+
+        <SectionCard
+          title="Property Features"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <FormField
-            label="FEMA Zone"
-            value={fema.FemaZone}
-            onChange={(v) => setFema((prev) => ({ ...prev, FemaZone: v }))}
+            label="Other Features"
+            value={core["Other Features"] as string | undefined}
+            onChange={(v) => updateCore("Other Features", v || null)}
           />
           <SelectField
-            label="Is Hazard Zone"
+            label="Wash Bay"
             value={
-              fema.FemaIsHazardZone === true
-                ? "true"
-                : fema.FemaIsHazardZone === false
-                  ? "false"
-                  : undefined
+              core["Wash Bay"] === true
+                ? "Yes"
+                : core["Wash Bay"] === false
+                  ? "No"
+                  : ""
             }
-            options={[
-              { label: "Yes", value: "true" },
-              { label: "No", value: "false" },
-            ]}
+            options={WASH_BAY_OPTIONS.map((o) => ({ label: o, value: o }))}
             onChange={(v) =>
-              setFema((prev) => ({
-                ...prev,
-                FemaIsHazardZone:
-                  v === "true" ? true : v === "false" ? false : null,
-              }))
+              updateCore(
+                "Wash Bay",
+                v === "Yes" ? true : v === "No" ? false : null,
+              )
             }
           />
           <FormField
-            label="FEMA Map Date"
-            value={fema.FemaMapDate}
-            onChange={(v) => setFema((prev) => ({ ...prev, FemaMapDate: v }))}
+            label="Hoisting"
+            value={core.Hoisting as string | undefined}
+            onChange={(v) => updateCore("Hoisting", v || null)}
           />
         </SectionCard>
 
-        <SectionCard title="Neighborhood Boundaries">
+        {showIncomeLease ? (
+          <SectionCard
+            title="Income / Lease"
+            className="mb-4 w-full break-inside-avoid"
+          >
+            <FormField
+              label="Tenant"
+              value={core.Tenant as string | undefined}
+              onChange={(v) => updateCore("Tenant", v || null)}
+            />
+            <FormField
+              label="Lease Start"
+              value={core["Lease Start"] as string | undefined}
+              onChange={(v) => updateCore("Lease Start", v || null)}
+            />
+            <FormField
+              label="Rent / Month"
+              type="number"
+              value={core["Rent / Month"] as number | undefined}
+              onChange={(v) =>
+                updateCore("Rent / Month", v ? Number(v) : null)
+              }
+            />
+            <ComputedField
+              label="Rent / SF / Year"
+              value={(() => {
+                const r = rentPerSfPerYear(
+                  core["Rent / Month"] as number | null | undefined,
+                  core["Building Size (SF)"],
+                );
+                return r != null ? r.toFixed(2) : null;
+              })()}
+            />
+            <SelectField
+              label="Expense Structure"
+              value={core["Expense Structure"] as string | undefined}
+              options={EXPENSE_STRUCTURE_OPTIONS.map((o) => ({
+                label: o,
+                value: o,
+              }))}
+              onChange={(v) =>
+                updateCore(
+                  "Expense Structure",
+                  (v || null) as ExpenseStructure | null,
+                )
+              }
+            />
+            <FormField
+              label="Occupancy %"
+              value={core["Occupancy %"] as string | undefined}
+              onChange={(v) => updateCore("Occupancy %", v || null)}
+            />
+            <FormField
+              label="Post Sale Renovation Cost"
+              type="number"
+              value={core["Post Sale Renovation Cost"] as number | undefined}
+              onChange={(v) =>
+                updateCore(
+                  "Post Sale Renovation Cost",
+                  v ? Number(v) : null,
+                )
+              }
+            />
+          </SectionCard>
+        ) : null}
+
+        <SectionCard
+          title="Computed Summary"
+          className="mb-4 w-full break-inside-avoid"
+        >
           <FormField
-            label="North"
-            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.north}
+            label="Size Multiplier"
+            type="number"
+            value={core["Size Multiplier"] as number | undefined}
+            placeholder="1"
             onChange={(v) =>
-              setCore((prev) => ({
-                ...prev,
-                neighborhoodBoundaries: {
-                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
-                  north: v,
-                },
-              } as CoreData))
+              updateCore("Size Multiplier", v ? Number(v) : null)
             }
-            placeholder="Northern boundary"
+          />
+          <ComputedField
+            label="Total Taxes"
+            value={fmtDisplayCurrency(
+              totalTaxes(
+                taxes,
+                (core["Size Multiplier"] as number | null | undefined) ??
+                  1,
+              ),
+            )}
           />
           <FormField
-            label="South"
-            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.south}
+            label="County Appraised Value"
+            type="number"
+            value={core["County Appraised Value"] as number | undefined}
             onChange={(v) =>
-              setCore((prev) => ({
-                ...prev,
-                neighborhoodBoundaries: {
-                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
-                  south: v,
-                },
-              } as CoreData))
+              updateCore(
+                "County Appraised Value",
+                v ? Number(v) : null,
+              )
             }
-            placeholder="Southern boundary"
           />
           <FormField
-            label="East"
-            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.east}
+            label="Est Insurance"
+            type="number"
+            value={core["Est Insurance"]}
             onChange={(v) =>
-              setCore((prev) => ({
-                ...prev,
-                neighborhoodBoundaries: {
-                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
-                  east: v,
-                },
-              } as CoreData))
+              updateCore("Est Insurance", v ? Number(v) : null)
             }
-            placeholder="Eastern boundary"
           />
-          <FormField
-            label="West"
-            value={((core as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> | undefined)?.west}
-            onChange={(v) =>
-              setCore((prev) => ({
-                ...prev,
-                neighborhoodBoundaries: {
-                  ...((prev as Record<string, unknown>).neighborhoodBoundaries as Record<string, string> ?? {}),
-                  west: v,
-                },
-              } as CoreData))
-            }
-            placeholder="Western boundary"
+          <ComputedField
+            label="Est Expenses"
+            value={fmtDisplayCurrency(
+              estExpenses(
+                core["Est Insurance"],
+                totalTaxes(
+                  taxes,
+                  (core["Size Multiplier"] as number | null | undefined) ??
+                    1,
+                ),
+              ),
+            )}
           />
+          <ComputedField label="Market Conditions" value="Current" />
         </SectionCard>
       </div>
 
@@ -557,6 +848,12 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         sectionKey="subject"
         isOpen={isDocPanelOpen}
         onClose={() => setIsDocPanelOpen(false)}
+      />
+      <ExportJsonDialog
+        projectId={projectId}
+        context="subject"
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
       />
     </div>
   );

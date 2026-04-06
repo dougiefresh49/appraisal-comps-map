@@ -266,7 +266,6 @@ export async function POST(request: Request) {
       // Sanitize raw control characters inside JSON string values.
       // Gemini sometimes emits literal tabs, form feeds, etc. that
       // are invalid in JSON strings per the spec.
-      // eslint-disable-next-line no-control-regex
       jsonText = jsonText.replace(/[\x00-\x1f]/g, (ch) => {
         if (ch === "\n" || ch === "\r") return ch;
         if (ch === "\t") return "\\t";
