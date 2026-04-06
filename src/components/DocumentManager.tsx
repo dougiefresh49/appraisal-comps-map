@@ -23,6 +23,11 @@ import {
   subscribeToProjectDocuments,
   type ProjectDocument,
 } from "~/lib/supabase-queries";
+import {
+  formatDocumentTypeShort,
+  getDocumentPrimaryTitle,
+} from "~/utils/document-display";
+import { DeleteDocumentConfirmDialog } from "~/components/DeleteDocumentConfirmDialog";
 
 const DOCUMENT_TYPES = [
   { value: "deed", label: "Deed Record" },
@@ -181,6 +186,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     new Set(),
   );
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    fileName: string | null;
+  } | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
   const isMountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -447,11 +457,24 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     }
   };
 
-  const handleDelete = async (docId: string) => {
+  const handleRequestDelete = (docId: string, fileName: string | null) => {
+    setDeleteConfirm({ id: docId, fileName });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    setIsDeletingDoc(true);
+    setError(null);
     try {
-      await deleteProjectDocument(docId);
+      await deleteProjectDocument(deleteConfirm.id);
+      setDeleteConfirm(null);
     } catch (err) {
       console.error("Failed to delete document", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to delete document",
+      );
+    } finally {
+      setIsDeletingDoc(false);
     }
   };
 
@@ -814,11 +837,21 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               doc={doc}
               reprocessingIds={reprocessingIds}
               onReprocess={handleReprocess}
-              onDelete={handleDelete}
+              onRequestDelete={handleRequestDelete}
             />
           ))}
         </ul>
       )}
+
+      <DeleteDocumentConfirmDialog
+        isOpen={deleteConfirm !== null}
+        fileName={deleteConfirm?.fileName}
+        isDeleting={isDeletingDoc}
+        onCancel={() => {
+          if (!isDeletingDoc) setDeleteConfirm(null);
+        }}
+        onConfirm={() => void handleConfirmDelete()}
+      />
     </div>
   );
 }
@@ -827,12 +860,12 @@ function DocumentListCard({
   doc,
   reprocessingIds,
   onReprocess,
-  onDelete,
+  onRequestDelete,
 }: {
   doc: ProjectDocument;
   reprocessingIds: Set<string>;
   onReprocess: (id: string) => void;
-  onDelete: (id: string) => void;
+  onRequestDelete: (id: string, fileName: string | null) => void;
 }) {
   const [textOpen, setTextOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
@@ -843,9 +876,13 @@ function DocumentListCard({
   const badgeClass =
     TYPE_BADGE_CLASS[doc.documentType] ?? TYPE_BADGE_CLASS.other;
 
+  const typeBadgeText = formatDocumentTypeShort(
+    doc.documentType,
+    doc.structuredData,
+  );
+
   const displayName =
-    doc.fileName?.trim() ??
-    doc.documentLabel?.trim() ??
+    getDocumentPrimaryTitle(doc.documentLabel, doc.fileName) ||
     "Untitled document";
   const subtitle =
     doc.fileName && doc.documentLabel && doc.documentLabel !== doc.fileName
@@ -884,7 +921,7 @@ function DocumentListCard({
             <span
               className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
             >
-              {getTypeLabel(doc.documentType)}
+              {typeBadgeText}
             </span>
             {doc.sectionTag && (
               <span className="inline-flex items-center gap-1 rounded-md border border-zinc-600/50 bg-zinc-800/60 px-2 py-0.5 text-xs text-zinc-400">
@@ -931,7 +968,7 @@ function DocumentListCard({
           )}
           <button
             type="button"
-            onClick={() => onDelete(doc.id)}
+            onClick={() => onRequestDelete(doc.id, doc.fileName)}
             className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
             title="Delete document"
           >

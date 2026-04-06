@@ -476,17 +476,20 @@ export function CompAddFlow({
     setSelectedFileIds(new Set(files.map((f) => f.id)));
   };
 
+  const pendingCompIdRef = useRef<string | null>(null);
+
   const handleParse = async () => {
     if (selectedFileIds.size === 0) return;
 
     setStep("parsing");
     setErrorMessage(null);
 
-    let activeCompId = compId;
+    let activeCompId = compId ?? pendingCompIdRef.current;
 
     try {
-      if (isAddMode) {
+      if (isAddMode && !activeCompId) {
         activeCompId = crypto.randomUUID();
+        pendingCompIdRef.current = activeCompId;
         const newComp: Comparable = {
           id: activeCompId,
           type: compType,
@@ -515,10 +518,16 @@ export function CompAddFlow({
         throw new Error(err.error ?? "Parse failed");
       }
 
+      pendingCompIdRef.current = null;
       setParsedCount(selectedFileIds.size);
       setResultCompId(activeCompId ?? null);
       setStep("done");
     } catch (err) {
+      if (isAddMode && activeCompId) {
+        const supabase = createClient();
+        void supabase.from("comparables").delete().eq("id", activeCompId);
+        pendingCompIdRef.current = null;
+      }
       setErrorMessage(
         err instanceof Error ? err.message : "Parsing failed",
       );

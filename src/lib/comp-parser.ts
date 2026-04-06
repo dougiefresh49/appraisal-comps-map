@@ -2,8 +2,9 @@ import "server-only";
 
 import { GoogleGenAI, type Part } from "@google/genai";
 import { createClient } from "~/utils/supabase/server";
-import { downloadFile } from "~/lib/drive-api";
+import { downloadFile, getFolderMetadata } from "~/lib/drive-api";
 import { buildCompExtractionPrompt } from "~/lib/parsing-prompts";
+import { registerCompParseSourceDocuments } from "~/server/documents/actions";
 import type { LandSaleData, SaleData, RentalData, CompType } from "~/types/comp-data";
 
 const GENERATION_MODEL = "gemini-3.1-pro-preview";
@@ -20,7 +21,12 @@ export interface ParseCompInput {
   compId: string;
   projectId: string;
   type: CompType;
-  fileBuffers: { buffer: Buffer; mimeType: string; name: string }[];
+  fileBuffers: {
+    buffer: Buffer;
+    mimeType: string;
+    name: string;
+    fileId?: string;
+  }[];
   extraContext?: string;
   driveToken?: string;
 }
@@ -29,6 +35,51 @@ export interface ParseCompResult {
   ok: boolean;
   data?: LandSaleData | SaleData | RentalData;
   error?: string;
+}
+
+/**
+ * Maps parser output fields onto `comparables` columns so list/summary UI
+ * stays in sync with `comp_parsed_data` (detail page reads raw_data only).
+ * Only includes keys when the parsed value is non-empty so we do not wipe
+ * user-edited rows on partial parses.
+ */
+function comparableRowPatchFromCompData(
+  compData: LandSaleData | SaleData | RentalData,
+): {
+  address?: string;
+  address_for_display?: string;
+  apn?: string[];
+  instrument_number?: string;
+} {
+  const row = compData as unknown as Record<string, unknown>;
+  const patch: {
+    address?: string;
+    address_for_display?: string;
+    apn?: string[];
+    instrument_number?: string;
+  } = {};
+
+  const address =
+    typeof row.Address === "string" ? row.Address.trim() : "";
+  if (address) {
+    patch.address = address;
+    patch.address_for_display = address;
+  }
+
+  const apnVal = row.APN;
+  if (typeof apnVal === "string" && apnVal.trim()) {
+    patch.apn = apnVal
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const rec = row.Recording;
+  if (typeof rec === "string" && rec.trim()) {
+    patch.instrument_number = rec.trim();
+  }
+
+  return patch;
 }
 
 /**
@@ -116,10 +167,40 @@ export async function parseCompFiles(
       throw new Error(`Failed to save parsed data: ${upsertError.message}`);
     }
 
-    await supabase
+    const comparablePatch = comparableRowPatchFromCompData(compData);
+    const { error: compUpdateError } = await supabase
       .from("comparables")
-      .update({ parsed_data_status: "parsed" })
+      .update({
+        parsed_data_status: "parsed",
+        ...comparablePatch,
+      })
       .eq("id", input.compId);
+
+    if (compUpdateError) {
+      throw new Error(
+        `Failed to update comparable after parse: ${compUpdateError.message}`,
+      );
+    }
+
+    try {
+      await registerCompParseSourceDocuments({
+        projectId: input.projectId,
+        compId: input.compId,
+        compType: input.type,
+        driveToken: input.driveToken,
+        sources: input.fileBuffers.map((f) => ({
+          fileId: f.fileId,
+          fileName: f.name,
+          mimeType: f.mimeType,
+          fileBuffer: f.buffer,
+        })),
+      });
+    } catch (regErr) {
+      console.error(
+        "[parseCompFiles] registerCompParseSourceDocuments:",
+        regErr,
+      );
+    }
 
     return { ok: true, data: compData };
   } catch (err) {
@@ -147,14 +228,21 @@ export async function parseCompFromDrive(input: {
   driveToken: string;
   extraContext?: string;
 }): Promise<ParseCompResult> {
-  const fileBuffers: { buffer: Buffer; mimeType: string; name: string }[] = [];
+  const fileBuffers: {
+    buffer: Buffer;
+    mimeType: string;
+    name: string;
+    fileId: string;
+  }[] = [];
 
   for (const fileId of input.fileIds) {
+    const meta = await getFolderMetadata(input.driveToken, fileId);
     const arrayBuffer = await downloadFile(input.driveToken, fileId);
     fileBuffers.push({
+      fileId,
       buffer: Buffer.from(arrayBuffer),
-      mimeType: "application/pdf",
-      name: fileId,
+      mimeType: meta.mimeType || "application/pdf",
+      name: meta.name || fileId,
     });
   }
 

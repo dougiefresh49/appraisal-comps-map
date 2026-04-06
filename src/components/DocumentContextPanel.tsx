@@ -3,19 +3,23 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   XMarkIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  XCircleIcon,
   ArrowPathIcon,
   ChevronDownIcon,
   PlusIcon,
   EyeIcon,
   ArrowLeftIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "~/utils/supabase/client";
 import { useProject } from "~/hooks/useProject";
 import { DriveFolderBrowser } from "~/components/DriveFolderBrowser";
+import { DeleteDocumentConfirmDialog } from "~/components/DeleteDocumentConfirmDialog";
+import { deleteProjectDocument } from "~/lib/supabase-queries";
 import type { ProjectFolderStructure } from "~/utils/projectStore";
+import {
+  formatDocumentTypeShort,
+  getDocumentPrimaryTitle,
+} from "~/utils/document-display";
 
 interface ProjectDocument {
   id: string;
@@ -50,32 +54,6 @@ function getDocStatus(doc: ProjectDocument): DocStatus {
   }
   return "processed";
 }
-
-const STATUS_CONFIG: Record<
-  DocStatus,
-  { icon: typeof CheckCircleIcon; colorClass: string; label: string }
-> = {
-  processed: {
-    icon: CheckCircleIcon,
-    colorClass: "text-emerald-400",
-    label: "Processed",
-  },
-  stale: {
-    icon: ExclamationTriangleIcon,
-    colorClass: "text-amber-400",
-    label: "Outdated",
-  },
-  unprocessed: {
-    icon: XCircleIcon,
-    colorClass: "text-red-400",
-    label: "Not Processed",
-  },
-  processing: {
-    icon: ArrowPathIcon,
-    colorClass: "text-blue-400 animate-spin",
-    label: "Processing...",
-  },
-};
 
 const SECTION_DOCUMENT_MAP: Record<string, string[]> = {
   flood_map: ["flood_map"],
@@ -113,6 +91,30 @@ function sectionKeyToTag(sectionKey: string): string | null {
  * Determines the Drive folder to pre-navigate to when adding a doc
  * from a given section.
  */
+/** Subtitle under "Document Context" — comp detail uses section tag like sales-comp-1. */
+function documentPanelSubtitle(
+  sectionKey: string,
+  sectionTagOverride: string | undefined,
+): string {
+  if (sectionKey === "comp-detail" && sectionTagOverride?.trim()) {
+    const m = /^(land|sales|rentals)-comp-(.+)$/.exec(
+      sectionTagOverride.trim(),
+    );
+    if (m) {
+      const slug = m[1];
+      const num = m[2];
+      const kind =
+        slug === "land"
+          ? "Land"
+          : slug === "sales"
+            ? "Sales"
+            : "Rentals";
+      return `for ${kind} Comp #${num}`;
+    }
+  }
+  return `${sectionKey.replace(/-/g, " ")} section`;
+}
+
 function folderIdForSection(
   sectionKey: string,
   fs: ProjectFolderStructure | undefined,
@@ -190,6 +192,14 @@ export function DocumentContextPanel({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [includePhotos, setIncludePhotos] = useState(true);
 
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    fileName: string | null;
+  } | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+
+  const showDocExcludeToggle = sectionKey !== "comp-detail";
+
   const folderStructure = useMemo(
     () => getFolderStructure(project),
     [project],
@@ -208,6 +218,11 @@ export function DocumentContextPanel({
   const browserRootFolderId = useMemo(
     () => folderIdForSection(sectionKey, folderStructure, compFolderId),
     [sectionKey, folderStructure, compFolderId],
+  );
+
+  const headerSubtitle = useMemo(
+    () => documentPanelSubtitle(sectionKey, sectionTagProp),
+    [sectionKey, sectionTagProp],
   );
 
   const fetchDocuments = useCallback(async () => {
@@ -273,6 +288,20 @@ export function DocumentContextPanel({
       return next;
     });
   }, [onPhotoContextChange]);
+
+  const handleConfirmDeleteDoc = useCallback(async () => {
+    if (!deleteConfirm) return;
+    setIsDeletingDoc(true);
+    try {
+      await deleteProjectDocument(deleteConfirm.id);
+      setDeleteConfirm(null);
+      await fetchDocuments();
+    } catch (err) {
+      console.error("[DocumentContextPanel] delete document:", err);
+    } finally {
+      setIsDeletingDoc(false);
+    }
+  }, [deleteConfirm, fetchDocuments]);
 
   const handleReprocess = useCallback(    async (docId: string) => {
       setReprocessingIds((prev) => new Set(prev).add(docId));
@@ -382,6 +411,16 @@ export function DocumentContextPanel({
 
   return (
     <div className="fixed inset-0 z-50">
+      <DeleteDocumentConfirmDialog
+        isOpen={deleteConfirm !== null}
+        fileName={deleteConfirm?.fileName}
+        isDeleting={isDeletingDoc}
+        onCancel={() => {
+          if (!isDeletingDoc) setDeleteConfirm(null);
+        }}
+        onConfirm={() => void handleConfirmDeleteDoc()}
+      />
+
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -396,9 +435,7 @@ export function DocumentContextPanel({
             <h2 className="text-sm font-semibold text-gray-100">
               Document Context
             </h2>
-            <p className="text-xs text-gray-500">
-              {sectionKey.replace(/-/g, " ")} section
-            </p>
+            <p className="text-xs text-gray-500">{headerSubtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -495,9 +532,16 @@ export function DocumentContextPanel({
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
                             isExcluded={excludedIds.has(doc.id)}
+                            showExcludeToggle={showDocExcludeToggle}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
                             onToggleExclude={() => toggleExcluded(doc.id)}
+                            onRequestDelete={() =>
+                              setDeleteConfirm({
+                                id: doc.id,
+                                fileName: doc.file_name,
+                              })
+                            }
                           />
                         ))}
                       </div>
@@ -517,9 +561,16 @@ export function DocumentContextPanel({
                             isExpanded={expandedIds.has(doc.id)}
                             isReprocessing={reprocessingIds.has(doc.id)}
                             isExcluded={excludedIds.has(doc.id)}
+                            showExcludeToggle={showDocExcludeToggle}
                             onToggleExpand={() => toggleExpanded(doc.id)}
                             onReprocess={() => void handleReprocess(doc.id)}
                             onToggleExclude={() => toggleExcluded(doc.id)}
+                            onRequestDelete={() =>
+                              setDeleteConfirm({
+                                id: doc.id,
+                                fileName: doc.file_name,
+                              })
+                            }
                           />
                         ))}
                       </div>
@@ -641,21 +692,30 @@ function DocumentRow({
   isExpanded,
   isReprocessing,
   isExcluded,
+  showExcludeToggle,
   onToggleExpand,
   onReprocess,
   onToggleExclude,
+  onRequestDelete,
 }: {
   doc: ProjectDocument;
   isExpanded: boolean;
   isReprocessing: boolean;
   isExcluded: boolean;
+  showExcludeToggle: boolean;
   onToggleExpand: () => void;
   onReprocess: () => void;
   onToggleExclude: () => void;
+  onRequestDelete: () => void;
 }) {
   const status = isReprocessing ? "processing" : getDocStatus(doc);
-  const config = STATUS_CONFIG[status];
-  const StatusIcon = config.icon;
+  const isRowProcessing = status === "processing";
+  const canReprocess = !!doc.file_id && !isRowProcessing && !isReprocessing;
+  const hasExtractPreview = !!doc.extracted_text?.trim();
+  const shortType = formatDocumentTypeShort(
+    doc.document_type,
+    doc.structured_data,
+  );
 
   return (
     <div
@@ -665,79 +725,125 @@ function DocumentRow({
           : "border-gray-800"
       }`}
     >
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        {/* Include/exclude checkbox */}
+      <div className="flex items-start gap-2 px-3 py-2.5">
+        {showExcludeToggle ? (
+          <button
+            type="button"
+            onClick={onToggleExclude}
+            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+              isExcluded
+                ? "border-gray-600 bg-transparent text-transparent"
+                : "border-blue-500 bg-blue-500/20 text-blue-400"
+            }`}
+            title={
+              isExcluded
+                ? "Excluded from context — click to include"
+                : "Included in context — click to exclude"
+            }
+            aria-label={isExcluded ? "Include document" : "Exclude document"}
+          >
+            {!isExcluded && (
+              <svg
+                className="h-2.5 w-2.5"
+                fill="none"
+                viewBox="0 0 10 10"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M1.5 5l2.5 2.5 4.5-4.5"
+                />
+              </svg>
+            )}
+          </button>
+        ) : null}
+
         <button
           type="button"
-          onClick={onToggleExclude}
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-            isExcluded
-              ? "border-gray-600 bg-transparent text-transparent"
-              : "border-blue-500 bg-blue-500/20 text-blue-400"
+          onClick={() => hasExtractPreview && onToggleExpand()}
+          disabled={!hasExtractPreview}
+          className={`min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
+            hasExtractPreview
+              ? "cursor-pointer hover:opacity-90"
+              : "cursor-default opacity-80"
           }`}
-          title={isExcluded ? "Excluded from context — click to include" : "Included in context — click to exclude"}
-          aria-label={isExcluded ? "Include document" : "Exclude document"}
         >
-          {!isExcluded && (
-            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 10 10" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 5l2.5 2.5 4.5-4.5" />
-            </svg>
-          )}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-gray-200">
+                {getDocumentPrimaryTitle(doc.document_label, doc.file_name) ||
+                  doc.document_type}
+              </p>
+              <p className="text-xs text-gray-500">{shortType}</p>
+            </div>
+            {hasExtractPreview ? (
+              <ChevronDownIcon
+                className={`mt-0.5 h-4 w-4 shrink-0 text-gray-500 transition ${
+                  isExpanded ? "rotate-180" : ""
+                }`}
+                aria-hidden
+              />
+            ) : null}
+          </div>
         </button>
-        <StatusIcon className={`h-4 w-4 shrink-0 ${config.colorClass}`} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-200">
-            {doc.document_label ?? doc.file_name ?? doc.document_type}
-          </p>
-          <p className="text-xs text-gray-500">
-            {doc.document_type.replace(/_/g, " ")} · {config.label}
-          </p>
-        </div>
 
-        <div className="flex items-center gap-1">
-          {doc.file_id && (
+        <div
+          className="mt-0.5 flex shrink-0 items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          {isRowProcessing ? (
+            <ArrowPathIcon
+              className="h-4 w-4 shrink-0 animate-spin text-blue-400"
+              aria-label="Processing"
+            />
+          ) : null}
+          {doc.file_id ? (
             <a
               href={`https://drive.google.com/file/d/${doc.file_id}/view`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded p-1 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
+              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
               title="View in Google Drive"
             >
               <EyeIcon className="h-3.5 w-3.5" />
               <span className="sr-only">View in Google Drive</span>
             </a>
-          )}
-          {(status === "stale" || status === "unprocessed") && (
+          ) : null}
+          {canReprocess ? (
             <button
+              type="button"
               onClick={onReprocess}
-              className="rounded p-1 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
-              title="Reprocess"
+              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
+              title="Reprocess document from Drive"
             >
               <ArrowPathIcon className="h-3.5 w-3.5" />
+              <span className="sr-only">Reprocess</span>
             </button>
-          )}
-
-          {doc.extracted_text && (
-            <button
-              onClick={onToggleExpand}
-              className="rounded p-1 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
-            >
-              <ChevronDownIcon
-                className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`}
-              />
-            </button>
-          )}
+          ) : null}
+          <button
+            type="button"
+            onClick={onRequestDelete}
+            className="rounded p-1.5 text-gray-500 transition hover:bg-red-950/50 hover:text-red-400"
+            title="Delete document"
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+            <span className="sr-only">Delete document</span>
+          </button>
         </div>
       </div>
 
-      {isExpanded && doc.extracted_text && (
+      {isExpanded && doc.extracted_text ? (
         <div className="border-t border-gray-800 px-3 py-2">
           <p className="max-h-32 overflow-y-auto text-xs leading-relaxed text-gray-400 whitespace-pre-wrap">
             {doc.extracted_text.substring(0, 1000)}
             {doc.extracted_text.length > 1000 && "..."}
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

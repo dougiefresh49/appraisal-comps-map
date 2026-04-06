@@ -6,6 +6,9 @@ import { extractDocumentContent } from "~/lib/gemini";
 import { generateEmbedding } from "~/lib/embeddings";
 import { getExtractionPrompt } from "~/lib/document-prompts";
 import { downloadDriveFile } from "~/lib/drive-download";
+import { shareDriveFile } from "~/lib/drive-api";
+import type { CompType } from "~/types/comp-data";
+import { getCompDocumentSectionTag } from "~/server/comps/comp-section-tag";
 import { mergeDocumentIntoSubjectData } from "~/server/subject-data/merge";
 
 export interface AddDocumentInput {
@@ -23,6 +26,114 @@ export interface DocumentActionResult {
   ok: boolean;
   documentId?: string;
   error?: string;
+}
+
+export interface CompParseSourceFile {
+  fileId?: string;
+  fileName: string;
+  mimeType: string;
+  fileBuffer?: Buffer;
+}
+
+/**
+ * After a successful comp parse, register each source file as `project_documents`
+ * with the same `section_tag` as the comp detail Docs panel (e.g. sales-comp-1).
+ * Skips rows that already exist for the same project + section_tag + file_id or file_name.
+ */
+export async function registerCompParseSourceDocuments(input: {
+  projectId: string;
+  compId: string;
+  compType: CompType;
+  driveToken?: string | null;
+  sources: CompParseSourceFile[];
+}): Promise<void> {
+  if (input.sources.length === 0) return;
+
+  const supabase = await createClient();
+  const sectionTag = await getCompDocumentSectionTag(
+    supabase,
+    input.projectId,
+    input.compId,
+    input.compType,
+  );
+
+  if (!sectionTag) {
+    console.warn(
+      "[registerCompParseSourceDocuments] Could not resolve section tag; skipping document registration.",
+    );
+    return;
+  }
+
+  for (const source of input.sources) {
+    try {
+      if (source.fileId?.trim() && input.driveToken?.trim()) {
+        try {
+          await shareDriveFile(input.driveToken, source.fileId);
+        } catch (shareErr) {
+          console.error(
+            "[registerCompParseSourceDocuments] shareDriveFile:",
+            shareErr,
+          );
+        }
+      }
+
+      let existingId: string | null = null;
+      if (source.fileId?.trim()) {
+        const { data: row } = await supabase
+          .from("project_documents")
+          .select("id")
+          .eq("project_id", input.projectId)
+          .eq("file_id", source.fileId.trim())
+          .eq("section_tag", sectionTag)
+          .maybeSingle();
+        existingId = (row as { id: string } | null)?.id ?? null;
+      } else {
+        const { data: rows } = await supabase
+          .from("project_documents")
+          .select("id")
+          .eq("project_id", input.projectId)
+          .eq("file_name", source.fileName)
+          .eq("section_tag", sectionTag)
+          .is("file_id", null)
+          .limit(1);
+        const row = rows?.[0] as { id: string } | undefined;
+        existingId = row?.id ?? null;
+      }
+
+      if (existingId) {
+        continue;
+      }
+
+      const trimmedFileId = source.fileId?.trim();
+      const fileIdForRow =
+        trimmedFileId !== undefined && trimmedFileId !== ""
+          ? trimmedFileId
+          : undefined;
+
+      const result = await addDocument({
+        projectId: input.projectId,
+        documentType: "other",
+        sectionTag,
+        fileId: fileIdForRow,
+        fileName: source.fileName,
+        mimeType: source.mimeType,
+        fileBuffer: source.fileBuffer,
+      });
+
+      if (!result.ok) {
+        console.error(
+          "[registerCompParseSourceDocuments] addDocument failed:",
+          result.error,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[registerCompParseSourceDocuments] source file:",
+        source.fileName,
+        err,
+      );
+    }
+  }
 }
 
 export async function addDocument(

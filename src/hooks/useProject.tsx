@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   normalizeProjectData,
+  DEFAULT_APPROACHES,
   type Comparable,
   type MapView,
   type ProjectData,
@@ -11,13 +20,81 @@ import { createClient } from "~/utils/supabase/client";
 import {
   fetchProject,
   upsertProjectMetadata,
+  type ProjectMetadataPatch,
   upsertComparable,
   upsertMapView,
   deleteComparable as deleteCompFromDb,
   deleteMap as deleteMapFromDb,
 } from "~/lib/supabase-queries";
 
-export function useProject(projectId: string) {
+/** Align layout + pages that pass raw or decoded `[projectId]` segments. */
+function normalizeRouteProjectId(projectId: string): string {
+  try {
+    return decodeURIComponent(projectId);
+  } catch {
+    return projectId;
+  }
+}
+
+export type UseProjectResult = {
+  project: ProjectData | undefined;
+  projectName: string;
+  projectExists: boolean;
+  isLoading: boolean;
+  updateProject: (updater: (project: ProjectData) => ProjectData) => void;
+};
+
+type ProjectWorkspaceContextValue = UseProjectResult & {
+  workspaceProjectId: string;
+};
+
+const ProjectWorkspaceContext = createContext<ProjectWorkspaceContextValue | null>(
+  null,
+);
+
+/**
+ * Mount once under `/project/[projectId]` so the sidebar and all pages share
+ * the same project state (updates from one appear everywhere).
+ */
+export function ProjectWorkspaceProvider({
+  projectId,
+  children,
+}: {
+  projectId: string;
+  children: ReactNode;
+}) {
+  const canonicalId = normalizeRouteProjectId(projectId);
+  const state = useProjectState(canonicalId);
+  const value: ProjectWorkspaceContextValue = {
+    ...state,
+    workspaceProjectId: canonicalId,
+  };
+
+  return (
+    <ProjectWorkspaceContext.Provider value={value}>
+      {children}
+    </ProjectWorkspaceContext.Provider>
+  );
+}
+
+export function useProject(projectId: string): UseProjectResult {
+  const canonicalId = normalizeRouteProjectId(projectId);
+  const ctx = useContext(ProjectWorkspaceContext);
+  if (ctx === null || ctx.workspaceProjectId !== canonicalId) {
+    throw new Error(
+      "useProject must be used within ProjectWorkspaceProvider (project layout).",
+    );
+  }
+  return {
+    project: ctx.project,
+    projectName: ctx.projectName,
+    projectExists: ctx.projectExists,
+    isLoading: ctx.isLoading,
+    updateProject: ctx.updateProject,
+  };
+}
+
+function useProjectState(projectId: string): UseProjectResult {
   const [project, setProject] = useState<ProjectData | undefined>(undefined);
   const [projectName, setProjectName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -124,18 +201,35 @@ async function persistChanges(
   next: ProjectData,
 ) {
   try {
+    const metaPatch: ProjectMetadataPatch = {};
+    if (prev.clientCompany !== next.clientCompany)
+      metaPatch.clientCompany = next.clientCompany ?? null;
+    if (prev.clientName !== next.clientName)
+      metaPatch.clientName = next.clientName ?? null;
+    if (prev.propertyType !== next.propertyType)
+      metaPatch.propertyType = next.propertyType ?? null;
+    if (prev.projectFolderId !== next.projectFolderId)
+      metaPatch.projectFolderId = next.projectFolderId ?? null;
+    if (prev.effectiveDate !== next.effectiveDate)
+      metaPatch.effectiveDate = next.effectiveDate ?? null;
+    if (prev.reportDueDate !== next.reportDueDate)
+      metaPatch.reportDueDate = next.reportDueDate ?? null;
+    if (prev.exposureTime !== next.exposureTime)
+      metaPatch.exposureTime = next.exposureTime ?? null;
+    if (prev.highestBestUse !== next.highestBestUse)
+      metaPatch.highestBestUse = next.highestBestUse ?? null;
+    if (prev.insurancePricePerSf !== next.insurancePricePerSf)
+      metaPatch.insurancePricePerSf = next.insurancePricePerSf ?? null;
+    if (prev.vacancyRate !== next.vacancyRate)
+      metaPatch.vacancyRate = next.vacancyRate ?? null;
     if (
-      prev.clientCompany !== next.clientCompany ||
-      prev.clientName !== next.clientName ||
-      prev.propertyType !== next.propertyType ||
-      prev.projectFolderId !== next.projectFolderId
-    ) {
-      await upsertProjectMetadata(projectId, {
-        clientCompany: next.clientCompany,
-        clientName: next.clientName,
-        propertyType: next.propertyType,
-        projectFolderId: next.projectFolderId,
-      });
+      JSON.stringify(prev.approaches ?? DEFAULT_APPROACHES) !==
+      JSON.stringify(next.approaches ?? DEFAULT_APPROACHES)
+    )
+      metaPatch.approaches = next.approaches ?? null;
+
+    if (Object.keys(metaPatch).length > 0) {
+      await upsertProjectMetadata(projectId, metaPatch);
     }
 
     if (prev.subject !== next.subject && next.subject) {
@@ -191,7 +285,7 @@ async function persistChanges(
       }
     }
   } catch (err) {
-    console.error("Failed to persist project changes to Supabase", err);
+      console.error("Failed to persist project changes to Supabase", err);
   }
 }
 

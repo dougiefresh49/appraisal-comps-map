@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { MapBanner } from "~/components/MapBanner";
 import {
@@ -10,10 +10,50 @@ import {
 } from "~/components/DocumentContextPanel";
 import { CompAddFlow } from "~/components/CompAddFlow";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
+import { ToggleSwitch } from "~/components/ToggleField";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
 import { useProject } from "~/hooks/useProject";
 import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
 import {
+  acToSf,
+  adjSalePrice,
+  buildOtherFeatures,
+  calcAge,
+  excessLandValue,
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  getVerificationVal,
+  getZoneVal,
+  landBldRatio,
+  landBldRatioAdj,
+  officePercent,
+  rentPerSfPerYear,
+  salePricePerAc,
+  salePricePerSf,
+  warehousePercent,
+} from "~/lib/calculated-fields";
+import {
+  CONDITION_OPTIONS,
+  CONDITIONS_OF_SALE_OPTIONS,
+  FENCE_TYPE_OPTIONS,
+  FINANCING_TERMS_OPTIONS,
+  FRONTAGE_OPTIONS,
+  HAS_FENCING_OPTIONS,
+  HVAC_OPTIONS,
+  PROPERTY_RIGHTS_OPTIONS,
+  SURFACE_OPTIONS,
+  USE_TYPE_OPTIONS,
+  UTILITIES_STATUS_OPTIONS,
+  UTILS_ELECTRICITY_OPTIONS,
+  UTILS_SEWER_OPTIONS,
+  UTILS_WATER_OPTIONS,
+  VERIFICATION_TYPE_OPTIONS,
+  WASH_BAY_OPTIONS,
+  ZONING_LOCATION_OPTIONS,
+} from "~/types/comp-field-options";
+import {
+  DEFAULT_APPROACHES,
   getComparablesByType,
   mapTypeForCompType,
   type ComparableType,
@@ -27,8 +67,89 @@ export interface CompDetailPageProps {
   typeSlug: string;
 }
 
-type FieldDef = { key: string; label: string };
+type FieldDef = {
+  key: string;
+  label: string;
+  variant?: "text" | "select" | "toggle" | "computed";
+  options?: readonly string[];
+  computeFn?: (draft: Record<string, unknown>) => string;
+};
 type SectionDef = { title: string; fields: FieldDef[] };
+
+function draftString(v: unknown): string {
+  if (v == null) return "";
+  if (
+    typeof v === "string" ||
+    typeof v === "number" ||
+    typeof v === "boolean"
+  ) {
+    return String(v);
+  }
+  return "";
+}
+
+function draftNumeric(
+  d: Record<string, unknown>,
+  key: string,
+): number | null {
+  const v = d[key];
+  if (v == null || v === "") return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v !== "string") return null;
+  const s = v.replace(/[$,\s]/g, "");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * True when SF matches acres × 43,560 (same rule as computeGeneratedFields).
+ * Allows a small float tolerance for rounded display values.
+ */
+function isLandSfGeneratedFromAc(d: Record<string, unknown>): boolean {
+  const ac = draftNumeric(d, "Land Size (AC)");
+  const sf = draftNumeric(d, "Land Size (SF)");
+  if (ac == null || sf == null) return false;
+  const expected = acToSf(ac);
+  if (expected == null) return false;
+  return Math.abs(sf - expected) < 0.05;
+}
+
+/** Yes/No fields may be stored as boolean or legacy "Yes"/"No" strings. */
+function draftToggleValue(
+  d: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  const v = d[key];
+  if (v === true) return true;
+  if (v === false) return false;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (t === "Yes") return true;
+    if (t === "No") return false;
+  }
+  return undefined;
+}
+
+function formatDateOfSaleMarketDisplay(d: Record<string, unknown>): string {
+  const raw = d["Date of Sale"];
+  if (raw == null || raw === "") return "—";
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return raw.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+  }
+  if (typeof raw !== "string" && typeof raw !== "number") return "—";
+  const str = String(raw).trim();
+  const parsed = new Date(str);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+  }
+  return str || "—";
+}
 
 function mapBannerImageType(compType: ComparableType): string {
   switch (compType) {
@@ -77,42 +198,171 @@ const LAND_SECTIONS: SectionDef[] = [
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
-      { key: "Zoning", label: "Zoning" },
-      { key: "Zoning Description", label: "Zoning Description" },
-      { key: "Zoning Location", label: "Zoning Location" },
+      { key: "Corner", label: "Corner", variant: "toggle" },
+      {
+        key: "Frontage",
+        label: "Frontage",
+        variant: "select",
+        options: FRONTAGE_OPTIONS,
+      },
+      {
+        key: "Has Fencing",
+        label: "Has Fencing",
+        variant: "select",
+        options: HAS_FENCING_OPTIONS,
+      },
+      {
+        key: "Fence Type",
+        label: "Fence Type",
+        variant: "select",
+        options: FENCE_TYPE_OPTIONS,
+      },
+      { key: "Fencing", label: "Fencing Notes" },
+      {
+        key: "Surface",
+        label: "Surface",
+        variant: "select",
+        options: SURFACE_OPTIONS,
+      },
     ],
   },
   {
     title: "Sale Info",
     fields: [
       { key: "Sale Price", label: "Sale Price" },
+      {
+        key: "Sale Price / AC",
+        label: "Sale Price / AC",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const ac = draftNumeric(d, "Land Size (AC)");
+          const val = salePricePerAc(price, ac);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
+      {
+        key: "Sale Price / SF",
+        label: "Sale Price / SF",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const sf = draftNumeric(d, "Land Size (SF)");
+          const val = salePricePerSf(price, sf);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
       { key: "Date of Sale", label: "Date of Sale" },
+      {
+        key: "Market Conditions",
+        label: "Market Conditions",
+        variant: "computed",
+        computeFn: (d) => formatDateOfSaleMarketDisplay(d),
+      },
       { key: "Recording", label: "Recording" },
       { key: "Grantor", label: "Grantor" },
       { key: "Grantee", label: "Grantee" },
-      { key: "Financing Terms", label: "Financing Terms" },
-      { key: "Property Rights", label: "Property Rights" },
-      { key: "Conditions of Sale", label: "Conditions of Sale" },
+      {
+        key: "Financing Terms",
+        label: "Financing Terms",
+        variant: "select",
+        options: FINANCING_TERMS_OPTIONS,
+      },
+      {
+        key: "Property Rights",
+        label: "Property Rights",
+        variant: "select",
+        options: PROPERTY_RIGHTS_OPTIONS,
+      },
+      {
+        key: "Conditions of Sale",
+        label: "Conditions of Sale",
+        variant: "select",
+        options: CONDITIONS_OF_SALE_OPTIONS,
+      },
     ],
   },
   {
     title: "Utilities",
     fields: [
-      { key: "Utils - Electricity", label: "Electricity" },
-      { key: "Utils - Water", label: "Water" },
-      { key: "Utils - Sewer", label: "Sewer" },
-      { key: "Surface", label: "Surface" },
+      {
+        key: "Utils - Electricity",
+        label: "Electricity",
+        variant: "select",
+        options: UTILS_ELECTRICITY_OPTIONS,
+      },
+      {
+        key: "Utils - Water",
+        label: "Water",
+        variant: "select",
+        options: UTILS_WATER_OPTIONS,
+      },
+      {
+        key: "Utils - Sewer",
+        label: "Sewer",
+        variant: "select",
+        options: UTILS_SEWER_OPTIONS,
+      },
+      {
+        key: "Utilities",
+        label: "Utilities (Overall)",
+        variant: "select",
+        options: UTILITIES_STATUS_OPTIONS,
+      },
     ],
   },
   {
-    title: "Key Indicators",
+    title: "Zoning",
     fields: [
-      { key: "Corner", label: "Corner" },
-      { key: "Highway Frontage", label: "Highway Frontage" },
-      { key: "Market Conditions", label: "Market Conditions" },
-      { key: "Verification Type", label: "Verification Type" },
+      {
+        key: "Zoning Location",
+        label: "Zoning Location",
+        variant: "select",
+        options: ZONING_LOCATION_OPTIONS,
+      },
+      { key: "Zoning Description", label: "Zoning Description" },
+      {
+        key: "Zoning",
+        label: "Zoning",
+        variant: "computed",
+        computeFn: (d) => {
+          const loc = draftString(d["Zoning Location"]);
+          const desc = draftString(d["Zoning Description"]);
+          const s = getZoneVal(loc || undefined, desc || undefined);
+          return s !== "" ? s : "—";
+        },
+      },
+    ],
+  },
+  {
+    title: "Verification & Misc",
+    fields: [
+      {
+        key: "Verification Type",
+        label: "Verification Type",
+        variant: "select",
+        options: VERIFICATION_TYPE_OPTIONS,
+      },
       { key: "Verified By", label: "Verified By" },
       { key: "MLS #", label: "MLS #" },
+      {
+        key: "Verification",
+        label: "Verification",
+        variant: "computed",
+        computeFn: (d) => {
+          const typeStr = draftString(d["Verification Type"]);
+          const type = typeStr !== "" ? typeStr : undefined;
+          const byStr = draftString(d["Verified By"]);
+          const by = byStr !== "" ? byStr : undefined;
+          const mlsRaw = d["MLS #"];
+          const mls =
+            typeof mlsRaw === "number" || typeof mlsRaw === "string"
+              ? mlsRaw
+              : undefined;
+          const s = getVerificationVal(type, by, mls);
+          return s !== "" ? s : "—";
+        },
+      },
       { key: "Taxes", label: "Taxes" },
     ],
   },
@@ -127,9 +377,13 @@ const SALES_SECTIONS: SectionDef[] = [
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
-      { key: "Zoning", label: "Zoning" },
-      { key: "Zoning Location", label: "Zoning Location" },
-      { key: "Zoning Description", label: "Zoning Description" },
+      { key: "Taxes", label: "Taxes" },
+      {
+        key: "Use Type",
+        label: "Use Type",
+        variant: "select",
+        options: USE_TYPE_OPTIONS,
+      },
       { key: "Property Type", label: "Property Type" },
     ],
   },
@@ -137,17 +391,114 @@ const SALES_SECTIONS: SectionDef[] = [
     title: "Property Improvements",
     fields: [
       { key: "Building Size (SF)", label: "Building Size (SF)" },
+      { key: "Office Area (SF)", label: "Office Area (SF)" },
+      { key: "Warehouse Area (SF)", label: "Warehouse Area (SF)" },
+      {
+        key: "Office %",
+        label: "Office %",
+        variant: "computed",
+        computeFn: (d) => {
+          const officeSf = draftNumeric(d, "Office Area (SF)");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = officePercent(officeSf, bldg);
+          return val != null ? formatPercent(val, 1) : "—";
+        },
+      },
+      {
+        key: "Warehouse %",
+        label: "Warehouse %",
+        variant: "computed",
+        computeFn: (d) => {
+          const wh = draftNumeric(d, "Warehouse Area (SF)");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = warehousePercent(wh, bldg);
+          return val != null ? `${formatNumber(val, 1)}%` : "—";
+        },
+      },
       { key: "Parking (SF)", label: "Parking (SF)" },
-      { key: "Land / Bld Ratio", label: "Land / Bld Ratio" },
+      {
+        key: "Land / Bld Ratio",
+        label: "Land / Bld Ratio",
+        variant: "computed",
+        computeFn: (d) => {
+          const landSf = draftNumeric(d, "Land Size (SF)");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = landBldRatio(landSf, bldg);
+          return val != null ? formatNumber(val, 2) : "—";
+        },
+      },
       { key: "Year Built", label: "Year Built" },
+      {
+        key: "Age",
+        label: "Age",
+        variant: "computed",
+        computeFn: (d) => {
+          const raw = d["Year Built"];
+          const yb =
+            typeof raw === "string"
+              ? parseInt(raw, 10)
+              : typeof raw === "number"
+                ? raw
+                : NaN;
+          const val = !Number.isNaN(yb) ? calcAge(yb) : null;
+          return val != null ? formatNumber(val, 0) : "—";
+        },
+      },
       { key: "Effective Age", label: "Effective Age" },
-      { key: "Condition", label: "Condition" },
+      {
+        key: "Condition",
+        label: "Condition",
+        variant: "select",
+        options: CONDITION_OPTIONS,
+      },
       { key: "Construction", label: "Construction" },
-      { key: "Other Features", label: "Other Features" },
-      { key: "HVAC", label: "HVAC" },
+      {
+        key: "Other Features Description",
+        label: "Other Features Description",
+      },
+      {
+        key: "Other Features",
+        label: "Other Features",
+        variant: "computed",
+        computeFn: (d) => {
+          const ohRaw = d["Overhead Doors"];
+          let overheadStr: string | null = null;
+          if (typeof ohRaw === "number" && !Number.isNaN(ohRaw)) {
+            overheadStr = String(ohRaw);
+          } else if (typeof ohRaw === "string" && ohRaw.trim() !== "") {
+            overheadStr = ohRaw.trim();
+          }
+          const wb = d["Wash Bay"];
+          const desc = draftString(d["Other Features Description"]);
+          const out = buildOtherFeatures(
+            overheadStr,
+            wb as string | boolean | null | undefined,
+            draftString(d.Hoisting) || undefined,
+            desc !== "" ? desc : undefined,
+          );
+          return out !== "" ? out : "—";
+        },
+      },
+      {
+        key: "HVAC",
+        label: "HVAC",
+        variant: "select",
+        options: HVAC_OPTIONS,
+      },
       { key: "Overhead Doors", label: "Overhead Doors" },
-      { key: "Wash Bay", label: "Wash Bay" },
+      {
+        key: "Wash Bay",
+        label: "Wash Bay",
+        variant: "select",
+        options: WASH_BAY_OPTIONS,
+      },
       { key: "Hoisting", label: "Hoisting" },
+      {
+        key: "Has Fencing",
+        label: "Has Fencing",
+        variant: "select",
+        options: HAS_FENCING_OPTIONS,
+      },
       { key: "Buildings", label: "Buildings" },
     ],
   },
@@ -155,25 +506,141 @@ const SALES_SECTIONS: SectionDef[] = [
     title: "Sale Info",
     fields: [
       { key: "Sale Price", label: "Sale Price" },
+      {
+        key: "Sale Price / SF",
+        label: "Sale Price / SF",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = salePricePerSf(price, bldg);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
       { key: "Date of Sale", label: "Date of Sale" },
+      {
+        key: "Market Conditions",
+        label: "Market Conditions",
+        variant: "computed",
+        computeFn: (d) => formatDateOfSaleMarketDisplay(d),
+      },
       { key: "Recording", label: "Recording" },
       { key: "Grantor", label: "Grantor" },
       { key: "Grantee", label: "Grantee" },
-      { key: "Financing Terms", label: "Financing Terms" },
-      { key: "Property Rights", label: "Property Rights" },
-      { key: "Conditions of Sale", label: "Conditions of Sale" },
+      {
+        key: "Financing Terms",
+        label: "Financing Terms",
+        variant: "select",
+        options: FINANCING_TERMS_OPTIONS,
+      },
+      {
+        key: "Property Rights",
+        label: "Property Rights",
+        variant: "select",
+        options: PROPERTY_RIGHTS_OPTIONS,
+      },
+      {
+        key: "Conditions of Sale",
+        label: "Conditions of Sale",
+        variant: "select",
+        options: CONDITIONS_OF_SALE_OPTIONS,
+      },
+      { key: "Renovation Cost", label: "Renovation Cost" },
       { key: "Occupancy %", label: "Occupancy %" },
+    ],
+  },
+  {
+    title: "Excess Land",
+    fields: [
+      { key: "Excess Land Size (AC)", label: "Excess Land Size (AC)" },
+      { key: "Excess Land Value / AC", label: "Excess Land Value / AC" },
+      {
+        key: "Excess Land Value",
+        label: "Excess Land Value",
+        variant: "computed",
+        computeFn: (d) => {
+          const ac = draftNumeric(d, "Excess Land Size (AC)");
+          const perAc = draftNumeric(d, "Excess Land Value / AC");
+          const val = excessLandValue(ac, perAc);
+          return val != null ? formatCurrency(val) : "—";
+        },
+      },
+      {
+        key: "Adj Sale Price",
+        label: "Adj Sale Price",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const elSizeAc = draftNumeric(d, "Excess Land Size (AC)");
+          const elValPerAc = draftNumeric(d, "Excess Land Value / AC");
+          const elVal = excessLandValue(elSizeAc, elValPerAc);
+          const adj = adjSalePrice(price, elVal);
+          return adj != null ? formatCurrency(adj) : "—";
+        },
+      },
+      {
+        key: "Sale Price / SF (Adj)",
+        label: "Sale Price / SF (Adj)",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const elSizeAc = draftNumeric(d, "Excess Land Size (AC)");
+          const elValPerAc = draftNumeric(d, "Excess Land Value / AC");
+          const elVal = excessLandValue(elSizeAc, elValPerAc);
+          const adj = adjSalePrice(price, elVal);
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = salePricePerSf(adj, bldg);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
+      {
+        key: "Improvements / SF",
+        label: "Improvements / SF",
+        variant: "computed",
+        computeFn: (d) => {
+          const price = draftNumeric(d, "Sale Price");
+          const elSizeAc = draftNumeric(d, "Excess Land Size (AC)");
+          const elValPerAc = draftNumeric(d, "Excess Land Value / AC");
+          const elVal = excessLandValue(elSizeAc, elValPerAc);
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const adj = adjSalePrice(price, elVal);
+          const val = salePricePerSf(adj, bldg);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
+      {
+        key: "Land / Bld Ratio (Adj)",
+        label: "Land / Bld Ratio (Adj)",
+        variant: "computed",
+        computeFn: (d) => {
+          const landSf = draftNumeric(d, "Land Size (SF)");
+          const excessAc = draftNumeric(d, "Excess Land Size (AC)");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = landBldRatioAdj(landSf, excessAc, bldg);
+          return val != null ? formatNumber(val, 2) : "—";
+        },
+      },
     ],
   },
   {
     title: "Income Analysis",
     fields: [
-      { key: "Rent / SF", label: "Rent / SF" },
+      { key: "Rent / Month", label: "Rent / Month" },
+      {
+        key: "Rent / SF",
+        label: "Rent / SF",
+        variant: "computed",
+        computeFn: (d) => {
+          const rent = draftNumeric(d, "Rent / Month");
+          const bldg = draftNumeric(d, "Building Size (SF)");
+          const val = rentPerSfPerYear(rent, bldg);
+          return val != null ? formatCurrency(val, 2) : "—";
+        },
+      },
       { key: "Potential Gross Income", label: "Potential Gross Income" },
       { key: "Vacancy %", label: "Vacancy %" },
       { key: "Vacancy", label: "Vacancy" },
       { key: "Effective Gross Income", label: "Effective Gross Income" },
-      { key: "Taxes", label: "Taxes" },
       { key: "Insurance", label: "Insurance" },
       { key: "Expenses", label: "Expenses" },
       { key: "Net Operating Income", label: "Net Operating Income" },
@@ -184,13 +651,57 @@ const SALES_SECTIONS: SectionDef[] = [
     ],
   },
   {
-    title: "Key Indicators",
+    title: "Zoning",
     fields: [
-      { key: "Market Conditions", label: "Market Conditions" },
-      { key: "Verification Type", label: "Verification Type" },
-      { key: "Verified By", label: "Verified By" },
+      {
+        key: "Zoning Location",
+        label: "Zoning Location",
+        variant: "select",
+        options: ZONING_LOCATION_OPTIONS,
+      },
+      { key: "Zoning Description", label: "Zoning Description" },
+      {
+        key: "Zoning",
+        label: "Zoning",
+        variant: "computed",
+        computeFn: (d) => {
+          const loc = draftString(d["Zoning Location"]);
+          const desc = draftString(d["Zoning Description"]);
+          const s = getZoneVal(loc || undefined, desc || undefined);
+          return s !== "" ? s : "—";
+        },
+      },
+    ],
+  },
+  {
+    title: "Verification & Misc",
+    fields: [
       { key: "MLS #", label: "MLS #" },
-      { key: "Verification", label: "Verification" },
+      {
+        key: "Verification Type",
+        label: "Verification Type",
+        variant: "select",
+        options: VERIFICATION_TYPE_OPTIONS,
+      },
+      { key: "Verified By", label: "Verified By" },
+      {
+        key: "Verification",
+        label: "Verification",
+        variant: "computed",
+        computeFn: (d) => {
+          const typeStr = draftString(d["Verification Type"]);
+          const type = typeStr !== "" ? typeStr : undefined;
+          const byStr = draftString(d["Verified By"]);
+          const by = byStr !== "" ? byStr : undefined;
+          const mlsRaw = d["MLS #"];
+          const mls =
+            typeof mlsRaw === "number" || typeof mlsRaw === "string"
+              ? mlsRaw
+              : undefined;
+          const s = getVerificationVal(type, by, mls);
+          return s !== "" ? s : "—";
+        },
+      },
     ],
   },
 ];
@@ -330,20 +841,30 @@ export function CompDetailPage({
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => {
-      if (!parsedData?.raw_data) {
-        setDraft({});
-        return;
-      }
-      setDraft({ ...(parsedData.raw_data as Record<string, unknown>) });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parsedData?.id, parsedData?.updated_at],
-  );
+  useEffect(() => {
+    if (!parsedData?.raw_data) {
+      setDraft({});
+      return;
+    }
+    const raw = { ...(parsedData.raw_data as Record<string, unknown>) };
+    if (raw["Highway Frontage"] != null && raw.Frontage == null) {
+      raw.Frontage = raw["Highway Frontage"];
+    }
+    setDraft(raw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-init when persisted row identity/timestamp changes
+  }, [parsedData?.id, parsedData?.updated_at]);
 
   const comparables = project ? getComparablesByType(project, compType) : [];
   const comp = comparables.find((c) => c.id === compId);
+
+  const approaches = project?.approaches ?? DEFAULT_APPROACHES;
+  const sections = useMemo(() => {
+    let s = sectionsForType(compType);
+    if (compType === "Sales" && !approaches.income) {
+      s = s.filter((sec) => sec.title !== "Income Analysis");
+    }
+    return s;
+  }, [compType, approaches.income]);
   const compFolderId = comp?.folderId;
 
   useEffect(() => {
@@ -461,7 +982,6 @@ export function CompDetailPage({
   const isProcessing = comp.parsedDataStatus === "processing";
 
   const headerLabel = `${compType.toUpperCase()} COMP #${displayNumber} — ${displayAddress}`;
-  const sections = sectionsForType(compType);
 
   const renderEmptyState = () => {
     if (isProcessing) {
@@ -610,35 +1130,87 @@ export function CompDetailPage({
         renderEmptyState()
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="columns-1 gap-x-4 [column-fill:balance] lg:columns-2">
             {sections.map((section) => (
               <div
                 key={section.title}
-                className="rounded-xl border border-gray-800 bg-gray-900/40 p-5"
+                className="mb-4 w-full break-inside-avoid rounded-xl border border-gray-800 bg-gray-900/40 p-5"
               >
                 <h2 className="mb-4 border-b border-gray-800 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   {section.title}
                 </h2>
                 <div className="space-y-3">
-                  {section.fields.map(({ key, label }) => (
-                    <div
-                      key={key}
-                      className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:items-center sm:gap-4"
-                    >
-                      <label className="text-xs font-medium text-gray-500">
-                        {label}
-                      </label>
-                      <input
-                        type="text"
-                        value={fieldToInputString(draft, key)}
-                        onChange={(e) =>
-                          handleFieldChange(key, e.target.value)
-                        }
-                        className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
-                        placeholder="—"
-                      />
-                    </div>
-                  ))}
+                  {section.fields.map((field) => {
+                    const {
+                      key,
+                      label,
+                      variant = "text",
+                      options,
+                      computeFn,
+                    } = field;
+                    const controlClass =
+                      "w-full rounded-md border border-gray-700 bg-gray-950/60 px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30";
+                    const landSfDerivedFromAc =
+                      compType === "Land" &&
+                      key === "Land Size (SF)" &&
+                      isLandSfGeneratedFromAc(draft);
+                    return (
+                      <div
+                        key={key}
+                        className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:items-center sm:gap-4"
+                      >
+                        <label className="text-xs font-medium text-gray-500">
+                          {label}
+                        </label>
+                        {variant === "computed" && computeFn ? (
+                          <span className="inline-block text-sm text-gray-400 bg-gray-900/40 rounded-md px-2.5 py-1.5 border border-gray-800">
+                            {computeFn(draft)}
+                          </span>
+                        ) : variant === "select" && options ? (
+                          <select
+                            value={fieldToInputString(draft, key)}
+                            onChange={(e) =>
+                              handleFieldChange(key, e.target.value)
+                            }
+                            className={controlClass}
+                          >
+                            <option value="">—</option>
+                            {options.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        ) : variant === "toggle" ? (
+                          <div className="flex justify-end">
+                            <ToggleSwitch
+                              value={draftToggleValue(draft, key)}
+                              onChange={(b) =>
+                                handleFieldChange(key, b ? "Yes" : "No")
+                              }
+                              aria-label={label}
+                            />
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={fieldToInputString(draft, key)}
+                            onChange={(e) =>
+                              handleFieldChange(key, e.target.value)
+                            }
+                            disabled={landSfDerivedFromAc}
+                            title={
+                              landSfDerivedFromAc
+                                ? "Derived from Land Size (AC) × 43,560. Edit acres or clear square feet to override."
+                                : undefined
+                            }
+                            className={`${controlClass} disabled:cursor-not-allowed disabled:opacity-60`}
+                            placeholder="—"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

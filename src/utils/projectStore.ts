@@ -1,3 +1,5 @@
+import { sortComparables } from "~/utils/comparable-sort";
+
 // ============================================================
 // Core Primitive Types
 // ============================================================
@@ -138,6 +140,35 @@ export interface ProjectFolderStructure {
   };
 }
 
+export interface ProjectApproaches {
+  salesComparison: { land: boolean; sales: boolean };
+  income: boolean;
+  cost: boolean;
+}
+
+export const DEFAULT_APPROACHES: ProjectApproaches = {
+  salesComparison: { land: true, sales: true },
+  income: true,
+  cost: true,
+};
+
+/** DB/client raw shape: any missing or non-false value enables the approach. */
+export function normalizeProjectApproaches(raw?: unknown): ProjectApproaches {
+  const rawApproaches = raw as Record<string, unknown> | null | undefined;
+  const salesComp = (rawApproaches?.salesComparison ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    salesComparison: {
+      land: salesComp.land !== false,
+      sales: salesComp.sales !== false,
+    },
+    income: rawApproaches?.income !== false,
+    cost: rawApproaches?.cost !== false,
+  };
+}
+
 export interface ProjectData {
   /** Derived from subject_data.core at fetch time — NOT a DB column on projects. */
   subject: SubjectInfo;
@@ -150,6 +181,14 @@ export interface ProjectData {
   folderStructure?: ProjectFolderStructure;
   effectiveDate?: string;
   reportDueDate?: string;
+  exposureTime?: string;
+  highestBestUse?: string;
+  /** Corresponds to `insurance_price_per_sf` on `projects`. */
+  insurancePricePerSf?: number;
+  /** Corresponds to `vacancy_rate` on `projects`. */
+  vacancyRate?: number;
+  /** Report appraisal approaches (JSONB on `projects`). */
+  approaches?: ProjectApproaches;
 }
 
 export type ProjectsMap = Record<string, ProjectData>;
@@ -409,27 +448,12 @@ export function getCompMarker(
   return mapView.markers.find((m) => m.compId === compId);
 }
 
-/** Parses `Comparable.number` for numeric sort; non-numeric / empty sorts last. */
-function comparableNumberSortKey(comp: Comparable): number {
-  const raw = comp.number?.trim();
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const n = Number.parseFloat(raw);
-  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-}
-
 export function getComparablesByType(
   project: ProjectData,
   type: ComparableType,
 ): Comparable[] {
   const list = project.comparables.filter((c) => c.type === type);
-  return [...list].sort((a, b) => {
-    const ka = comparableNumberSortKey(a);
-    const kb = comparableNumberSortKey(b);
-    if (ka !== kb) return ka - kb;
-    return a.address.localeCompare(b.address, undefined, {
-      sensitivity: "base",
-    });
-  });
+  return sortComparables(list);
 }
 
 // ============================================================
@@ -872,6 +896,28 @@ function normalizeNewShape(data?: Partial<ProjectData>): ProjectData {
   const folderStructure =
     data?.folderStructure ?? rawFs.folder_structure;
 
+  const rawNums = data as Partial<ProjectData> & {
+    exposure_time?: string | null;
+    highest_best_use?: string | null;
+    insurance_price_per_sf?: number | string | null;
+    vacancy_rate?: number | string | null;
+  };
+  const insurancePricePerSf =
+    data?.insurancePricePerSf ??
+    (typeof rawNums.insurance_price_per_sf === "number"
+      ? rawNums.insurance_price_per_sf
+      : rawNums.insurance_price_per_sf != null &&
+          rawNums.insurance_price_per_sf !== ""
+        ? Number(rawNums.insurance_price_per_sf)
+        : undefined);
+  const vacancyRate =
+    data?.vacancyRate ??
+    (typeof rawNums.vacancy_rate === "number"
+      ? rawNums.vacancy_rate
+      : rawNums.vacancy_rate != null && rawNums.vacancy_rate !== ""
+        ? Number(rawNums.vacancy_rate)
+        : undefined);
+
   return {
     subject,
     comparables,
@@ -881,6 +927,20 @@ function normalizeNewShape(data?: Partial<ProjectData>): ProjectData {
     clientName: data?.clientName,
     propertyType: data?.propertyType,
     folderStructure,
+    effectiveDate: data?.effectiveDate,
+    reportDueDate: data?.reportDueDate,
+    exposureTime: data?.exposureTime ?? rawNums.exposure_time ?? undefined,
+    highestBestUse:
+      data?.highestBestUse ?? rawNums.highest_best_use ?? undefined,
+    insurancePricePerSf:
+      insurancePricePerSf != null && !Number.isNaN(insurancePricePerSf)
+        ? insurancePricePerSf
+        : undefined,
+    vacancyRate:
+      vacancyRate != null && !Number.isNaN(vacancyRate)
+        ? vacancyRate
+        : undefined,
+    approaches: normalizeProjectApproaches(data?.approaches),
   };
 }
 

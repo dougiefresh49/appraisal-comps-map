@@ -55,7 +55,8 @@ export function officePercent(
   officeAreaSf: number | null | undefined,
   buildingSizeSf: number | null | undefined,
 ): number | null {
-  if (officeAreaSf == null || !buildingSizeSf || buildingSizeSf === 0) return null;
+  if (officeAreaSf == null || !buildingSizeSf || buildingSizeSf === 0)
+    return null;
   return officeAreaSf / buildingSizeSf;
 }
 
@@ -71,7 +72,8 @@ export function parkingRatio(
   parkingSpaces: number | null | undefined,
   buildingSizeSf: number | null | undefined,
 ): number | null {
-  if (parkingSpaces == null || !buildingSizeSf || buildingSizeSf === 0) return null;
+  if (parkingSpaces == null || !buildingSizeSf || buildingSizeSf === 0)
+    return null;
   return parkingSpaces / (buildingSizeSf / 1000);
 }
 
@@ -79,7 +81,8 @@ export function calcAge(
   yearBuilt: number | string | null | undefined,
   effectiveDateYear?: number,
 ): number | null {
-  const yb = typeof yearBuilt === "string" ? parseInt(yearBuilt, 10) : yearBuilt;
+  const yb =
+    typeof yearBuilt === "string" ? parseInt(yearBuilt, 10) : yearBuilt;
   if (!yb || isNaN(yb)) return null;
   const refYear = effectiveDateYear ?? new Date().getFullYear();
   return refYear - yb;
@@ -91,6 +94,92 @@ export function rentPerSfPerYear(
 ): number | null {
   if (!rentPerMonth || !buildingSizeSf || buildingSizeSf === 0) return null;
   return (rentPerMonth / buildingSizeSf) * 12;
+}
+
+export function excessLandValue(
+  excessLandSizeAc: number | null | undefined,
+  excessLandValuePerAc: number | null | undefined,
+): number | null {
+  if (!excessLandSizeAc || !excessLandValuePerAc) return null;
+  return excessLandSizeAc * excessLandValuePerAc;
+}
+
+export function adjSalePrice(
+  salePrice: number | null | undefined,
+  excessLandVal: number | null | undefined,
+): number | null {
+  if (salePrice == null || isNaN(salePrice)) return null;
+  return salePrice - (excessLandVal ?? 0);
+}
+
+export function warehousePercent(
+  warehouseAreaSf: number | null | undefined,
+  buildingSizeSf: number | null | undefined,
+): number | null {
+  if (
+    warehouseAreaSf == null ||
+    buildingSizeSf == null ||
+    isNaN(warehouseAreaSf) ||
+    isNaN(buildingSizeSf) ||
+    buildingSizeSf === 0
+  ) {
+    return null;
+  }
+  return (warehouseAreaSf / buildingSizeSf) * 100;
+}
+
+export function landBldRatioAdj(
+  landSizeSf: number | null | undefined,
+  excessLandSizeAc: number | null | undefined,
+  buildingSizeSf: number | null | undefined,
+): number | null {
+  if (
+    landSizeSf == null ||
+    buildingSizeSf == null ||
+    isNaN(landSizeSf) ||
+    isNaN(buildingSizeSf) ||
+    buildingSizeSf === 0
+  ) {
+    return null;
+  }
+  const excessSf =
+    excessLandSizeAc != null && !isNaN(excessLandSizeAc)
+      ? (acToSf(excessLandSizeAc) ?? 0)
+      : 0;
+  return (landSizeSf - excessSf) / buildingSizeSf;
+}
+
+/**
+ * Mirrors sale comp “Other Features” TEXTJOIN: overhead doors, wash bay,
+ * hoisting, then optional description.
+ */
+export function buildOtherFeatures(
+  overheadDoors: string | number | null | undefined,
+  washBay: string | boolean | null | undefined,
+  hoisting: string | null | undefined,
+  description: string | null | undefined,
+): string {
+  const parts: string[] = [];
+  if (overheadDoors != null && overheadDoors !== "") {
+    parts.push(`${overheadDoors} Overhead Doors`);
+  }
+  if (washBay === true || washBay === "Yes") {
+    parts.push("Wash Bay");
+  } else if (washBay === false || washBay === "No") {
+    parts.push("No Wash Bay");
+  }
+  if (hoisting && hoisting.trim() !== "") {
+    parts.push(hoisting === "None" ? "No Hoisting" : `${hoisting} Hoisting`);
+  }
+  let result = parts.join(", ");
+  const desc =
+    typeof description === "string" && description.trim() !== ""
+      ? description.trim()
+      : "";
+  if (desc) {
+    result = result ? `${result}. ${desc}` : desc;
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,8 +232,9 @@ export function formatAddressLabel(
   state: string | null | undefined,
   zip: string | number | null | undefined,
 ): string {
-  const parts = [address, city, [state, zip].filter(Boolean).join(" ")]
-    .filter(Boolean);
+  const parts = [address, city, [state, zip].filter(Boolean).join(" ")].filter(
+    Boolean,
+  );
   return parts.join(", ");
 }
 
@@ -181,9 +271,14 @@ export function calcMonthlyIncrease(
 ): number {
   if (!pastDate || !reportEffectiveDate || !percentIncPerMonth) return 0;
   const d1 = typeof pastDate === "string" ? new Date(pastDate) : pastDate;
-  const d2 = typeof reportEffectiveDate === "string" ? new Date(reportEffectiveDate) : reportEffectiveDate;
+  const d2 =
+    typeof reportEffectiveDate === "string"
+      ? new Date(reportEffectiveDate)
+      : reportEffectiveDate;
   if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
-  const monthDiff = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+  const monthDiff =
+    (d2.getFullYear() - d1.getFullYear()) * 12 +
+    (d2.getMonth() - d1.getMonth());
   if (monthDiff < 3) return 0;
   return Math.round(monthDiff * percentIncPerMonth) / 100;
 }
@@ -225,14 +320,18 @@ export function computeGeneratedFields(
   const n = (key: string) => {
     const v = d[key];
     if (typeof v === "number") return v;
-    if (typeof v === "string") { const p = parseFloat(v); return isNaN(p) ? null : p; }
+    if (typeof v === "string") {
+      const p = parseFloat(v);
+      return isNaN(p) ? null : p;
+    }
     return null;
   };
   const s = (key: string) => {
     const v = d[key];
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
-  const empty = (key: string) => d[key] == null || d[key] === "" || d[key] === 0;
+  const empty = (key: string) =>
+    d[key] == null || d[key] === "" || d[key] === 0;
   const year = options?.effectiveDateYear ?? new Date().getFullYear();
 
   if (empty("Land Size (SF)") && n("Land Size (AC)")) {
@@ -248,22 +347,37 @@ export function computeGeneratedFields(
     d["Sale Price / SF"] = salePricePerSf(n("Sale Price"), n("Land Size (SF)"));
   }
   if (empty("Land / Bld Ratio")) {
-    d["Land / Bld Ratio"] = landBldRatio(n("Land Size (SF)"), n("Building Size (SF)"));
+    d["Land / Bld Ratio"] = landBldRatio(
+      n("Land Size (SF)"),
+      n("Building Size (SF)"),
+    );
   }
   if (empty("Office %")) {
-    d["Office %"] = officePercent(n("Office Area (SF)"), n("Building Size (SF)"));
+    d["Office %"] = officePercent(
+      n("Office Area (SF)"),
+      n("Building Size (SF)"),
+    );
   }
   if (empty("Floor Area Ratio")) {
-    d["Floor Area Ratio"] = floorAreaRatio(n("Building Size (SF)"), n("Land Size (SF)"));
+    d["Floor Area Ratio"] = floorAreaRatio(
+      n("Building Size (SF)"),
+      n("Land Size (SF)"),
+    );
   }
   if (empty("Parking Ratio")) {
-    d["Parking Ratio"] = parkingRatio(n("Parking Spaces"), n("Building Size (SF)"));
+    d["Parking Ratio"] = parkingRatio(
+      n("Parking Spaces"),
+      n("Building Size (SF)"),
+    );
   }
   if (empty("Age")) {
     d.Age = calcAge(d["Year Built"] as string | number | null, year);
   }
   if (empty("Rent / SF / Year")) {
-    d["Rent / SF / Year"] = rentPerSfPerYear(n("Rent / Month"), n("Building Size (SF)"));
+    d["Rent / SF / Year"] = rentPerSfPerYear(
+      n("Rent / Month"),
+      n("Building Size (SF)"),
+    );
   }
   if (empty("Zoning") && (s("Zoning Location") ?? s("Zoning Area"))) {
     d.Zoning = getZoneVal(
@@ -279,10 +393,21 @@ export function computeGeneratedFields(
     );
   }
   if (empty("AddressLabel")) {
-    d.AddressLabel = formatAddressLabel(s("Address"), s("City"), s("State"), d.Zip as string | number | null);
+    d.AddressLabel = formatAddressLabel(
+      s("Address"),
+      s("City"),
+      s("State"),
+      d.Zip as string | number | null,
+    );
   }
   if (empty("AddressLocal")) {
-    d.AddressLocal = formatAddressLocal(s("Address"), s("City"), s("County"), s("State"), d.Zip as string | number | null);
+    d.AddressLocal = formatAddressLocal(
+      s("Address"),
+      s("City"),
+      s("County"),
+      s("State"),
+      d.Zip as string | number | null,
+    );
   }
 
   if (options?.reportEffectiveDate && options.percentIncPerMonth) {
@@ -296,6 +421,45 @@ export function computeGeneratedFields(
     }
   }
 
+  const elValForAdj = excessLandValue(
+    n("Excess Land Size (AC)"),
+    n("Excess Land Value / AC"),
+  );
+  if (empty("Excess Land Value")) {
+    d["Excess Land Value"] = elValForAdj;
+  }
+  if (empty("Adj Sale Price")) {
+    d["Adj Sale Price"] = adjSalePrice(n("Sale Price"), elValForAdj);
+  }
+  if (empty("Warehouse %")) {
+    d["Warehouse %"] = warehousePercent(
+      n("Warehouse Area (SF)"),
+      n("Building Size (SF)"),
+    );
+  }
+  if (empty("Land / Bld Ratio (Adj)")) {
+    d["Land / Bld Ratio (Adj)"] = landBldRatioAdj(
+      n("Land Size (SF)"),
+      n("Excess Land Size (AC)"),
+      n("Building Size (SF)"),
+    );
+  }
+  if (empty("Other Features")) {
+    const ohRaw = d["Overhead Doors"];
+    let overheadStr: string | null = null;
+    if (typeof ohRaw === "number" && !isNaN(ohRaw)) {
+      overheadStr = String(ohRaw);
+    } else if (typeof ohRaw === "string" && ohRaw.trim() !== "") {
+      overheadStr = ohRaw.trim();
+    }
+    d["Other Features"] = buildOtherFeatures(
+      overheadStr,
+      d["Wash Bay"] as string | boolean | null | undefined,
+      s("Hoisting"),
+      s("Other Features Description"),
+    );
+  }
+
   return d;
 }
 
@@ -303,7 +467,10 @@ export function computeGeneratedFields(
 // Number formatting helpers (for display)
 // ---------------------------------------------------------------------------
 
-export function formatCurrency(value: number | null | undefined, decimals = 0): string {
+export function formatCurrency(
+  value: number | null | undefined,
+  decimals = 0,
+): string {
   if (value == null) return "--";
   return value.toLocaleString("en-US", {
     style: "currency",
@@ -313,7 +480,10 @@ export function formatCurrency(value: number | null | undefined, decimals = 0): 
   });
 }
 
-export function formatNumber(value: number | null | undefined, decimals = 0): string {
+export function formatNumber(
+  value: number | null | undefined,
+  decimals = 0,
+): string {
   if (value == null) return "--";
   return value.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
@@ -321,7 +491,10 @@ export function formatNumber(value: number | null | undefined, decimals = 0): st
   });
 }
 
-export function formatPercent(value: number | null | undefined, decimals = 1): string {
+export function formatPercent(
+  value: number | null | undefined,
+  decimals = 1,
+): string {
   if (value == null) return "--";
   return (value * 100).toFixed(decimals) + "%";
 }

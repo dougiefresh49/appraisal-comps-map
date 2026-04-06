@@ -864,6 +864,133 @@ function DiscussionBackfillPanel() {
   );
 }
 
+interface NeighborhoodBackfillResult {
+  processed?: number;
+  boundaries_updated?: number;
+  sections_updated?: number;
+  skipped?: string[];
+  errors?: string[];
+  elapsed_ms?: number;
+  error?: string;
+}
+
+function NeighborhoodBackfillPanel() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [result, setResult] = useState<NeighborhoodBackfillResult | null>(null);
+  const [force, setForce] = useState(false);
+
+  const run = async () => {
+    setIsRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/seed/backfill-neighborhood", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = (await res.json()) as NeighborhoodBackfillResult;
+      if (!res.ok) {
+        setResult({ error: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      setResult(data);
+    } catch (e) {
+      setResult({
+        error: e instanceof Error ? e.message : "Unknown error",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        Backfill Neighborhood Boundaries
+      </h3>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Re-extracts the full{" "}
+        <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+          #### Boundaries
+        </code>{" "}
+        section from each report markdown file, uses Gemini flash-lite to
+        parse N/S/E/W strings into{" "}
+        <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+          subject_data.core.neighborhoodBoundaries
+        </code>
+        , and replaces truncated{" "}
+        <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+          report_sections
+        </code>{" "}
+        neighborhood rows with the full narrative (re-embedded).
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={isRunning}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+        >
+          {isRunning ? "Running…" : "Run backfill"}
+        </button>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            disabled={isRunning}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Force overwrite existing
+        </label>
+      </div>
+
+      {result && (
+        <div
+          className={`mt-4 rounded-md border p-3 text-sm ${
+            result.error
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          }`}
+        >
+          {result.error && <p>Error: {result.error}</p>}
+          {result.boundaries_updated !== undefined &&
+            result.sections_updated !== undefined &&
+            result.processed !== undefined && (
+              <p className="text-gray-800 dark:text-gray-200">
+                Boundaries updated: {result.boundaries_updated} · Sections
+                updated: {result.sections_updated} · Processed:{" "}
+                {result.processed}
+                {result.elapsed_ms !== undefined &&
+                  ` · ${(result.elapsed_ms / 1000).toFixed(1)}s`}
+              </p>
+            )}
+          {result.skipped && result.skipped.length > 0 && (
+            <details className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+              <summary className="cursor-pointer font-medium">
+                Skipped ({result.skipped.length})
+              </summary>
+              <ul className="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-4">
+                {result.skipped.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {result.errors && result.errors.length > 0 && (
+            <div className="mt-2 text-xs text-red-700 dark:text-red-300">
+              <p className="font-medium">Errors:</p>
+              {result.errors.map((e, i) => (
+                <p key={i}>{e}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ReportDueDateBackfillResult {
   processed?: number;
   updated?: number;
@@ -1836,6 +1963,8 @@ export default function SeedPage() {
         />
 
         <DiscussionBackfillPanel />
+
+        <NeighborhoodBackfillPanel />
 
         <ReportDueDateBackfillPanel />
 

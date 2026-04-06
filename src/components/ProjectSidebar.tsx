@@ -11,7 +11,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { ProfileMenu } from "~/components/ProfileMenu";
-import { getComparablesByType } from "~/utils/projectStore";
+import {
+  DEFAULT_APPROACHES,
+  getComparablesByType,
+  type ProjectApproaches,
+} from "~/utils/projectStore";
 
 interface ProjectSidebarProps {
   projectId: string;
@@ -78,6 +82,10 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
     () => (project ? getComparablesByType(project, "Rentals") : []),
     [project],
   );
+
+  const approaches =
+    (project as { approaches?: ProjectApproaches } | undefined)?.approaches ??
+    DEFAULT_APPROACHES;
 
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
@@ -151,7 +159,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             {hasSketches && (
               <Link href={`${p}/subject/sketches`} className={linkClass(`${p}/subject/sketches`)}>Building Sketches</Link>
             )}
-            {hasCostReport && (
+            {hasCostReport && approaches.cost && (
               <Link href={`${p}/subject/cost-report`} className={linkClass(`${p}/subject/cost-report`)}>Cost Report</Link>
             )}
             <div className="my-2 border-t border-gray-100 dark:border-gray-800" />
@@ -164,59 +172,65 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
       </div>
 
       {/* LAND SALES */}
-      <div className="pt-3">
-        <button onClick={() => toggleSection("landSales")} className={sectionHeaderClass}>
-          <span>Land Sales</span>
-          <span className="text-[10px]">{expandedSections.landSales ? "▼" : "▶"}</span>
-        </button>
-        {expandedSections.landSales && (
-          <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-            <Link href={`${p}/land-sales/comparables`} className={linkClass(`${p}/land-sales/comparables`)}>Comps</Link>
-            {renderCompSublinks(landComps, "land-sales")}
-            <Link href={`${p}/land-sales/comparables-map`} className={linkClass(`${p}/land-sales/comparables-map`)}>Map</Link>
-            <Link href={`${p}/land-sales/summary`} className={linkClass(`${p}/land-sales/summary`)}>Summary</Link>
-            <Link href={`${p}/land-sales/adjustments`} className={linkClass(`${p}/land-sales/adjustments`)}>Adjustments</Link>
-            <Link href={`${p}/land-sales/discussion`} className={linkClass(`${p}/land-sales/discussion`)}>Discussion</Link>
-            <Link href={`${p}/land-sales/ui`} className={linkClass(`${p}/land-sales/ui`)}>Comp UI</Link>
-          </div>
-        )}
-      </div>
+      {approaches.salesComparison.land && (
+        <div className="pt-3">
+          <button onClick={() => toggleSection("landSales")} className={sectionHeaderClass}>
+            <span>Land Sales</span>
+            <span className="text-[10px]">{expandedSections.landSales ? "▼" : "▶"}</span>
+          </button>
+          {expandedSections.landSales && (
+            <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+              <Link href={`${p}/land-sales/comparables`} className={linkClass(`${p}/land-sales/comparables`)}>Comps</Link>
+              {renderCompSublinks(landComps, "land-sales")}
+              <Link href={`${p}/land-sales/comparables-map`} className={linkClass(`${p}/land-sales/comparables-map`)}>Map</Link>
+              <Link href={`${p}/land-sales/summary`} className={linkClass(`${p}/land-sales/summary`)}>Summary</Link>
+              <Link href={`${p}/land-sales/adjustments`} className={linkClass(`${p}/land-sales/adjustments`)}>Adjustments</Link>
+              <Link href={`${p}/land-sales/discussion`} className={linkClass(`${p}/land-sales/discussion`)}>Discussion</Link>
+              <Link href={`${p}/land-sales/ui`} className={linkClass(`${p}/land-sales/ui`)}>Comp UI</Link>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* SALES */}
-      <div className="pt-3">
-        <button onClick={() => toggleSection("sales")} className={sectionHeaderClass}>
-          <span>Sales</span>
-          <span className="text-[10px]">{expandedSections.sales ? "▼" : "▶"}</span>
-        </button>
-        {expandedSections.sales && (
-          <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-            <Link href={`${p}/sales/comparables`} className={linkClass(`${p}/sales/comparables`)}>Comps</Link>
-            {renderCompSublinks(salesComps, "sales")}
-            <Link href={`${p}/sales/comparables-map`} className={linkClass(`${p}/sales/comparables-map`)}>Map</Link>
-            <Link href={`${p}/sales/summary`} className={linkClass(`${p}/sales/summary`)}>Summary</Link>
-            <Link href={`${p}/sales/adjustments`} className={linkClass(`${p}/sales/adjustments`)}>Adjustments</Link>
-            <Link href={`${p}/sales/discussion`} className={linkClass(`${p}/sales/discussion`)}>Discussion</Link>
-            <Link href={`${p}/sales/ui`} className={linkClass(`${p}/sales/ui`)}>Comp UI</Link>
-          </div>
-        )}
-      </div>
+      {approaches.salesComparison.sales && (
+        <div className="pt-3">
+          <button onClick={() => toggleSection("sales")} className={sectionHeaderClass}>
+            <span>Sales</span>
+            <span className="text-[10px]">{expandedSections.sales ? "▼" : "▶"}</span>
+          </button>
+          {expandedSections.sales && (
+            <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+              <Link href={`${p}/sales/comparables`} className={linkClass(`${p}/sales/comparables`)}>Comps</Link>
+              {renderCompSublinks(salesComps, "sales")}
+              <Link href={`${p}/sales/comparables-map`} className={linkClass(`${p}/sales/comparables-map`)}>Map</Link>
+              <Link href={`${p}/sales/summary`} className={linkClass(`${p}/sales/summary`)}>Summary</Link>
+              <Link href={`${p}/sales/adjustments`} className={linkClass(`${p}/sales/adjustments`)}>Adjustments</Link>
+              <Link href={`${p}/sales/discussion`} className={linkClass(`${p}/sales/discussion`)}>Discussion</Link>
+              <Link href={`${p}/sales/ui`} className={linkClass(`${p}/sales/ui`)}>Comp UI</Link>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* RENTALS */}
-      <div className="pt-3">
-        <button onClick={() => toggleSection("rentals")} className={sectionHeaderClass}>
-          <span>Rentals</span>
-          <span className="text-[10px]">{expandedSections.rentals ? "▼" : "▶"}</span>
-        </button>
-        {expandedSections.rentals && (
-          <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
-            <Link href={`${p}/rentals/comparables`} className={linkClass(`${p}/rentals/comparables`)}>Comps</Link>
-            {renderCompSublinks(rentalComps, "rentals")}
-            <Link href={`${p}/rentals/comparables-map`} className={linkClass(`${p}/rentals/comparables-map`)}>Map</Link>
-            <Link href={`${p}/rentals/summary`} className={linkClass(`${p}/rentals/summary`)}>Summary</Link>
-            <Link href={`${p}/rentals/ui`} className={linkClass(`${p}/rentals/ui`)}>Comp UI</Link>
-          </div>
-        )}
-      </div>
+      {approaches.income && (
+        <div className="pt-3">
+          <button onClick={() => toggleSection("rentals")} className={sectionHeaderClass}>
+            <span>Rentals</span>
+            <span className="text-[10px]">{expandedSections.rentals ? "▼" : "▶"}</span>
+          </button>
+          {expandedSections.rentals && (
+            <div className="ml-2 space-y-0.5 border-l-2 border-gray-100 pl-2 dark:border-gray-800">
+              <Link href={`${p}/rentals/comparables`} className={linkClass(`${p}/rentals/comparables`)}>Comps</Link>
+              {renderCompSublinks(rentalComps, "rentals")}
+              <Link href={`${p}/rentals/comparables-map`} className={linkClass(`${p}/rentals/comparables-map`)}>Map</Link>
+              <Link href={`${p}/rentals/summary`} className={linkClass(`${p}/rentals/summary`)}>Summary</Link>
+              <Link href={`${p}/rentals/ui`} className={linkClass(`${p}/rentals/ui`)}>Comp UI</Link>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Documents */}
       <div className="pt-3">

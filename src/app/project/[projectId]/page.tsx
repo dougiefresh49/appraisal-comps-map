@@ -3,9 +3,16 @@
 import { useState, use, useMemo } from "react";
 import Link from "next/link";
 import {
+  ArrowTopRightOnSquareIcon,
+  ScaleIcon,
+  BanknotesIcon,
+  WrenchScrewdriverIcon,
+} from "@heroicons/react/24/outline";
+import {
   normalizeProjectData,
   COMPARABLE_TYPES,
   getComparablesByType,
+  DEFAULT_APPROACHES,
   type ProjectData,
   type ComparableType,
   type Comparable,
@@ -14,6 +21,7 @@ import { useProject } from "~/hooks/useProject";
 import { useSubjectData } from "~/hooks/useSubjectData";
 
 import { JsonViewer } from "~/components/JsonViewer";
+import { ToggleSwitch } from "~/components/ToggleField";
 
 interface ProjectPageProps {
   params: Promise<{
@@ -191,9 +199,14 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
               </h3>
               <Link
                 href={`/project/${projectId}/subject/overview`}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                aria-label="Open subject overview"
+                title="Open subject overview"
               >
-                Edit in Subject Overview
+                <ArrowTopRightOnSquareIcon
+                  className="h-4 w-4"
+                  aria-hidden
+                />
               </Link>
             </div>
 
@@ -307,107 +320,468 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
                   type="text"
                   value={selectedProject.projectFolderId ?? ""}
                   readOnly
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Effective Date
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.effectiveDate ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      effectiveDate: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                  placeholder="As of / report effective date"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Report Due Date
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.reportDueDate ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      reportDueDate: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                  placeholder="Delivery deadline"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Exposure Time
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.exposureTime ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      exposureTime: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Highest and Best Use
+                </label>
+                <input
+                  type="text"
+                  value={selectedProject.highestBestUse ?? ""}
+                  onChange={(event) => {
+                    updateProject((project) => ({
+                      ...project,
+                      highestBestUse: event.target.value,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Insurance Price / SF
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={
+                    selectedProject.insurancePricePerSf != null &&
+                    !Number.isNaN(selectedProject.insurancePricePerSf)
+                      ? String(selectedProject.insurancePricePerSf)
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    updateProject((project) => ({
+                      ...project,
+                      insurancePricePerSf:
+                        raw === ""
+                          ? undefined
+                          : Number(raw) === Number(raw)
+                            ? Number(raw)
+                            : project.insurancePricePerSf,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                  Vacancy Rate
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={
+                    selectedProject.vacancyRate != null &&
+                    !Number.isNaN(selectedProject.vacancyRate)
+                      ? String(selectedProject.vacancyRate)
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    updateProject((project) => ({
+                      ...project,
+                      vacancyRate:
+                        raw === ""
+                          ? undefined
+                          : Number(raw) === Number(raw)
+                            ? Number(raw)
+                            : project.vacancyRate,
+                    }));
+                  }}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
                 />
               </div>
             </div>
           </section>
 
+          {/* Report Approaches */}
           <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-5">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Report Approaches
+              </h3>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Control which valuation approaches and comp sections appear in the sidebar.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {/* Sales Comparison Card */}
+              {(() => {
+                const approaches = selectedProject.approaches ?? DEFAULT_APPROACHES;
+                const landEnabled = approaches.salesComparison.land;
+                const salesEnabled = approaches.salesComparison.sales;
+                const anyEnabled = landEnabled || salesEnabled;
+                return (
+                  <div
+                    className={`relative flex flex-col rounded-lg border-2 p-4 transition-colors ${
+                      anyEnabled
+                        ? "border-blue-500/40 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-950/20"
+                        : "border-gray-200 bg-gray-50 dark:border-gray-700/60 dark:bg-gray-950/40"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-start gap-3">
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                          anyEnabled
+                            ? "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
+                            : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600"
+                        }`}
+                      >
+                        <ScaleIcon className="h-5 w-5" aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${anyEnabled ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-500"}`}>
+                          Sales Comparison
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-tight text-gray-500 dark:text-gray-500">
+                          Compare against sold properties
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto space-y-2 border-t border-gray-200/60 pt-3 dark:border-gray-700/40">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateProject((prev) => ({
+                            ...prev,
+                            approaches: {
+                              ...(prev.approaches ?? DEFAULT_APPROACHES),
+                              salesComparison: {
+                                ...(prev.approaches ?? DEFAULT_APPROACHES).salesComparison,
+                                land: !landEnabled,
+                              },
+                            },
+                          }));
+                        }}
+                        aria-pressed={landEnabled}
+                        className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                          landEnabled
+                            ? "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <span>Land Comps</span>
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${landEnabled ? "bg-blue-500 dark:bg-blue-400" : "bg-gray-300 dark:bg-gray-600"}`}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateProject((prev) => ({
+                            ...prev,
+                            approaches: {
+                              ...(prev.approaches ?? DEFAULT_APPROACHES),
+                              salesComparison: {
+                                ...(prev.approaches ?? DEFAULT_APPROACHES).salesComparison,
+                                sales: !salesEnabled,
+                              },
+                            },
+                          }));
+                        }}
+                        aria-pressed={salesEnabled}
+                        className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                          salesEnabled
+                            ? "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <span>Improved Sales</span>
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${salesEnabled ? "bg-blue-500 dark:bg-blue-400" : "bg-gray-300 dark:bg-gray-600"}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Income Approach Card */}
+              {(() => {
+                const approaches = selectedProject.approaches ?? DEFAULT_APPROACHES;
+                const enabled = approaches.income;
+                return (
+                  <div
+                    className={`relative flex flex-col rounded-lg border-2 p-4 transition-colors ${
+                      enabled
+                        ? "border-emerald-500/40 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-950/20"
+                        : "border-gray-200 bg-gray-50 dark:border-gray-700/60 dark:bg-gray-950/40"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-start gap-3">
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                          enabled
+                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400"
+                            : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600"
+                        }`}
+                      >
+                        <BanknotesIcon className="h-5 w-5" aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${enabled ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-500"}`}>
+                          Income Approach
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-tight text-gray-500 dark:text-gray-500">
+                          Rental income &amp; cap rate analysis
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto border-t border-gray-200/60 pt-3 dark:border-gray-700/40">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${enabled ? "text-gray-700 dark:text-gray-300" : "text-gray-400 dark:text-gray-600"}`}>
+                          {enabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <ToggleSwitch
+                          aria-label="Income approach enabled"
+                          value={enabled}
+                          onChange={(income) => {
+                            updateProject((prev) => ({
+                              ...prev,
+                              approaches: {
+                                ...(prev.approaches ?? DEFAULT_APPROACHES),
+                                income,
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                      {!enabled && (
+                        <p className="mt-2 text-[11px] leading-tight text-gray-400 dark:text-gray-600">
+                          Rentals &amp; income fields hidden from sidebar.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Cost Approach Card */}
+              {(() => {
+                const approaches = selectedProject.approaches ?? DEFAULT_APPROACHES;
+                const enabled = approaches.cost;
+                return (
+                  <div
+                    className={`relative flex flex-col rounded-lg border-2 p-4 transition-colors ${
+                      enabled
+                        ? "border-amber-500/40 bg-amber-50/40 dark:border-amber-500/30 dark:bg-amber-950/20"
+                        : "border-gray-200 bg-gray-50 dark:border-gray-700/60 dark:bg-gray-950/40"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-start gap-3">
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                          enabled
+                            ? "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
+                            : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600"
+                        }`}
+                      >
+                        <WrenchScrewdriverIcon className="h-5 w-5" aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${enabled ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-500"}`}>
+                          Cost Approach
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-tight text-gray-500 dark:text-gray-500">
+                          Replacement cost new less depreciation
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto border-t border-gray-200/60 pt-3 dark:border-gray-700/40">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${enabled ? "text-gray-700 dark:text-gray-300" : "text-gray-400 dark:text-gray-600"}`}>
+                          {enabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <ToggleSwitch
+                          aria-label="Cost approach enabled"
+                          value={enabled}
+                          onChange={(cost) => {
+                            updateProject((prev) => ({
+                              ...prev,
+                              approaches: {
+                                ...(prev.approaches ?? DEFAULT_APPROACHES),
+                                cost,
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                      {!enabled && (
+                        <p className="mt-2 text-[11px] leading-tight text-gray-400 dark:text-gray-600">
+                          Cost report section hidden from sidebar.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
                 Comparable Properties
               </h3>
             </div>
 
-            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-              Each comparable type maintains its own markers, shapes, and map
-              settings.
-            </p>
-
-            <div className="space-y-6">
+            <div className="space-y-8">
               {COMPARABLE_TYPES.map((type) => {
                 const list = comparablesByType[type];
-                const sectionSlug = type === "Land" ? "land-sales" : type === "Sales" ? "sales" : "rentals";
-                
+                const sectionSlug =
+                  type === "Land"
+                    ? "land-sales"
+                    : type === "Sales"
+                      ? "sales"
+                      : "rentals";
+                const openCompsLabel = `Open ${type} comparables`;
+
                 return (
-                  <div
-                    key={type}
-                    className="rounded-md border border-gray-200 bg-gray-50 p-4 shadow-inner dark:border-gray-800 dark:bg-gray-950/50"
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <div key={type} className="space-y-3">
+                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-2 dark:border-gray-800">
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                         {type} Comparables ({list.length})
                       </span>
-                      <div className="flex gap-2">
-                          <Link
-                            href={`/project/${projectId}/${sectionSlug}/comparables`}
-                            className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                          >
-                           Edit {type} Comps
-                          </Link>
-                      </div>
+                      <Link
+                        href={`/project/${projectId}/${sectionSlug}/comparables`}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                        aria-label={openCompsLabel}
+                        title={openCompsLabel}
+                      >
+                        <ArrowTopRightOnSquareIcon
+                          className="h-4 w-4"
+                          aria-hidden
+                        />
+                      </Link>
                     </div>
 
                     {list.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-gray-300 bg-white p-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         No {type.toLowerCase()} comparables yet.
-                      </div>
+                      </p>
                     ) : (
-                      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                      <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
                         {list.map((comparable, index) => (
-                          <div
+                          <li
                             key={comparable.id}
-                            className="flex flex-col rounded-md border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+                            className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
                           >
-                            <div className="mb-3 flex items-start justify-between">
-                              <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                {type} #{index + 1}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                {type === "Land" && (
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  {type} #{index + 1}
+                                </span>
+                                {type === "Land" ? (
                                   <Link
                                     href={`/project/${projectId}/land-sales/comps/${comparable.id}/location-map`}
-                                    className="rounded border border-green-600 bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-green-700 transition hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/40"
+                                    className="text-[10px] font-semibold uppercase tracking-wide text-green-700 underline-offset-2 hover:text-green-600 hover:underline dark:text-green-400 dark:hover:text-green-300"
                                   >
                                     Map
                                   </Link>
-                                )}
+                                ) : null}
                               </div>
-                            </div>
-
-                            <div className="flex-1 space-y-3">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {comparable.address || "No Address"}
-                                </div>
-                                {comparable.addressForDisplay && comparable.addressForDisplay !== comparable.address && (
-                                   <div className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">
+                              <Link
+                                href={`/project/${projectId}/${sectionSlug}/comps/${comparable.id}`}
+                                className="inline-block text-sm font-medium text-gray-900 underline-offset-2 hover:text-blue-600 hover:underline dark:text-gray-100 dark:hover:text-blue-400"
+                                title={`Open ${type} comp ${index + 1}`}
+                                aria-label={`View details for ${comparable.address?.trim() ? comparable.address : `${type} comparable ${index + 1}`}`}
+                              >
+                                {comparable.address || "No Address"}
+                              </Link>
+                              {comparable.addressForDisplay &&
+                                comparable.addressForDisplay !==
+                                  comparable.address && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
                                     Display: {comparable.addressForDisplay}
-                                  </div>
+                                  </p>
                                 )}
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2 dark:border-gray-700">
-                                <div>
-                                    <label className="block text-[10px] uppercase font-bold text-gray-400 border-gray-400">APN</label>
-                                    <div className="text-xs text-gray-700 font-mono dark:text-gray-300">
-                                        {comparable.apn && comparable.apn.length > 0 
-                                            ? comparable.apn.join(", ") 
-                                            : <span className="text-gray-300 dark:text-gray-600">-</span>}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] uppercase font-bold text-gray-400">Distance</label>
-                                     <div className="text-xs text-gray-700 dark:text-gray-300">
-                                        -
-                                    </div>
-                                </div>
-                              </div>
                             </div>
-                          </div>
+                            <dl className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-1 text-xs sm:text-right">
+                              <div>
+                                <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  APN
+                                </dt>
+                                <dd className="font-mono text-gray-800 dark:text-gray-200">
+                                  {comparable.apn &&
+                                  comparable.apn.length > 0 ? (
+                                    comparable.apn.join(", ")
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-gray-600">
+                                      —
+                                    </span>
+                                  )}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Distance
+                                </dt>
+                                <dd className="text-gray-800 dark:text-gray-200">
+                                  —
+                                </dd>
+                              </div>
+                            </dl>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     )}
                   </div>
                 );

@@ -81,11 +81,24 @@ export function useReportSection(
     async (content: string) => {
       if (!projectId || !sectionKey) return;
 
-      setSection((prev) =>
-        prev
-          ? { ...prev, content, updatedAt: new Date().toISOString() }
-          : null,
-      );
+      setSection((prev) => {
+        const now = new Date().toISOString();
+        if (prev) return { ...prev, content, updatedAt: now };
+        return {
+          id: "",
+          projectId,
+          sectionKey,
+          content,
+          version: 1,
+          generationContext: {},
+          propertyType: null,
+          city: null,
+          county: null,
+          subjectAddress: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
 
       try {
         const updated = await upsertReportSection(

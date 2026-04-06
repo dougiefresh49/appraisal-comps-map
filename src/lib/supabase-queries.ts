@@ -4,14 +4,16 @@ import type {
   PostgrestSingleResponse,
 } from "@supabase/supabase-js";
 import { createClient } from "~/utils/supabase/client";
-import type {
-  ProjectData,
-  ProjectFolderStructure,
-  Comparable,
-  MapView,
-  MapMarker,
-  MapDrawings,
-  LatLng,
+import {
+  normalizeProjectApproaches,
+  type ProjectData,
+  type ProjectFolderStructure,
+  type ProjectApproaches,
+  type Comparable,
+  type MapView,
+  type MapMarker,
+  type MapDrawings,
+  type LatLng,
 } from "~/utils/projectStore";
 
 function parseFolderStructure(
@@ -35,8 +37,23 @@ interface ProjectRow {
   folder_structure: Record<string, unknown> | null;
   effective_date: string | null;
   report_due_date: string | null;
+  exposure_time: string | null;
+  highest_best_use: string | null;
+  insurance_price_per_sf: number | string | null;
+  vacancy_rate: number | string | null;
+  approaches: unknown;
   created_at: string;
   updated_at: string;
+}
+
+function numericField(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
 }
 
 interface ProjectListRow {
@@ -299,6 +316,11 @@ export async function fetchProject(
     folderStructure,
     effectiveDate: projectRow.effective_date ?? undefined,
     reportDueDate: projectRow.report_due_date ?? undefined,
+    exposureTime: projectRow.exposure_time ?? undefined,
+    highestBestUse: projectRow.highest_best_use ?? undefined,
+    insurancePricePerSf: numericField(projectRow.insurance_price_per_sf),
+    vacancyRate: numericField(projectRow.vacancy_rate),
+    approaches: normalizeProjectApproaches(projectRow.approaches),
   };
 
   return { project, name: projectRow.name };
@@ -409,33 +431,68 @@ async function batchInsertMaps(projectId: string, maps: MapView[]) {
 // Upsert operations (granular updates)
 // ============================================================
 
+/** Only include keys you intend to change — supports explicit null to clear a column. */
+export type ProjectMetadataPatch = Partial<{
+  name: string;
+  clientCompany: string | null;
+  clientName: string | null;
+  propertyType: string | null;
+  projectFolderId: string | null;
+  effectiveDate: string | null;
+  reportDueDate: string | null;
+  exposureTime: string | null;
+  highestBestUse: string | null;
+  insurancePricePerSf: number | null;
+  vacancyRate: number | null;
+  approaches: ProjectApproaches | null;
+}>;
+
 export async function upsertProjectMetadata(
   projectId: string,
-  data: {
-    name?: string;
-    clientCompany?: string;
-    clientName?: string;
-    propertyType?: string;
-    projectFolderId?: string;
-    effectiveDate?: string;
-    reportDueDate?: string;
-  },
+  data: ProjectMetadataPatch,
 ) {
   const supabase = createClient();
 
   const updates: Record<string, unknown> = {};
-  if (data.name !== undefined) updates.name = data.name;
-  if (data.clientCompany !== undefined)
-    updates.client_company = data.clientCompany;
-  if (data.clientName !== undefined) updates.client_name = data.clientName;
-  if (data.propertyType !== undefined)
-    updates.property_type = data.propertyType;
-  if (data.projectFolderId !== undefined)
-    updates.project_folder_id = data.projectFolderId;
-  if (data.effectiveDate !== undefined)
-    updates.effective_date = data.effectiveDate || null;
-  if (data.reportDueDate !== undefined)
-    updates.report_due_date = data.reportDueDate || null;
+  if ("name" in data && data.name !== undefined) updates.name = data.name;
+  if ("clientCompany" in data) {
+    const v = data.clientCompany;
+    updates.client_company =
+      v != null && v.trim() !== "" ? v : null;
+  }
+  if ("clientName" in data) {
+    const v = data.clientName;
+    updates.client_name = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("propertyType" in data) {
+    const v = data.propertyType;
+    updates.property_type = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("projectFolderId" in data) {
+    const v = data.projectFolderId;
+    updates.project_folder_id =
+      v != null && v.trim() !== "" ? v : null;
+  }
+  if ("effectiveDate" in data) {
+    const v = data.effectiveDate;
+    updates.effective_date = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("reportDueDate" in data) {
+    const v = data.reportDueDate;
+    updates.report_due_date = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("exposureTime" in data) {
+    const v = data.exposureTime;
+    updates.exposure_time = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("highestBestUse" in data) {
+    const v = data.highestBestUse;
+    updates.highest_best_use = v != null && v.trim() !== "" ? v : null;
+  }
+  if ("insurancePricePerSf" in data)
+    updates.insurance_price_per_sf = data.insurancePricePerSf;
+  if ("vacancyRate" in data) updates.vacancy_rate = data.vacancyRate;
+  if ("approaches" in data) updates.approaches = data.approaches;
 
   if (Object.keys(updates).length === 0) return;
 
