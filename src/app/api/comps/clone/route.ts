@@ -115,12 +115,13 @@ export async function POST(request: Request) {
 
     // ── 5. Copy parsed data ─────────────────────────────────────────────────
     if (sourceParsed) {
+      const rawData = (sourceParsed.raw_data ?? {}) as Record<string, unknown>;
       const { error: parsedInsertError } = await supabase
         .from("comp_parsed_data")
         .insert({
           comp_id: newCompId,
           project_id: projectId,
-          raw_data: sourceParsed.raw_data,
+          raw_data: rawData,
           source: "cloned",
         });
 

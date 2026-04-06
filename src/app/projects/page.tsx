@@ -6,7 +6,7 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import { startOfDay } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppSiteHeader } from "~/components/AppSiteHeader";
 import { CreateProjectCard } from "~/components/CreateProjectCard";
@@ -63,7 +63,7 @@ function qp(params: URLSearchParams, key: string): string {
   return params.get(key) ?? "";
 }
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -371,5 +371,26 @@ export default function ProjectsPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+function ProjectsPageFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-[#030712]">
+      <AppSiteHeader />
+      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4">
+        <p className="text-sm font-medium text-slate-500 dark:text-cyan-200/70">
+          Loading projects…
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<ProjectsPageFallback />}>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }
