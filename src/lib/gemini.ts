@@ -1,6 +1,13 @@
-import { GoogleGenAI, type Part } from "@google/genai";
+import { GoogleGenAI, type Part, type Content } from "@google/genai";
+import type { ChatMessage } from "~/lib/chat-context";
+import {
+  toolConfig,
+  executeToolCall,
+  type ToolCallResult,
+} from "~/lib/chat-tools";
 
 const GENERATION_MODEL = "gemini-3.1-flash-lite-preview";
+const CHAT_MODEL = "gemini-3-flash-preview";
 const PRO_MODEL = "gemini-3.1-pro-preview";
 
 let ai: GoogleGenAI | null = null;
@@ -111,4 +118,122 @@ export async function extractDocumentContent(
     console.warn("[extractDocumentContent] Failed to parse Gemini JSON response:", err);
     return { extractedText: text, structuredData: {} };
   }
+}
+
+/**
+ * Stream a chat response from Gemini with function calling support.
+ *
+ * Flow:
+ * 1. Send messages + tool declarations to Gemini (non-streaming first call
+ *    so we can detect function calls).
+ * 2. If Gemini returns function calls, execute them, send status SSE events
+ *    to the client, feed results back to Gemini, and repeat.
+ * 3. Once Gemini returns text (no more function calls), stream that final
+ *    response to the client.
+ */
+export async function generateChatStream(
+  systemPrompt: string,
+  messages: ChatMessage[],
+  projectId: string,
+): Promise<ReadableStream<Uint8Array>> {
+  const encoder = new TextEncoder();
+
+  const contents: Content[] = messages.map((m) => ({
+    role: m.role === "assistant" ? ("model" as const) : ("user" as const),
+    parts: [{ text: m.content }],
+  }));
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        let loopCount = 0;
+        const maxLoops = 5;
+
+        while (loopCount < maxLoops) {
+          loopCount++;
+
+          const response = await getAI().models.generateContent({
+            model: CHAT_MODEL,
+            contents,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: 0.7,
+              maxOutputTokens: 8192,
+              tools: [toolConfig],
+            },
+          });
+
+          const candidate = response.candidates?.[0];
+          if (!candidate) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify("No response from AI.")}\n\n`),
+            );
+            break;
+          }
+
+          const functionCalls = candidate.content?.parts?.filter(
+            (p) => p.functionCall,
+          );
+
+          if (!functionCalls || functionCalls.length === 0) {
+            const text = response.text ?? "";
+            if (text) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(text)}\n\n`));
+            }
+            break;
+          }
+
+          // Execute function calls and collect results
+          contents.push({
+            role: "model",
+            parts: functionCalls,
+          });
+
+          const functionResponses: Content["parts"] = [];
+
+          for (const part of functionCalls) {
+            const fc = part.functionCall!;
+            const args = (fc.args ?? {}) as Record<string, string>;
+
+            const result: ToolCallResult = await executeToolCall(
+              fc.name!,
+              args,
+              projectId,
+            );
+
+            // Send tool status event to client
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ toolResult: result })}\n\n`,
+              ),
+            );
+
+            functionResponses.push({
+              functionResponse: {
+                name: fc.name!,
+                response: {
+                  success: result.success,
+                  message: result.message,
+                },
+              },
+            });
+          }
+
+          contents.push({
+            role: "user",
+            parts: functionResponses,
+          });
+        }
+
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Stream error";
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`),
+        );
+        controller.close();
+      }
+    },
+  });
 }
