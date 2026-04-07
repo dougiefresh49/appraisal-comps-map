@@ -55,7 +55,7 @@ function SketchThumbnailCard({
     return () => observer.disconnect();
   }, []);
 
-  const thumbUrl = `https://drive.google.com/thumbnail?id=${file.id}&sz=w600`;
+  const thumbUrl = `/api/drive/thumbnail/${file.id}?sz=600`;
 
   return (
     <button
@@ -232,7 +232,7 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
             <div className="max-h-[calc(90vh-3rem)] overflow-auto p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`https://drive.google.com/thumbnail?id=${lightboxId}&sz=w1600`}
+                src={`/api/drive/thumbnail/${lightboxId}?sz=1600`}
                 alt={lightboxName}
                 className="mx-auto max-h-[calc(90vh-5rem)] w-auto max-w-full object-contain"
               />

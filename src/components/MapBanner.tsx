@@ -158,7 +158,7 @@ export function MapBanner(props: MapBannerProps) {
       if (explicitId) {
         if (!cancelled) {
           setImageUrl(
-            `https://drive.google.com/thumbnail?id=${explicitId}&sz=w1200`,
+            `/api/drive/thumbnail/${explicitId}?sz=1200`,
           );
           setFullImageUrl(`/api/drive/file/${explicitId}`);
           setResolvedFileId(explicitId);
@@ -176,7 +176,7 @@ export function MapBanner(props: MapBannerProps) {
         const match = findFileByCandidates(files, candidates);
         if (match) {
           setImageUrl(
-            `https://drive.google.com/thumbnail?id=${match.id}&sz=w1200`,
+            `/api/drive/thumbnail/${match.id}?sz=1200`,
           );
           setFullImageUrl(`/api/drive/file/${match.id}`);
           setResolvedFileId(match.id);
@@ -369,7 +369,7 @@ export function MapBanner(props: MapBannerProps) {
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={`https://drive.google.com/thumbnail?id=${f.id}&sz=w200`}
+                            src={`/api/drive/thumbnail/${f.id}?sz=200`}
                             alt=""
                             className="h-10 w-10 shrink-0 rounded object-cover"
                           />
