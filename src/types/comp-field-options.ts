@@ -13,6 +13,8 @@ export const FRONTAGE_OPTIONS = [
   "No",
 ] as const;
 
+export type FrontageType = (typeof FRONTAGE_OPTIONS)[number];
+
 export const HAS_FENCING_OPTIONS = ["Yes", "Partial", "No"] as const;
 
 export const FENCE_TYPE_OPTIONS = [

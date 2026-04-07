@@ -184,8 +184,8 @@ function subjectUtilities(core: Record<string, unknown>): string {
 
 function subjectFrontage(core: Record<string, unknown>): string {
   const corner = core.Corner === true ? "Corner" : core.Corner === false ? "Not corner" : null;
-  const hw = core["Highway Frontage"] === true ? "Highway frontage" : core["Highway Frontage"] === false ? "No highway frontage" : null;
-  const parts = [corner, hw].filter(Boolean);
+  const frontage = typeof core.Frontage === "string" ? core.Frontage : null;
+  const parts = [corner, frontage].filter(Boolean);
   return parts.length ? parts.join("; ") : "—";
 }
 

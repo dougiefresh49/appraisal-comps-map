@@ -638,6 +638,106 @@ export function stripEmbeddedImagesFromReportMarkdown(content: string): string {
   return joined;
 }
 
+const IMAGE_CELL_RE = /!\[[^\]]*\]\[[^\]]*image\d+[^\]]*\]/i;
+
+/** Table row with only alignment dashes / colons */
+function isMarkdownTableSeparatorRow(cells: string[]): boolean {
+  return cells.every(
+    (c) =>
+      c === "" ||
+      /^:?\s*-{2,}\s*:?$/.test(c) ||
+      /^:?-{3,}:?$/.test(c.replace(/\s/g, "")),
+  );
+}
+
+function splitMarkdownTableRow(line: string): string[] {
+  const t = line.trim();
+  if (!t.startsWith("|")) return [];
+  const inner = t.endsWith("|") ? t.slice(1, -1) : t.slice(1);
+  return inner.split("|").map((c) => c.trim());
+}
+
+function isImageTableCell(cell: string): boolean {
+  return IMAGE_CELL_RE.test(cell);
+}
+
+function cleanReportPhotoLabel(raw: string): string {
+  return raw
+    .replace(/\\-/g, "-")
+    .replace(/\\\//g, "/")
+    .replace(/\u000b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Extracts the ordered list of photo caption labels from the **SUBJECT PHOTOS** section
+ * of a past-report markdown export (Google Docs style with `![][imageN]` placeholders).
+ *
+ * Parses until the next top-level `# ` heading (not `##`). Strips embedded images first
+ * so the slice stays small. Supports:
+ * - First-page rows: `| ![][imageN] | Label |`
+ * - Grid rows: `| ![][imageN] | ![][imageM] |` then `| Label A | Label B |`
+ */
+export function parsePhotoLabelsFromReportMarkdown(mdContent: string): string[] {
+  if (!mdContent.trim()) return [];
+
+  const stripped = stripEmbeddedImagesFromReportMarkdown(mdContent);
+  const headingRe = /^## \*\*SUBJECT PHOTOS\*\*[^\n]*/im;
+  const hm = headingRe.exec(stripped);
+  if (!hm) {
+    console.log(TAG, "parsePhotoLabelsFromReportMarkdown: SUBJECT PHOTOS heading not found");
+    return [];
+  }
+
+  const afterHeading = stripped.slice(hm.index + hm[0].length);
+  const nextTop = /^# (?!\#)/m.exec(afterHeading);
+  const section = nextTop ? afterHeading.slice(0, nextTop.index) : afterHeading;
+
+  const labels: string[] = [];
+  for (const line of section.split("\n")) {
+    if (!line.trim().startsWith("|")) continue;
+
+    const cells = splitMarkdownTableRow(line);
+    if (cells.length < 2) continue;
+
+    if (isMarkdownTableSeparatorRow(cells)) continue;
+
+    const imageFlags = cells.map(isImageTableCell);
+
+    if (cells.length === 2) {
+      // | image | label |
+      if (imageFlags[0] && !imageFlags[1]) {
+        const lb = cleanReportPhotoLabel(cells[1] ?? "");
+        if (lb.length > 0) labels.push(lb);
+        continue;
+      }
+      // | image | image | — caption row follows
+      if (imageFlags[0] && imageFlags[1]) continue;
+      // | label | label |
+      if (!imageFlags[0] && !imageFlags[1]) {
+        for (const c of cells) {
+          const lb = cleanReportPhotoLabel(c);
+          if (lb.length > 0) labels.push(lb);
+        }
+        continue;
+      }
+      // | image | empty |
+      continue;
+    }
+
+    // Rare wider rows: collect non-image non-empty cells as labels in visual order
+    for (let i = 0; i < cells.length; i++) {
+      if (imageFlags[i]) continue;
+      const lb = cleanReportPhotoLabel(cells[i] ?? "");
+      if (lb.length > 0) labels.push(lb);
+    }
+  }
+
+  console.log(TAG, `parsePhotoLabelsFromReportMarkdown: extracted ${labels.length} label(s)`);
+  return labels;
+}
+
 /**
  * Sends full report markdown to Gemini and returns structured extraction for DB backfill.
  */

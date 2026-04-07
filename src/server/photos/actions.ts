@@ -4,11 +4,17 @@ import {
   listFolderChildren,
   findChildByName,
   uploadOrUpdateFile,
+  downloadFile,
 } from "~/lib/drive-api";
 import {
   analyzeProjectPhotos,
   buildSubjectPhotoContext,
+  generateSmartLabel,
+  resizeForGemini,
+  resolveImageMimeType,
+  type PhotoCategory,
 } from "~/lib/photo-analyzer";
+import { synthesizeSubjectCoreFromPhotos } from "~/lib/subject-core-synthesizer";
 
 /**
  * Triggers photo analysis for a project's subject photos folder.
@@ -20,10 +26,13 @@ import {
  * Returns immediately with { success: true, totalPhotos } where totalPhotos
  * reflects the number of images found and queued. Individual photo results
  * are written to Supabase asynchronously; the UI tracks progress via Realtime.
+ *
+ * @param photoIds - Optional Drive file IDs to limit analysis to. When omitted, all photos are processed.
  */
 export async function triggerPhotoAnalysis(
   projectFolderId: string,
   projectId?: string,
+  photoIds?: string[],
 ): Promise<{ success: boolean; totalPhotos?: number; error?: string }> {
   try {
     if (!projectFolderId) {
@@ -115,16 +124,34 @@ export async function triggerPhotoAnalysis(
       const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
       return imageExtensions.has(ext);
     });
-    const totalPhotos = imageFiles.length;
+    const filesToAnalyze = photoIds
+      ? imageFiles.filter((f) => photoIds.includes(f.id))
+      : imageFiles;
+    const totalPhotos = filesToAnalyze.length;
 
-    // Fire-and-forget: run analysis in background
+    // Fire-and-forget: run analysis then synthesize core in background
     void analyzeProjectPhotos(resolvedProjectId, photosFolderId, token, serviceClient, {
       propertyType,
       subjectAddress,
       subjectContext,
       concurrency: 2,
+      photoIds,
+    }).then(async () => {
+      // After all photos are analyzed, run a single Gemini call to synthesize
+      // photo observations + document data into subject_data.core fields.
+      // Uses merge_subject_core RPC so only empty/null keys are filled.
+      console.log(`[triggerPhotoAnalysis] Photos done, starting core synthesis for project ${resolvedProjectId}`);
+      const { patchedKeys, error: synthError } = await synthesizeSubjectCoreFromPhotos(
+        resolvedProjectId,
+        serviceClient,
+      );
+      if (synthError) {
+        console.error("[triggerPhotoAnalysis] Core synthesis failed:", synthError);
+      } else if (patchedKeys.length > 0) {
+        console.log(`[triggerPhotoAnalysis] Core synthesis patched ${patchedKeys.length} keys: ${patchedKeys.join(", ")}`);
+      }
     }).catch((err) => {
-      console.error("[triggerPhotoAnalysis] Background analysis failed:", err);
+      console.error("[triggerPhotoAnalysis] Background pipeline failed:", err);
     });
 
     return { success: true, totalPhotos };
@@ -135,6 +162,116 @@ export async function triggerPhotoAnalysis(
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
+}
+
+/**
+ * Regenerates AI labels for specific photos using generateSmartLabel.
+ * Fetches each photo's category and description from the DB, downloads the image
+ * from Drive, calls Gemini for a smart label, and updates photo_analyses.label.
+ *
+ * Useful for backfilling labels on photos that were analyzed before smart labeling
+ * was introduced, without re-running the full classification + description pipeline.
+ */
+export async function relabelPhotos(
+  projectId: string,
+  photoIds: string[],
+): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+  try {
+    if (!projectId || photoIds.length === 0) {
+      return { success: false, updatedCount: 0, error: "projectId and photoIds are required" };
+    }
+
+    const { token, error: driveAuthError } = await getGoogleToken();
+    if (!token) {
+      return {
+        success: false,
+        updatedCount: 0,
+        error: driveAuthError ?? "Not authenticated — please sign in again",
+      };
+    }
+
+    const supabase = await createClient();
+
+    // Fetch the target photos from DB
+    const { data: photoRows, error: fetchError } = await supabase
+      .from("photo_analyses")
+      .select("id, file_id, file_name, category, description, property_type, subject_address")
+      .eq("project_id", projectId)
+      .in("file_id", photoIds);
+
+    if (fetchError) throw fetchError;
+    if (!photoRows || photoRows.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    const serviceClient = createServiceClient();
+    let updatedCount = 0;
+
+    const concurrency = 2;
+    for (let i = 0; i < photoRows.length; i += concurrency) {
+      const batch = photoRows.slice(i, i + concurrency);
+      await Promise.all(
+        batch.map(async (row) => {
+          try {
+            const typedRow = row as {
+              id: string;
+              file_id: string | null;
+              file_name: string;
+              category: string;
+              description: string | null;
+              property_type: string | null;
+              subject_address: string | null;
+            };
+
+            if (!typedRow.file_id) return;
+
+            const arrayBuffer = await downloadFile(token, typedRow.file_id);
+            const rawBuffer = Buffer.from(arrayBuffer);
+            const mimeType = resolveImageMimeType(typedRow.file_name, "");
+            const { buffer: resizedBuffer, mimeType: resizedMimeType } =
+              await resizeForGemini(rawBuffer, mimeType);
+
+            const newLabel = await generateSmartLabel(
+              resizedBuffer,
+              resizedMimeType,
+              typedRow.category as PhotoCategory,
+              typedRow.description ?? "",
+              typedRow.property_type ?? "Commercial",
+              typedRow.subject_address ?? "",
+            );
+
+            await serviceClient
+              .from("photo_analyses")
+              .update({ label: newLabel, updated_at: new Date().toISOString() })
+              .eq("id", typedRow.id);
+
+            updatedCount++;
+            console.log(`[relabelPhotos] Relabeled ${typedRow.file_name}: "${newLabel}"`);
+          } catch (err) {
+            console.error(`[relabelPhotos] Error relabeling photo ${row.id}:`, err);
+          }
+        }),
+      );
+    }
+
+    return { success: true, updatedCount };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[relabelPhotos] Error:", message);
+    return { success: false, updatedCount: 0, error: message };
+  }
+}
+
+/**
+ * Re-analyzes a specific subset of photos (classify + describe + smart label).
+ * Same as triggerPhotoAnalysis but only processes the specified Drive file IDs.
+ */
+export async function reanalyzePhotos(
+  projectId: string,
+  projectFolderId: string,
+  photoIds: string[],
+): Promise<{ success: boolean; totalPhotos?: number; error?: string }> {
+  return triggerPhotoAnalysis(projectFolderId, projectId, photoIds);
 }
 
 /**

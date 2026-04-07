@@ -32,6 +32,10 @@ interface PushToSheetButtonProps {
   disabled?: boolean;
   /** Success / error messages next to the button (default true). Set false if the parent shows feedback. */
   showInlineFeedback?: boolean;
+  /** Native tooltip on the trigger (default: generic push explanation). */
+  triggerTitle?: string;
+  /** When true, no native `title` (e.g. parent shows a custom CSS hover hint). */
+  omitNativeTitle?: boolean;
   /** Fires whenever push status or error message changes. */
   onStatusChange?: (state: {
     status: "idle" | "pushing" | "success" | "error";
@@ -57,6 +61,8 @@ export const PushToSheetButton = forwardRef<
     className = "",
     disabled = false,
     showInlineFeedback = true,
+    triggerTitle = "Push this data to the connected Google Spreadsheet (opens a confirmation first).",
+    omitNativeTitle = false,
     onStatusChange,
   },
   ref,
@@ -161,8 +167,12 @@ export const PushToSheetButton = forwardRef<
         type="button"
         onClick={() => setShowConfirm(true)}
         disabled={disabled || status === "pushing"}
-        title="Push data to Google Spreadsheet"
-        aria-label={iconOnly ? "Push to Sheet" : undefined}
+        {...(omitNativeTitle
+          ? { "aria-label": iconOnly ? "Push to Sheet" : undefined }
+          : {
+              title: triggerTitle,
+              "aria-label": iconOnly ? triggerTitle : undefined,
+            })}
         className={
           iconOnly
             ? `inline-flex ${triggerSize} shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-emerald-700 hover:bg-emerald-950/30 hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 ${className}`

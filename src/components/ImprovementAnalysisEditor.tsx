@@ -10,7 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import { useProject } from "~/hooks/useProject";
-import { fetchProjectDocuments } from "~/lib/supabase-queries";
+import { fetchProjectDocuments, fetchAggregatedPhotoImprovements } from "~/lib/supabase-queries";
 import { populateImprovementRowsFromSources } from "~/lib/improvement-analysis-populate";
 import type {
   ImprovementAnalysisRow,
@@ -95,6 +95,9 @@ function buildDefaultRows(): ImprovementAnalysisRow[] {
       "Property Type",
       "Property Subtype",
       "Occupancy",
+    ]),
+    { label: "Investment Class", category: "Improvement Characteristics" as ImprovementCategory, include: false, value: "" },
+    ...add("Improvement Characteristics", [
       "Number of Buildings",
       "Number of Stories",
       "Construction Class",
@@ -285,6 +288,7 @@ export function ImprovementAnalysisEditor({
 
   const [rows, setRows] = useState<LocalRow[]>([]);
   const [docStructuredSlices, setDocStructuredSlices] = useState<unknown[]>([]);
+  const [photoImprovements, setPhotoImprovements] = useState<Record<string, string>>({});
   const [activeCategories, setActiveCategories] = useState<Set<ImprovementCategory>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -327,6 +331,18 @@ export function ImprovementAnalysisEditor({
   }, [decodedId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchAggregatedPhotoImprovements(decodedId).then((improvements) => {
+      if (!cancelled) setPhotoImprovements(improvements);
+    }).catch(() => {
+      // Non-fatal: photo improvements are supplemental
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [decodedId]);
+
+  useEffect(() => {
     if (!subjectData) return;
     const core = (subjectData.core ?? {}) as Record<string, unknown>;
     setRows((prev) => {
@@ -336,6 +352,7 @@ export function ImprovementAnalysisEditor({
         core,
         project?.propertyType,
         docStructuredSlices,
+        photoImprovements,
       );
       let changed = false;
       const next = prev.map((r, i) => {
@@ -349,7 +366,7 @@ export function ImprovementAnalysisEditor({
       });
       return changed ? next : prev;
     });
-  }, [subjectData, coreJson, project?.propertyType, docStructuredSlices]);
+  }, [subjectData, coreJson, project?.propertyType, docStructuredSlices, photoImprovements]);
 
   const visibleCategories = useMemo(() => {
     if (activeCategories.size === 0) return CATEGORY_ORDER;
@@ -390,6 +407,7 @@ export function ImprovementAnalysisEditor({
         core,
         project?.propertyType,
         docStructuredSlices,
+        photoImprovements,
       );
       return prev.map((r, i) => {
         const m = merged[i];
@@ -399,7 +417,7 @@ export function ImprovementAnalysisEditor({
         return { ...r, value: m.value };
       });
     });
-  }, [subjectData?.core, project?.propertyType, docStructuredSlices]);
+  }, [subjectData?.core, project?.propertyType, docStructuredSlices, photoImprovements]);
 
   const handleSave = async () => {
     setIsSaving(true);

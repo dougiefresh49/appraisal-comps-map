@@ -1,0 +1,292 @@
+[
+  {
+    "data": {
+      "improvement-analysis-v2-A1:D42": [
+        {
+          "row_number": 2,
+          "Label": "Property Type",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "Commercial"
+        },
+        {
+          "row_number": 3,
+          "Label": "Property Subtype",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "Warehouse"
+        },
+        {
+          "row_number": 4,
+          "Label": "Occupancy",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "Single Tenant"
+        },
+        {
+          "row_number": 5,
+          "Label": "Investment Class",
+          "Type": "Improvement Characteristics",
+          "Include": false
+        },
+        {
+          "row_number": 6,
+          "Label": "Number of Buildings",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": 1
+        },
+        {
+          "row_number": 7,
+          "Label": "Number of Stories",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": 1
+        },
+        {
+          "row_number": 8,
+          "Label": "Construction Class",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "S"
+        },
+        {
+          "row_number": 9,
+          "Label": "Construction Quality",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "Good"
+        },
+        {
+          "row_number": 10,
+          "Label": "Gross Building Area (GBA)",
+          "Type": "Improvement Characteristics",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 11,
+          "Label": "Net Rentable Area (NRA)",
+          "Type": "Improvement Characteristics",
+          "Include": false
+        },
+        {
+          "row_number": 12,
+          "Label": "Land / Bld Ratio",
+          "Type": "Ratios & Parking",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 13,
+          "Label": "Floor Area Ratio",
+          "Type": "Ratios & Parking",
+          "Include": false,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 14,
+          "Label": "Parking (SF)",
+          "Type": "Ratios & Parking",
+          "Include": false,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 15,
+          "Label": "Parking Spaces",
+          "Type": "Ratios & Parking",
+          "Include": false,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject) & \" Total (\" & FILTER(Subject[Parking Spaces Details], Subject[Type] = \"Improvements\") & \")\""
+        },
+        {
+          "row_number": 16,
+          "Label": "Parking Ratio",
+          "Type": "Ratios & Parking",
+          "Include": false,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 17,
+          "Label": "Year Built",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 18,
+          "Label": "Condition",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 19,
+          "Label": "Age",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 20,
+          "Label": "Effective Age",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": "=GET_SUBJECT_IMPROVEMENT(Subject[#HEADERS], Subject)"
+        },
+        {
+          "row_number": 21,
+          "Label": "Typical Building Life",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": 50
+        },
+        {
+          "row_number": 22,
+          "Label": "Remaining Economic Life",
+          "Type": "Age / Life",
+          "Include": true,
+          "Value": "=FILTER(Improvements_2[Value], Improvements_2[Label] = \"Typical Building Life\") - FILTER(Improvements_2[Value], Improvements_2[Label] = \"Effective Age\")"
+        },
+        {
+          "row_number": 23,
+          "Label": "Foundation",
+          "Type": "Structural Characteristics",
+          "Include": true,
+          "Value": "Concrete Slab"
+        },
+        {
+          "row_number": 24,
+          "Label": "Roof Type / Material",
+          "Type": "Structural Characteristics",
+          "Include": true,
+          "Value": "Metal"
+        },
+        {
+          "row_number": 25,
+          "Label": "Building Frame",
+          "Type": "Structural Characteristics",
+          "Include": true,
+          "Value": "Heavy Steel Beam"
+        },
+        {
+          "row_number": 26,
+          "Label": "Exterior Walls",
+          "Type": "Structural Characteristics",
+          "Include": true,
+          "Value": "Pre-engineered Metal Siding"
+        },
+        {
+          "row_number": 27,
+          "Label": "Floors",
+          "Type": "Interior Characteristics",
+          "Include": true,
+          "Value": "Concrete Slab (Smooth Finish), Ceramic Tile (Bathroom)"
+        },
+        {
+          "row_number": 28,
+          "Label": "Walls",
+          "Type": "Interior Characteristics",
+          "Include": true,
+          "Value": "Insulation (Shop), Painted Drywall, Ceramic Tile (Bathroom)"
+        },
+        {
+          "row_number": 29,
+          "Label": "Ceiling",
+          "Type": "Interior Characteristics",
+          "Include": true,
+          "Value": "Insulation, Painted Drywall (Bathroom)"
+        },
+        {
+          "row_number": 30,
+          "Label": "Lighting",
+          "Type": "Interior Characteristics",
+          "Include": true,
+          "Value": "LED Lighting, Incandescent Lights (small amount)"
+        },
+        {
+          "row_number": 31,
+          "Label": "Restrooms",
+          "Type": "Interior Characteristics",
+          "Include": true,
+          "Value": "Adequate (~3 Fixtures)"
+        },
+        {
+          "row_number": 32,
+          "Label": "Electrical",
+          "Type": "Mechanical Systems",
+          "Include": true,
+          "Value": "Adequate (3 Phase / 440 Voltage)"
+        },
+        {
+          "row_number": 33,
+          "Label": "Plumbing",
+          "Type": "Mechanical Systems",
+          "Include": true,
+          "Value": "Adequate (Public & Water Well, Septic)"
+        },
+        {
+          "row_number": 34,
+          "Label": "Heating",
+          "Type": "Mechanical Systems",
+          "Include": true,
+          "Value": "None"
+        },
+        {
+          "row_number": 35,
+          "Label": "Air Conditioning",
+          "Type": "Mechanical Systems",
+          "Include": true,
+          "Value": "None (HVAC units are non functional)"
+        },
+        {
+          "row_number": 36,
+          "Label": "Fire Protection/Sprinklers",
+          "Type": "Mechanical Systems",
+          "Include": true,
+          "Value": "Smoke Detectors (None noted), No Sprinklers"
+        },
+        {
+          "row_number": 37,
+          "Label": "Number of Elevators",
+          "Type": "Mechanical Systems",
+          "Include": false
+        },
+        {
+          "row_number": 38,
+          "Label": "Site Improvements",
+          "Type": "Site Improvements",
+          "Include": true,
+          "Value": "=ADD_NEWLINE_OUTSIDE_PARENS(FILTER(Subject[Other Features], Subject[Type] = \"Improvements\"))"
+        },
+        {
+          "row_number": 39,
+          "Label": "Landscaping",
+          "Type": "Site Improvements",
+          "Include": true,
+          "Value": "Raw & Caliche / Gravel Yard, Grass + Tree Landscaping (corner land)"
+        },
+        {
+          "row_number": 40,
+          "Label": "Legally Permitted Use",
+          "Type": "Legal, Conforming Status",
+          "Include": true,
+          "Value": "Yes"
+        },
+        {
+          "row_number": 41,
+          "Label": "Conforms to Parking",
+          "Type": "Legal, Conforming Status",
+          "Include": true,
+          "Value": "Yes"
+        },
+        {
+          "row_number": 42,
+          "Label": "Conformity Conclusion",
+          "Type": "Legal, Conforming Status",
+          "Include": true,
+          "Value": "In Conformity"
+        }
+      ]
+    }
+  }
+]

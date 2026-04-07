@@ -343,16 +343,19 @@ interface SubjectData {
   Hoisting: YesNoUnknown;
   "Wash Bay": YesNoUnknown;
   Corner: boolean;
-  "Highway Frontage": boolean;
+  Frontage: "Highway" | "Main" | "Secondary" | "Dirt" | "None" | "Yes" | "No" | null;
   "Utils - Electricity": YesNoUnknown;
   "Utils - Water": UtilsWater | null;
   "Utils - Sewer": UtilsSewer | null;
   Surface: LandSurface | null;
   Construction: string | null;
   Condition: Condition;
-  "Year Built": number | null;
+  /** One year per building, comma-separated, e.g. "2021, 2010" — also a single number is allowed */
+  "Year Built": number | string | null;
+  /** When true, Age is explicit; otherwise omit Age (computed from Year Built) */
+  "Age Override"?: boolean;
   Age: number | null;
-  "Effective Age": Generated;
+  "Effective Age": Generated | number | null;
   "Est Insurance": number | null;
   "Est Expences": number | null;
 }

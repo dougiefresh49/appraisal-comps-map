@@ -4,6 +4,7 @@ import { GoogleGenAI, type Part } from "@google/genai";
 import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { downloadFile, listFolderChildren } from "~/lib/drive-api";
+import { LABEL_EXAMPLES } from "~/lib/photo-label-examples";
 
 const PHOTO_MODEL = "gemini-3.1-flash-lite-preview";
 
@@ -141,7 +142,7 @@ export function buildSubjectPhotoContext(
  * Resize an image buffer so it fits within Gemini's recommended limits.
  * Caps the long edge at 1568px and enforces max 4MB output.
  */
-async function resizeForGemini(
+export async function resizeForGemini(
   imageBuffer: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string }> {
@@ -319,34 +320,253 @@ For the "improvements_observed" object, ONLY include keys for characteristics th
 }
 
 /**
- * Generate a short label for a classified photo, e.g. "Subject Front", "Warehouse Interior".
+ * Camera/auto-generated filename patterns that should NOT be used as labels.
+ * Matches: PXL_*, IMG_*, DSC*, DSCN*, MVIMG_*, samsung*, photo*, dcim*
+ * and stems that are primarily digits/punctuation (e.g. "20250522 164933641~2").
  */
-function buildLabel(
+const NON_DESCRIPTIVE_PATTERN = /^(img|dsc[n_]?|pxl|dcim|mvimg|samsung|photo)\b/i;
+
+function isStemDescriptive(stem: string): boolean {
+  if (stem.length <= 3) return false;
+  if (/^\d+$/.test(stem)) return false;
+  if (NON_DESCRIPTIVE_PATTERN.test(stem)) return false;
+  // Reject stems that are mostly digits/punctuation after stripping spaces/tildes/dots
+  if (stem.replace(/[\d\s~.]+/g, "").length <= 2) return false;
+  return true;
+}
+
+/**
+ * Returns a category-based fallback label (e.g. "Warehouse Exterior") for use
+ * when the filename is a camera pattern and no description is available yet.
+ */
+function buildCategoryFallbackLabel(
   category: PhotoCategory,
-  fileName: string,
   propertyType: string,
 ): string {
   const base = propertyType.split(" ")[0] ?? "Subject";
-  const categoryShort: Record<PhotoCategory, string> = {
+  const map: Record<PhotoCategory, string> = {
     "Site & Grounds": "Site View",
     "Building Exterior": `${base} Exterior`,
     "Building Interior": `${base} Interior`,
     "Residential / Apartment Unit": "Unit Interior",
     "Damage & Deferred Maintenance": "Deferred Maintenance",
   };
+  return map[category] ?? `${base} Photo`;
+}
 
-  // Use filename stem as a hint if it's descriptive
-  const stem = fileName.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").trim();
-  const isDescriptive = stem.length > 3 && !/^\d+$/.test(stem) && !/^img/i.test(stem) && !/^dsc/i.test(stem);
+/**
+ * Generate a short label for a classified photo.
+ * Uses the filename stem only if it is actually descriptive (not a camera pattern).
+ * Falls back to a category-based label when the stem is auto-generated.
+ */
+function buildLabel(
+  category: PhotoCategory,
+  fileName: string,
+  propertyType: string,
+): string {
+  const stem = fileName.replace(/\.[^.]+$/, "").replace(/[-_.]/g, " ").trim();
 
-  if (isDescriptive) {
+  if (isStemDescriptive(stem)) {
     return stem
       .split(" ")
+      .filter(Boolean)
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(" ");
   }
 
-  return categoryShort[category] ?? `${base} Photo`;
+  return buildCategoryFallbackLabel(category, propertyType);
+}
+
+/**
+ * Generate a contextual, specific label for a photo using Gemini + few-shot examples.
+ * Produces labels like "Lobby", "Chapel - Bathroom", "Rear Fence Damage" instead of
+ * generic category-level labels.
+ *
+ * @param imageBuffer - Resized image buffer (from resizeForGemini)
+ * @param mimeType - Mime type of the image
+ * @param category - Photo category (from classifyImage)
+ * @param description - Gemini description of the image (from describeImage)
+ * @param propertyType - Property type string from the project
+ * @param subjectAddress - Subject property address
+ */
+export async function generateSmartLabel(
+  imageBuffer: Buffer,
+  mimeType: string,
+  category: PhotoCategory,
+  description: string,
+  propertyType: string,
+  subjectAddress: string,
+): Promise<string> {
+  const examplesBlock = LABEL_EXAMPLES
+    .map((ex) => `Category: ${ex.category} → Label: "${ex.label}"`)
+    .join("\n");
+
+  const prompt = `You are an AI assistant creating concise, specific photo labels for a commercial real estate appraisal report.
+
+Property: ${propertyType} at ${subjectAddress}
+Photo Category: ${category}
+Photo Description: ${description || "(no description available)"}
+
+Here are examples of good labels from past commercial real estate appraisals:
+
+${examplesBlock}
+
+Based on the photo category, description, and the image itself, generate a short, specific label (2-6 words) that identifies exactly what this photo shows. Be specific — use room names, orientations (Front/Rear/Left/Right), or distinguishing features. Do NOT use generic labels like "${category}" unless the photo is truly generic with no distinguishing features.
+
+Respond with ONLY the label text — no quotes, no explanation, nothing else.`;
+
+  const parts: Part[] = [
+    { inlineData: { data: imageBuffer.toString("base64"), mimeType } },
+    { text: prompt },
+  ];
+
+  try {
+    const response = await getAI().models.generateContent({
+      model: PHOTO_MODEL,
+      contents: parts,
+      config: { temperature: 0.2, maxOutputTokens: 64 },
+    });
+
+    const label = (response.text ?? "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .trim();
+
+    if (label && label.length > 0 && label.length <= 80) {
+      return label;
+    }
+  } catch (err) {
+    console.warn("[generateSmartLabel] Gemini call failed, using fallback:", err);
+  }
+
+  return buildCategoryFallbackLabel(category, propertyType);
+}
+
+function normalizeLabelForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\\(.)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Pick the closest string from `availableLabels` to model output (exact, then normalized, then Levenshtein). */
+export function resolveReportLabelMatch(
+  rawResponse: string,
+  availableLabels: string[],
+): string {
+  const t = rawResponse
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+  if (availableLabels.length === 0) return t;
+  if (!t) return availableLabels[0] ?? "";
+
+  const exact = availableLabels.find((l) => l === t);
+  if (exact) return exact;
+
+  const nt = normalizeLabelForMatch(t);
+  const normHit = availableLabels.find(
+    (l) => normalizeLabelForMatch(l) === nt,
+  );
+  if (normHit) return normHit;
+
+  const includesHit = availableLabels.find(
+    (l) =>
+      nt.includes(normalizeLabelForMatch(l)) ||
+      normalizeLabelForMatch(l).includes(nt),
+  );
+  if (includesHit) return includesHit;
+
+  let best = availableLabels[0] ?? t;
+  let bestDist = Infinity;
+  for (const l of availableLabels) {
+    const d = levenshtein(nt, normalizeLabelForMatch(l));
+    if (d < bestDist) {
+      bestDist = d;
+      best = l;
+    }
+  }
+  return best;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const prev = new Array<number>(b.length + 1);
+  const cur = new Array<number>(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(
+        (prev[j] ?? 0) + 1,
+        (cur[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + cost,
+      );
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = cur[j] ?? 0;
+  }
+  return prev[b.length] ?? 0;
+}
+
+/**
+ * Given a constrained list of labels from a published appraisal report, pick the one
+ * that best matches the photo (vision + category + description).
+ */
+export async function matchPhotoToReportLabel(
+  imageBuffer: Buffer,
+  mimeType: string,
+  availableLabels: string[],
+  category: string,
+  description: string,
+): Promise<string> {
+  if (availableLabels.length === 0) {
+    return "";
+  }
+  if (availableLabels.length === 1) {
+    return availableLabels[0] ?? "";
+  }
+
+  const listBlock = availableLabels
+    .map((l, i) => `${i + 1}. ${l}`)
+    .join("\n");
+
+  const prompt = `You are matching a subject property inspection photo to the caption labels used in a commercial real estate appraisal report.
+
+Photo category (from prior AI classification): ${category}
+Photo description (from prior AI analysis): ${description || "(none)"}
+
+The ONLY allowed labels are listed below. You must pick exactly one label that best describes this image. Copy the label text exactly as written (character-for-character), including punctuation and spacing.
+
+Allowed labels:
+${listBlock}
+
+Respond with ONLY one line: the exact label text from the list, nothing else.`;
+
+  const parts: Part[] = [
+    { inlineData: { data: imageBuffer.toString("base64"), mimeType } },
+    { text: prompt },
+  ];
+
+  try {
+    const response = await getAI().models.generateContent({
+      model: PHOTO_MODEL,
+      contents: parts,
+      config: {
+        temperature: 0.1,
+        maxOutputTokens: 128,
+      },
+    });
+
+    const raw = (response.text ?? "").trim();
+    return resolveReportLabelMatch(raw, availableLabels);
+  } catch (err) {
+    console.warn("[matchPhotoToReportLabel] Gemini failed:", err);
+    return availableLabels[0] ?? "";
+  }
 }
 
 /**
@@ -361,7 +581,7 @@ function isImageFile(fileName: string, mimeType?: string): boolean {
 /**
  * Maps a Drive file mime type (or extension) to a Gemini-compatible image mime type.
  */
-function resolveImageMimeType(fileName: string, driveMimeType: string): string {
+export function resolveImageMimeType(fileName: string, driveMimeType: string): string {
   if (driveMimeType?.startsWith("image/")) return driveMimeType;
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   const map: Record<string, string> = {
@@ -379,7 +599,9 @@ function resolveImageMimeType(fileName: string, driveMimeType: string): string {
 }
 
 /**
- * Analyzes a single photo: classifies, labels, describes, and upserts into photo_analyses.
+ * Analyzes a single photo: classifies, labels (smart), describes, and upserts into photo_analyses.
+ * Flow: classify → buildLabel (filename-based fallback for description context) →
+ *       describeImage → generateSmartLabel (Gemini label using description + image).
  */
 export async function analyzePhoto(
   input: PhotoAnalysisInput,
@@ -390,7 +612,6 @@ export async function analyzePhoto(
   const arrayBuffer = await downloadFile(token, input.fileId);
   const rawBuffer = Buffer.from(arrayBuffer);
 
-  // We don't know the mime type from Drive file listing; derive from filename
   const mimeType = resolveImageMimeType(input.fileName, "");
   const { buffer: resizedBuffer, mimeType: resizedMimeType } =
     await resizeForGemini(rawBuffer, mimeType);
@@ -402,19 +623,29 @@ export async function analyzePhoto(
     input.subjectContext,
   );
 
-  const label = buildLabel(category, input.fileName, input.propertyType);
+  // Use filename-based label as context for the describe call
+  const fallbackLabel = buildLabel(category, input.fileName, input.propertyType);
 
   const { description, improvements_observed } = await describeImage(
     resizedBuffer,
     resizedMimeType,
     category,
-    label,
+    fallbackLabel,
     input.propertyType,
     input.subjectAddress,
     input.subjectContext,
   );
 
-  // Upsert into photo_analyses (match by project_id + file_id)
+  // Generate a smart, contextual label using Gemini + description + image
+  const label = await generateSmartLabel(
+    resizedBuffer,
+    resizedMimeType,
+    category,
+    description,
+    input.propertyType,
+    input.subjectAddress,
+  );
+
   const { error: upsertError } = await supabase
     .from("photo_analyses")
     .upsert(
@@ -448,6 +679,9 @@ export async function analyzePhoto(
  * Lists all image files in a Drive folder and analyzes each one.
  * Uses a small concurrency limit to avoid Drive/Gemini rate limits.
  * Returns the total number of photos queued for analysis.
+ *
+ * @param photoIds - Optional list of Drive file IDs to limit analysis to.
+ *   When omitted, all images in the folder are processed.
  */
 export async function analyzeProjectPhotos(
   projectId: string,
@@ -459,6 +693,7 @@ export async function analyzeProjectPhotos(
     subjectAddress: string;
     subjectContext: string;
     concurrency?: number;
+    photoIds?: string[];
   },
 ): Promise<{ totalPhotos: number }> {
   const allFiles = await listFolderChildren(token, photosFolderId, {
@@ -467,15 +702,18 @@ export async function analyzeProjectPhotos(
 
   const imageFiles = allFiles.filter((f) => isImageFile(f.name, f.mimeType));
 
-  if (imageFiles.length === 0) {
+  const filesToProcess = opts.photoIds
+    ? imageFiles.filter((f) => opts.photoIds!.includes(f.id))
+    : imageFiles;
+
+  if (filesToProcess.length === 0) {
     return { totalPhotos: 0 };
   }
 
   const concurrency = opts.concurrency ?? 2;
 
-  // Process images in batches
-  for (let i = 0; i < imageFiles.length; i += concurrency) {
-    const batch = imageFiles.slice(i, i + concurrency);
+  for (let i = 0; i < filesToProcess.length; i += concurrency) {
+    const batch = filesToProcess.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (file, batchIdx) => {
         const sortOrder = i + batchIdx;
@@ -494,7 +732,7 @@ export async function analyzeProjectPhotos(
             sortOrder,
           );
           console.log(
-            `[analyzeProjectPhotos] Processed ${sortOrder + 1}/${imageFiles.length}: ${file.name}`,
+            `[analyzeProjectPhotos] Processed ${sortOrder + 1}/${filesToProcess.length}: ${file.name}`,
           );
         } catch (err) {
           console.error(
@@ -506,5 +744,5 @@ export async function analyzeProjectPhotos(
     );
   }
 
-  return { totalPhotos: imageFiles.length };
+  return { totalPhotos: filesToProcess.length };
 }

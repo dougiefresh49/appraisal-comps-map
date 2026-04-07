@@ -960,6 +960,40 @@ export async function fetchIncludedPhotosForExport(
   }));
 }
 
+/**
+ * Fetches and aggregates improvements_observed across all included photos for a project.
+ * Returns a flat map of first-non-empty value per improvement key.
+ * This is a lightweight query (no image data, labels, or descriptions) for use
+ * by the improvement analysis page to populate its grid without loading full photo rows.
+ */
+export async function fetchAggregatedPhotoImprovements(
+  projectId: string,
+): Promise<Record<string, string>> {
+  const supabase = createClient();
+  const result = (await supabase
+    .from("photo_analyses")
+    .select("improvements_observed")
+    .eq("project_id", projectId)
+    .eq("is_included", true)
+    .order("sort_order", { ascending: true })) as PostgrestResponse<{
+    improvements_observed: Record<string, string> | null;
+  }>;
+
+  if (result.error) throw result.error;
+
+  const aggregated: Record<string, string> = {};
+  for (const row of result.data ?? []) {
+    const obs = row.improvements_observed;
+    if (!obs || typeof obs !== "object") continue;
+    for (const [key, value] of Object.entries(obs)) {
+      if (value && typeof value === "string" && value.trim() && !(key in aggregated)) {
+        aggregated[key] = value.trim();
+      }
+    }
+  }
+  return aggregated;
+}
+
 // ============================================================
 // Report sections
 // ============================================================

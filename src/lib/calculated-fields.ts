@@ -77,15 +77,113 @@ export function parkingRatio(
   return parkingSpaces / (buildingSizeSf / 1000);
 }
 
+/**
+ * Parse comma-separated construction years (spreadsheet: SPLIT + MIN on "Year Built").
+ */
+export function parseYearsBuiltList(
+  yearBuilt: number | string | null | undefined,
+): number[] {
+  if (yearBuilt == null || yearBuilt === "") return [];
+  if (typeof yearBuilt === "number" && !Number.isNaN(yearBuilt)) {
+    const y = Math.trunc(yearBuilt);
+    return y > 1000 && y < 3000 ? [y] : [];
+  }
+  const s = String(yearBuilt).trim();
+  if (!s) return [];
+  const parts = s
+    .split(/[,;/|]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const years: number[] = [];
+  for (const p of parts) {
+    const m = /^(\d{4})/.exec(p);
+    if (m) {
+      const y = parseInt(m[1]!, 10);
+      if (y > 1000 && y < 3000) years.push(y);
+    }
+  }
+  return years;
+}
+
+/** First 4-digit year from project effective date string, else current year. */
+export function reportEffectiveYear(
+  effectiveDateStr: string | null | undefined,
+): number {
+  if (effectiveDateStr?.trim()) {
+    const m = /(\d{4})/.exec(effectiveDateStr);
+    if (m) {
+      const y = parseInt(m[1]!, 10);
+      if (y > 1800 && y < 3000) return y;
+    }
+  }
+  return new Date().getFullYear();
+}
+
+/**
+ * Weighted effective age by building SF (ApBot2/getEffectiveAge).
+ * When only one year is listed, returns chronological age.
+ * When multiple years are listed without per-building sizes, splits total GBA evenly.
+ */
+export function calcEffectiveAgeWeighted(
+  yearsBuilt: number[],
+  refYear: number,
+  buildingSizesPerBuilding: number[] | null | undefined,
+  totalBuildingSf: number | null | undefined,
+): number | null {
+  if (yearsBuilt.length === 0) return null;
+  const n = yearsBuilt.length;
+
+  if (n === 1) {
+    const age = refYear - yearsBuilt[0]!;
+    if (age < 0 || age > 200) return null;
+    return age;
+  }
+
+  let sizes: number[];
+  if (
+    buildingSizesPerBuilding &&
+    buildingSizesPerBuilding.length === n &&
+    buildingSizesPerBuilding.every((s) => typeof s === "number" && s > 0)
+  ) {
+    sizes = buildingSizesPerBuilding;
+  } else if (
+    totalBuildingSf != null &&
+    !Number.isNaN(totalBuildingSf) &&
+    totalBuildingSf > 0
+  ) {
+    const each = totalBuildingSf / n;
+    sizes = yearsBuilt.map(() => each);
+  } else {
+    return null;
+  }
+
+  const totalSize = sizes.reduce((a, b) => a + b, 0);
+  if (totalSize <= 0) return null;
+
+  let weighted = 0;
+  for (let i = 0; i < n; i++) {
+    const pct = sizes[i]! / totalSize;
+    const age = Math.max(0, refYear - yearsBuilt[i]!);
+    weighted += age * pct;
+  }
+  return Math.round(weighted * 10) / 10;
+}
+
+/**
+ * Chronological age: report year minus oldest year in "Year Built" list
+ * (matches formulas.json Age = report_year - MIN(SPLIT(...))).
+ */
 export function calcAge(
   yearBuilt: number | string | null | undefined,
   effectiveDateYear?: number,
 ): number | null {
-  const yb =
-    typeof yearBuilt === "string" ? parseInt(yearBuilt, 10) : yearBuilt;
-  if (!yb || isNaN(yb)) return null;
   const refYear = effectiveDateYear ?? new Date().getFullYear();
-  return refYear - yb;
+  const years = parseYearsBuiltList(yearBuilt);
+  if (years.length === 0) return null;
+  const oldest = Math.min(...years);
+  const age = refYear - oldest;
+  if (age < 0 || age > 200) return null;
+  return age;
 }
 
 export function rentPerSfPerYear(
