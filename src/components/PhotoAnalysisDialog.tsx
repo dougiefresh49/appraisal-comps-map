@@ -8,6 +8,7 @@ import {
   ArrowRightIcon,
   CheckIcon,
   XMarkIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import { DataMergeDialog } from "~/components/DataMergeDialog";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
@@ -16,7 +17,7 @@ import type { PhotoAnalysis } from "~/lib/supabase-queries";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ActionMode = "relabel" | "full-analysis" | "sync-only";
+type ActionMode = "relabel" | "redescribe" | "full-analysis" | "sync-only";
 type Step = "choose-action" | "select-photos" | "processing" | "sync-preview" | "done";
 
 export interface PhotoAnalysisDialogProps {
@@ -174,6 +175,8 @@ export function PhotoAnalysisDialog({
 
     if (mode === "relabel") {
       await runRelabel(ids);
+    } else if (mode === "redescribe") {
+      await runRedescribe(ids);
     } else {
       await runFullAnalysis(ids);
     }
@@ -206,6 +209,52 @@ export function PhotoAnalysisDialog({
         message: `Relabeled ${data.updatedCount ?? ids.length} photo${(data.updatedCount ?? ids.length) !== 1 ? "s" : ""}`,
       });
       setDoneMessage(`Relabeled ${data.updatedCount ?? ids.length} photo${(data.updatedCount ?? ids.length) !== 1 ? "s" : ""} successfully.`);
+      setStep("done");
+      handleClose(true);
+    } catch (err) {
+      setProcessing((p) => ({
+        ...p!,
+        error: err instanceof Error ? err.message : "Unknown error",
+      }));
+    }
+  };
+
+  const runRedescribe = async (ids: string[]) => {
+    setProcessing({
+      total: ids.length,
+      completed: 0,
+      message: "Regenerating descriptions…",
+    });
+
+    try {
+      const res = await fetch("/api/photos/redescribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, photoIds: ids }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        updatedCount?: number;
+        error?: string;
+      };
+
+      if (!data.success) {
+        setProcessing((p) => ({
+          ...p!,
+          error: data.error ?? "Failed to regenerate descriptions",
+        }));
+        return;
+      }
+
+      const count = data.updatedCount ?? ids.length;
+      setProcessing({
+        total: ids.length,
+        completed: count,
+        message: `Regenerated descriptions for ${count} photo${count !== 1 ? "s" : ""}`,
+      });
+      setDoneMessage(
+        `Regenerated descriptions for ${count} photo${count !== 1 ? "s" : ""} successfully.`,
+      );
       setStep("done");
       handleClose(true);
     } catch (err) {
@@ -346,7 +395,14 @@ export function PhotoAnalysisDialog({
             <h2 className="text-base font-semibold text-gray-100">Photo Analysis</h2>
             <p className="mt-0.5 text-xs text-gray-500">
               {step === "choose-action" && "Choose what you want to do"}
-              {step === "select-photos" && `Select photos to ${mode === "relabel" ? "relabel" : "re-analyze"}`}
+              {step === "select-photos" &&
+                `Select photos to ${
+                  mode === "relabel"
+                    ? "relabel"
+                    : mode === "redescribe"
+                      ? "regenerate descriptions for"
+                      : "re-analyze"
+                }`}
               {step === "processing" && "Working…"}
               {step === "done" && "Complete"}
             </p>
@@ -375,6 +431,14 @@ export function PhotoAnalysisDialog({
                 icon={<TagIcon className="h-5 w-5" />}
                 title="Generate New Labels"
                 description="Use AI to regenerate labels for selected photos. Keeps existing descriptions and improvements data."
+              />
+              <ActionCard
+                mode="redescribe"
+                selected={mode === "redescribe"}
+                onSelect={() => setMode("redescribe")}
+                icon={<DocumentTextIcon className="h-5 w-5" />}
+                title="Regenerate Descriptions"
+                description="Re-generate descriptions and improvements using your corrected labels as context. Use after fixing labels manually."
               />
               <ActionCard
                 mode="full-analysis"
@@ -560,7 +624,11 @@ export function PhotoAnalysisDialog({
                 disabled={selectedIds.size === 0 || isMerging}
                 className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {mode === "relabel" ? "Generate Labels" : "Start Analysis"}
+                {mode === "relabel"
+                  ? "Generate Labels"
+                  : mode === "redescribe"
+                    ? "Regenerate Descriptions"
+                    : "Start Analysis"}
                 <SparklesIcon className="h-4 w-4" />
               </button>
             )}

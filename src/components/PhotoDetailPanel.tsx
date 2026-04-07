@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
 import { IMPROVEMENT_DISPLAY_LABELS } from "~/lib/improvement-constants";
 
 interface PhotoDetailPanelProps {
   photo: PhotoAnalysis | null;
+  projectId: string;
   onClose: () => void;
   onLabelChange?: (photoId: string, label: string) => void;
 }
@@ -20,11 +22,18 @@ const IMPROVEMENT_LABELS = IMPROVEMENT_DISPLAY_LABELS;
 
 export function PhotoDetailPanel({
   photo,
+  projectId,
   onClose,
   onLabelChange,
 }: PhotoDetailPanelProps) {
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editLabel, setEditLabel] = useState("");
+  const [isRedescribing, setIsRedescribing] = useState(false);
+  const [redescribeError, setRedescribeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRedescribeError(null);
+  }, [photo?.id]);
 
   if (!photo) return null;
 
@@ -49,6 +58,35 @@ export function PhotoDetailPanel({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSaveLabel();
     if (e.key === "Escape") setIsEditingLabel(false);
+  };
+
+  const handleRegenerateDescription = async () => {
+    if (!photo.fileId || isRedescribing) return;
+    setIsRedescribing(true);
+    setRedescribeError(null);
+    try {
+      const res = await fetch("/api/photos/redescribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, photoIds: [photo.fileId] }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        updatedCount?: number;
+        error?: string;
+      };
+      if (!data.success) {
+        setRedescribeError(data.error ?? "Failed to regenerate description");
+        return;
+      }
+      if ((data.updatedCount ?? 0) === 0) {
+        setRedescribeError("No photo was updated. Check Drive file ID.");
+      }
+    } catch {
+      setRedescribeError("Network error while regenerating");
+    } finally {
+      setIsRedescribing(false);
+    }
   };
 
   return (
@@ -148,6 +186,31 @@ export function PhotoDetailPanel({
               </dd>
             </div>
           )}
+
+          <div>
+            <button
+              type="button"
+              onClick={() => void handleRegenerateDescription()}
+              disabled={!photo.fileId || isRedescribing}
+              className="mt-1 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <ArrowPathIcon
+                className={`h-3.5 w-3.5 ${isRedescribing ? "animate-spin" : ""}`}
+                aria-hidden
+              />
+              {isRedescribing ? "Regenerating…" : "Regenerate description from label"}
+            </button>
+            {redescribeError && (
+              <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+                {redescribeError}
+              </p>
+            )}
+            {!photo.fileId && (
+              <p className="mt-1 text-xs text-gray-500">
+                This photo has no Drive file id; cannot regenerate.
+              </p>
+            )}
+          </div>
 
           {/* Improvements Observed */}
           {improvementKeys.length > 0 && (

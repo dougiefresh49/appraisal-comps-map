@@ -473,6 +473,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
       {/* Detail Side Panel */}
       <PhotoDetailPanel
         photo={selectedPhoto}
+        projectId={projectId}
         onClose={() => setSelectedPhotoId(null)}
         onLabelChange={(photoId, label) => updateLabel(photoId, label)}
       />
