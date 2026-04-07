@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { MapBanner } from "~/components/MapBanner";
 import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { CompAddFlow } from "~/components/CompAddFlow";
+import { DataMergeDialog } from "~/components/DataMergeDialog";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
 import { ToggleSwitch } from "~/components/ToggleField";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
@@ -70,7 +71,7 @@ export interface CompDetailPageProps {
 type FieldDef = {
   key: string;
   label: string;
-  variant?: "text" | "select" | "toggle" | "computed";
+  variant?: "text" | "textarea" | "select" | "toggle" | "computed";
   options?: readonly string[];
   computeFn?: (draft: Record<string, unknown>) => string;
 };
@@ -194,7 +195,7 @@ const LAND_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -373,7 +374,7 @@ const SALES_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -711,7 +712,7 @@ const RENTALS_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -834,6 +835,8 @@ export function CompDetailPage({
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
   const [showParseFlow, setShowParseFlow] = useState(false);
+  const [showReparseFlow, setShowReparseFlow] = useState(false);
+  const [pendingProposedData, setPendingProposedData] = useState<Record<string, unknown> | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -1077,6 +1080,17 @@ export function CompDetailPage({
             <span className="text-xs text-red-400">Save failed</span>
           )}
           {parsedData && (
+            <button
+              type="button"
+              onClick={() => setShowReparseFlow(true)}
+              title="Re-parse with new documents"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-gray-700 hover:text-gray-100"
+            >
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+              Re-parse
+            </button>
+          )}
+          {parsedData && (
             <PushToSheetButton
               confirmDescription={`${compType.toLowerCase()} comp #${displayNumber} data to the spreadsheet`}
               confirmDetail="All non-formula fields will be written. If the comp is found by Use Type + Recording, its existing row is updated. Otherwise a new row is appended."
@@ -1167,10 +1181,14 @@ export function CompDetailPage({
                       compType === "Land" &&
                       key === "Land Size (SF)" &&
                       isLandSfGeneratedFromAc(draft);
+                    const rowAlignClass =
+                      variant === "textarea"
+                        ? "sm:items-start sm:pt-0.5"
+                        : "sm:items-center";
                     return (
                       <div
                         key={key}
-                        className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:items-center sm:gap-4"
+                        className={`grid grid-cols-1 gap-1 sm:grid-cols-[1fr_3fr] sm:gap-4 ${rowAlignClass}`}
                       >
                         <label className="text-xs font-medium text-gray-500">
                           {label}
@@ -1204,6 +1222,16 @@ export function CompDetailPage({
                               aria-label={label}
                             />
                           </div>
+                        ) : variant === "textarea" ? (
+                          <textarea
+                            value={fieldToInputString(draft, key)}
+                            onChange={(e) =>
+                              handleFieldChange(key, e.target.value)
+                            }
+                            rows={2}
+                            className={`${controlClass} resize-y py-2 leading-snug`}
+                            placeholder="—"
+                          />
                         ) : (
                           <input
                             type="text"
@@ -1286,6 +1314,50 @@ export function CompDetailPage({
             setShowParseFlow(false);
           }}
           onClose={() => setShowParseFlow(false)}
+        />
+      )}
+
+      {/* Re-parse flow: preview-only mode */}
+      {showReparseFlow && (
+        <CompAddFlow
+          projectId={projectId}
+          compId={compId}
+          compType={compType}
+          compsFolderId={
+            project.folderStructure?.compsFolderIds?.[
+              compType === "Land"
+                ? "land"
+                : compType === "Sales"
+                  ? "sales"
+                  : "rentals"
+            ]
+          }
+          projectFolderId={project.projectFolderId}
+          initialFolderId={compFolderId}
+          onComplete={() => {
+            void refreshParsedData();
+            setShowReparseFlow(false);
+          }}
+          onClose={() => setShowReparseFlow(false)}
+          onPreviewComplete={(proposed) => {
+            setPendingProposedData(proposed);
+            setShowReparseFlow(false);
+          }}
+        />
+      )}
+
+      {/* Data merge dialog */}
+      {pendingProposedData && parsedData && (
+        <DataMergeDialog
+          isOpen
+          title="Review & Merge Re-parse Results"
+          currentData={parsedData.raw_data as Record<string, unknown>}
+          proposedData={pendingProposedData}
+          onConfirm={async (merged) => {
+            await saveParsedData(merged);
+            setPendingProposedData(null);
+          }}
+          onCancel={() => setPendingProposedData(null)}
         />
       )}
     </div>

@@ -20,9 +20,10 @@ export async function POST(request: NextRequest) {
       type: CompType;
       fileIds?: string[];
       extraContext?: string;
+      previewOnly?: boolean;
     };
 
-    const { compId, projectId, type, fileIds, extraContext } = body;
+    const { compId, projectId, type, fileIds, extraContext, previewOnly } = body;
 
     if (!compId || !projectId || !type) {
       return NextResponse.json(
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
         fileIds,
         driveToken,
         extraContext,
+        previewOnly,
       });
 
       if (!result.ok) {
@@ -65,6 +67,10 @@ export async function POST(request: NextRequest) {
           { error: result.error ?? "Parsing failed" },
           { status: 500 },
         );
+      }
+
+      if (result.preview) {
+        return NextResponse.json({ ok: true, proposedData: result.proposedData });
       }
 
       return NextResponse.json({ ok: true, data: result.data });
@@ -97,6 +103,7 @@ export async function POST(request: NextRequest) {
         type,
         fileBuffers,
         extraContext,
+        previewOnly,
       });
 
       if (!result.ok) {
@@ -104,6 +111,10 @@ export async function POST(request: NextRequest) {
           { error: result.error ?? "Parsing failed" },
           { status: 500 },
         );
+      }
+
+      if (result.preview) {
+        return NextResponse.json({ ok: true, proposedData: result.proposedData });
       }
 
       return NextResponse.json({ ok: true, data: result.data });

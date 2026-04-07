@@ -20,6 +20,7 @@ import {
 } from "~/components/PushToSheetButton";
 import { ExportJsonDialog } from "~/components/ExportJsonDialog";
 import { ToggleField } from "~/components/ToggleField";
+import { DataMergeDialog } from "~/components/DataMergeDialog";
 import {
   ArrowDownOnSquareIcon,
   ArrowDownTrayIcon,
@@ -201,6 +202,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     kind: "ok" | "err";
     text: string;
   } | null>(null);
+  const [isRebuildLoading, setIsRebuildLoading] = useState(false);
+  const [rebuildError, setRebuildError] = useState<string | null>(null);
+  const [pendingRebuildData, setPendingRebuildData] = useState<{
+    currentCore: Record<string, unknown>;
+    proposedCore: Record<string, unknown>;
+    currentFema: Record<string, unknown>;
+    proposedFema: Record<string, unknown>;
+  } | null>(null);
 
   const pushToSheetRef = useRef<PushToSheetButtonHandle>(null);
   const actionsMenuWrapRef = useRef<HTMLDivElement>(null);
@@ -301,6 +310,43 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     }
   };
 
+  const handleRebuildFromDocuments = async () => {
+    setIsRebuildLoading(true);
+    setRebuildError(null);
+    try {
+      const res = await fetch("/api/subjects/reparse-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "Rebuild preview failed");
+      }
+      const data = (await res.json()) as {
+        currentCore: Record<string, unknown>;
+        proposedCore: Record<string, unknown>;
+        currentFema: Record<string, unknown>;
+        proposedFema: Record<string, unknown>;
+        documentCount: number;
+      };
+      if (data.documentCount === 0) {
+        setRebuildError("No processed documents found for this project.");
+        return;
+      }
+      setPendingRebuildData({
+        currentCore: data.currentCore,
+        proposedCore: data.proposedCore,
+        currentFema: data.currentFema,
+        proposedFema: data.proposedFema,
+      });
+    } catch (err) {
+      setRebuildError(err instanceof Error ? err.message : "Rebuild failed");
+    } finally {
+      setIsRebuildLoading(false);
+    }
+  };
+
   const actionsDisabled = isLoading;
 
   return (
@@ -353,6 +399,24 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                       aria-hidden
                     />
                     Documents
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={actionsDisabled || isRebuildLoading}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      void handleRebuildFromDocuments();
+                    }}
+                  >
+                    <ArrowPathIcon
+                      className={`h-4 w-4 shrink-0 text-blue-400${isRebuildLoading ? " animate-spin" : ""}`}
+                      aria-hidden
+                    />
+                    Rebuild from Documents
                   </button>
                 </li>
                 <li role="none">
@@ -451,6 +515,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               variant="icon"
               onClick={() => setIsDocPanelOpen(true)}
             />
+            <button
+              type="button"
+              onClick={() => void handleRebuildFromDocuments()}
+              disabled={actionsDisabled || isRebuildLoading}
+              title="Rebuild subject data from processed documents"
+              aria-label="Rebuild from Documents"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/80 px-3 text-xs font-medium text-gray-300 transition hover:border-blue-700 hover:bg-blue-950/30 hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700"
+            >
+              {isRebuildLoading ? (
+                <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <ArrowPathIcon className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Rebuild
+            </button>
             <button
               type="button"
               onClick={() => setIsExportDialogOpen(true)}
@@ -1102,6 +1181,42 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         isOpen={isExportDialogOpen}
         onClose={() => setIsExportDialogOpen(false)}
       />
+
+      {/* Rebuild error inline toast */}
+      {rebuildError && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-red-800 bg-red-950 px-4 py-3 shadow-xl">
+          <p className="text-sm text-red-300">{rebuildError}</p>
+          <button
+            type="button"
+            onClick={() => setRebuildError(null)}
+            className="text-red-400 hover:text-red-200"
+            aria-label="Dismiss"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Rebuild from Documents — merge dialog */}
+      {pendingRebuildData && (
+        <DataMergeDialog
+          isOpen
+          title="Rebuild from Documents — Review Changes"
+          currentData={pendingRebuildData.currentCore}
+          proposedData={pendingRebuildData.proposedCore}
+          onConfirm={async (mergedCore) => {
+            await saveSubjectData({
+              core: mergedCore as unknown as SubjectData,
+              fema: pendingRebuildData.proposedFema as FemaData,
+            });
+            setCore(mergedCore as CoreData);
+            setPendingRebuildData(null);
+          }}
+          onCancel={() => setPendingRebuildData(null)}
+        />
+      )}
     </div>
   );
 }

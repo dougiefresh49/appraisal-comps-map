@@ -46,6 +46,12 @@ export interface CompAddFlowProps {
    */
   onComplete: (compId: string, newComp?: Comparable) => void;
   onClose: () => void;
+  /**
+   * When provided and compId is set, the parse request will use previewOnly=true.
+   * The callback receives the proposed data instead of writing to DB.
+   * The dialog closes and the caller controls what happens next.
+   */
+  onPreviewComplete?: (proposedData: Record<string, unknown>) => void;
 }
 
 function typeToApiType(type: ComparableType): CompType {
@@ -346,6 +352,7 @@ export function CompAddFlow({
   initialFolderId,
   onComplete,
   onClose,
+  onPreviewComplete,
 }: CompAddFlowProps) {
   const router = useRouter();
   const isAddMode = !compId;
@@ -488,6 +495,9 @@ export function CompAddFlow({
 
     let activeCompId = compId ?? pendingCompIdRef.current;
 
+    // Preview-only mode: skip DB writes, call onPreviewComplete with proposed data
+    const isPreviewMode = !!(onPreviewComplete && compId);
+
     try {
       if (isAddMode && !activeCompId) {
         activeCompId = crypto.randomUUID();
@@ -512,12 +522,26 @@ export function CompAddFlow({
           type: typeToApiType(compType),
           fileIds: Array.from(selectedFileIds),
           extraContext: extraContext.trim() || undefined,
+          ...(isPreviewMode ? { previewOnly: true } : {}),
         }),
       });
 
       if (!res.ok) {
         const err = (await res.json()) as { error?: string };
         throw new Error(err.error ?? "Parse failed");
+      }
+
+      const responseData = (await res.json()) as {
+        ok: boolean;
+        proposedData?: Record<string, unknown>;
+        data?: Record<string, unknown>;
+      };
+
+      // Preview mode: hand off to caller and close dialog
+      if (isPreviewMode && responseData.proposedData) {
+        onPreviewComplete(responseData.proposedData);
+        onClose();
+        return;
       }
 
       pendingCompIdRef.current = null;
@@ -541,7 +565,7 @@ export function CompAddFlow({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -752,7 +776,9 @@ export function CompAddFlow({
                   <p className="text-sm font-medium text-gray-300">
                     {isAddMode
                       ? "Creating comp & extracting data with AI…"
-                      : "Extracting comp data with AI…"}
+                      : onPreviewComplete
+                        ? "Extracting proposed data with AI…"
+                        : "Extracting comp data with AI…"}
                   </p>
                   <p className="text-xs text-gray-500">
                     This may take 15–30 seconds.
