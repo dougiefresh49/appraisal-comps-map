@@ -1,31 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { ChatPanel, ChatPanelToggle } from "~/components/ChatPanel";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
-interface ChatWidgetProps {
-  projectId: string;
+// ---------------------------------------------------------------------------
+// Context so the toggle (anywhere) and the panel (in layout) share state
+// ---------------------------------------------------------------------------
+
+interface ChatState {
+  isOpen: boolean;
+  open: () => void;
+  close: () => void;
+  toggle: () => void;
 }
 
-/**
- * Thin client wrapper mounted once per project workspace.
- * Manages open/close state for the chat panel + FAB toggle.
- */
-export function ChatWidget({ projectId }: ChatWidgetProps) {
+const ChatContext = createContext<ChatState | null>(null);
+
+export function useChatPanel(): ChatState {
+  const ctx = useContext(ChatContext);
+  if (!ctx) throw new Error("useChatPanel must be used within ChatProvider");
+  return ctx;
+}
+
+export function ChatProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-
   return (
-    <>
-      {/* Floating toggle — fixed bottom-right, above main content */}
-      <div className="fixed bottom-5 right-5 z-40 md:bottom-6 md:right-6">
-        <ChatPanelToggle onClick={() => setIsOpen(true)} />
-      </div>
-
-      <ChatPanel
-        projectId={projectId}
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-      />
-    </>
+    <ChatContext.Provider
+      value={{
+        isOpen,
+        open: () => setIsOpen(true),
+        close: () => setIsOpen(false),
+        toggle: () => setIsOpen((v) => !v),
+      }}
+    >
+      {children}
+    </ChatContext.Provider>
   );
 }

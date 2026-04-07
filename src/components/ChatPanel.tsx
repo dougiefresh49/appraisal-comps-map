@@ -278,67 +278,78 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       ? String((project as Record<string, unknown>).name)
       : "Project";
 
-  return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-800 bg-gray-950 shadow-2xl md:inset-x-auto md:inset-y-0 md:right-0 md:top-0 md:w-full md:max-w-lg md:border-l md:border-t-0">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3 md:px-6 md:py-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-gray-100">AI Chat</h2>
-            <p className="truncate text-xs text-gray-500">{projectName}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            {messages.length > 0 && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
-                aria-label="Clear chat"
-                title="Clear conversation"
-              >
-                <TrashIcon className="h-4 w-4" />
-              </button>
-            )}
+  const panelContent = (
+    <div className="flex h-full flex-col border-l border-gray-800 bg-gray-950">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3 md:px-5 md:py-3.5">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-gray-100">AI Chat</h2>
+          <p className="truncate text-xs text-gray-500">{projectName}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
             <button
-              onClick={onClose}
-              className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
-              aria-label="Close chat panel"
+              type="button"
+              onClick={handleClear}
+              className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
+              aria-label="Clear chat"
+              title="Clear conversation"
             >
-              <XMarkIcon className="h-5 w-5" />
+              <TrashIcon className="h-4 w-4" />
             </button>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
-          {messages.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="space-y-4">
-              {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1]} />
-              ))}
-            </div>
           )}
-        </div>
-
-        {/* Composer */}
-        <div className="border-t border-gray-800 px-4 py-3 md:px-6">
-          <MentionComposer
-            entities={entities}
-            onSend={handleSend}
-            disabled={isStreaming}
-          />
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            aria-label="Close chat panel"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
         </div>
       </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-5">
+        {messages.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="space-y-4">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1]} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Composer */}
+      <div className="border-t border-gray-800 px-4 py-3 md:px-5">
+        <MentionComposer
+          entities={entities}
+          onSend={handleSend}
+          disabled={isStreaming}
+        />
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Desktop: inline panel (rendered via layout portal slot) */}
+      <div className="hidden h-full w-[420px] shrink-0 md:block">
+        {panelContent}
+      </div>
+
+      {/* Mobile: full-screen overlay */}
+      <div className="fixed inset-0 z-50 md:hidden">
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          onClick={onClose}
+        />
+        <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-800 bg-gray-950 shadow-2xl">
+          {panelContent}
+        </div>
+      </div>
+    </>
   );
 }
 

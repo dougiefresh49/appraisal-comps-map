@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownTrayIcon,
   ArrowsUpDownIcon,
+  EllipsisVerticalIcon,
   PlusIcon,
 } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
@@ -100,6 +101,31 @@ export function ComparablesPageContent({
   const [showAddFlow, setShowAddFlow] = useState(false);
   const [showReorderDialog, setShowReorderDialog] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuWrapRef = useRef<HTMLDivElement>(null);
+
+  const closeActionsMenu = useCallback(() => setActionsMenuOpen(false), []);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (
+        actionsMenuWrapRef.current &&
+        !actionsMenuWrapRef.current.contains(e.target as Node)
+      ) {
+        setActionsMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActionsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [actionsMenuOpen]);
 
   if (isLoading) {
     return (
@@ -226,42 +252,120 @@ export function ComparablesPageContent({
         height="h-48"
       />
 
-      <div className="mt-6 mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {compSectionHeading(type)}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Manage {type.toLowerCase()} comparables.
-          </p>
+      <div className="mt-6 mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex w-full min-w-0 flex-row items-start gap-2 md:w-1/2 md:max-w-[50%] md:flex-col md:gap-0 md:pr-4">
+          <div className="w-3/4 min-w-0 md:w-full">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {compSectionHeading(type)}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Manage {type.toLowerCase()} comparables.
+            </p>
+          </div>
+          <div
+            className="relative flex w-1/4 shrink-0 justify-end self-start pt-0.5 md:hidden"
+            ref={actionsMenuWrapRef}
+          >
+            <button
+              type="button"
+              onClick={() => setActionsMenuOpen((o) => !o)}
+              aria-expanded={actionsMenuOpen}
+              aria-haspopup="menu"
+              title="Actions"
+              aria-label="Open actions menu"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
+            >
+              <EllipsisVerticalIcon className="h-4 w-4" aria-hidden />
+            </button>
+            {actionsMenuOpen && (
+              <ul
+                className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl dark:bg-gray-900"
+                role="menu"
+                aria-orientation="vertical"
+              >
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    onClick={() => {
+                      closeActionsMenu();
+                      setIsExportDialogOpen(true);
+                    }}
+                  >
+                    <ArrowDownTrayIcon
+                      className="h-4 w-4 shrink-0 text-violet-400"
+                      aria-hidden
+                    />
+                    Export JSON
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    onClick={() => {
+                      closeActionsMenu();
+                      setShowReorderDialog(true);
+                    }}
+                  >
+                    <ArrowsUpDownIcon
+                      className="h-4 w-4 shrink-0 text-gray-400"
+                      aria-hidden
+                    />
+                    Reorder comparables
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    onClick={() => {
+                      closeActionsMenu();
+                      handleAddComparable();
+                    }}
+                  >
+                    <PlusIcon
+                      className="h-4 w-4 shrink-0 text-blue-400"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    Add comparable
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="hidden md:flex md:flex-wrap md:items-center md:justify-end md:gap-1.5">
           <button
             type="button"
             onClick={() => setIsExportDialogOpen(true)}
             title="Export comp data as JSON for AppScript importer"
             aria-label="Export JSON"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 dark:border-gray-700"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 dark:border-gray-700"
           >
-            <ArrowDownTrayIcon className="h-5 w-5" aria-hidden />
+            <ArrowDownTrayIcon className="h-4 w-4" aria-hidden />
           </button>
           <button
             type="button"
             onClick={() => setShowReorderDialog(true)}
             title="Reorder comparables (drag to change comp numbers)"
             aria-label="Reorder comparables"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
           >
-            <ArrowsUpDownIcon className="h-5 w-5" aria-hidden />
+            <ArrowsUpDownIcon className="h-4 w-4" aria-hidden />
           </button>
           <button
             type="button"
             onClick={handleAddComparable}
             title="Add comparable"
             aria-label="Add comparable"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 dark:bg-blue-600 dark:hover:bg-blue-500"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 dark:bg-blue-600 dark:hover:bg-blue-500"
           >
-            <PlusIcon className="h-5 w-5" strokeWidth={2} aria-hidden />
+            <PlusIcon className="h-4 w-4" strokeWidth={2} aria-hidden />
           </button>
         </div>
       </div>
