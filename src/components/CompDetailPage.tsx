@@ -840,17 +840,27 @@ export function CompDetailPage({
   >("idle");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPendingEditRef = useRef(false);
+  const lastSyncedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!parsedData?.raw_data) {
       setDraft({});
+      lastSyncedAtRef.current = null;
       return;
     }
+
+    // Skip Realtime-driven re-syncs while the user has pending edits
+    if (hasPendingEditRef.current && lastSyncedAtRef.current !== null) {
+      return;
+    }
+
     const raw = { ...(parsedData.raw_data as Record<string, unknown>) };
     if (raw["Highway Frontage"] != null && raw.Frontage == null) {
       raw.Frontage = raw["Highway Frontage"];
     }
     setDraft(raw);
+    lastSyncedAtRef.current = parsedData.updated_at;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-init when persisted row identity/timestamp changes
   }, [parsedData?.id, parsedData?.updated_at]);
 
@@ -905,6 +915,7 @@ export function CompDetailPage({
 
   const scheduleSave = useCallback(
     (next: Record<string, unknown>) => {
+      hasPendingEditRef.current = true;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         setSaveStatus("saving");
@@ -913,9 +924,11 @@ export function CompDetailPage({
             await saveParsedData(
               next as unknown as LandSaleData | SaleData | RentalData,
             );
+            hasPendingEditRef.current = false;
             setSaveStatus("saved");
             setTimeout(() => setSaveStatus("idle"), 2000);
           } catch {
+            hasPendingEditRef.current = false;
             setSaveStatus("error");
           }
         })();
