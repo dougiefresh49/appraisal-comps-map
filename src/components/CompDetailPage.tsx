@@ -71,7 +71,7 @@ export interface CompDetailPageProps {
 type FieldDef = {
   key: string;
   label: string;
-  variant?: "text" | "select" | "toggle" | "computed";
+  variant?: "text" | "textarea" | "select" | "toggle" | "computed";
   options?: readonly string[];
   computeFn?: (draft: Record<string, unknown>) => string;
 };
@@ -195,7 +195,7 @@ const LAND_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -374,7 +374,7 @@ const SALES_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -712,7 +712,7 @@ const RENTALS_SECTIONS: SectionDef[] = [
     title: "Property Info",
     fields: [
       { key: "Address", label: "Address" },
-      { key: "APN", label: "APN" },
+      { key: "APN", label: "APN", variant: "textarea" },
       { key: "Legal", label: "Legal" },
       { key: "Land Size (AC)", label: "Land Size (AC)" },
       { key: "Land Size (SF)", label: "Land Size (SF)" },
@@ -1181,10 +1181,14 @@ export function CompDetailPage({
                       compType === "Land" &&
                       key === "Land Size (SF)" &&
                       isLandSfGeneratedFromAc(draft);
+                    const rowAlignClass =
+                      variant === "textarea"
+                        ? "sm:items-start sm:pt-0.5"
+                        : "sm:items-center";
                     return (
                       <div
                         key={key}
-                        className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:items-center sm:gap-4"
+                        className={`grid grid-cols-1 gap-1 sm:grid-cols-[1fr_3fr] sm:gap-4 ${rowAlignClass}`}
                       >
                         <label className="text-xs font-medium text-gray-500">
                           {label}
@@ -1218,6 +1222,16 @@ export function CompDetailPage({
                               aria-label={label}
                             />
                           </div>
+                        ) : variant === "textarea" ? (
+                          <textarea
+                            value={fieldToInputString(draft, key)}
+                            onChange={(e) =>
+                              handleFieldChange(key, e.target.value)
+                            }
+                            rows={2}
+                            className={`${controlClass} resize-y py-2 leading-snug`}
+                            placeholder="—"
+                          />
                         ) : (
                           <input
                             type="text"
