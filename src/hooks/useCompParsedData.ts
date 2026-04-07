@@ -4,6 +4,49 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "~/utils/supabase/client";
 import type { CompParsedDataRow, LandSaleData, SaleData, RentalData } from "~/types/comp-data";
 
+/**
+ * Maps detail-form `raw_data` onto `comparables` columns (mirrors
+ * comparableRowPatchFromCompData in ~/lib/comp-parser.ts). Only non-empty
+ * values are included so partial saves do not wipe list fields.
+ */
+function comparableRowPatchFromRawData(
+  rawData: LandSaleData | SaleData | RentalData | Record<string, unknown>,
+): {
+  address?: string;
+  address_for_display?: string;
+  apn?: string[];
+  instrument_number?: string;
+} {
+  const row = rawData as Record<string, unknown>;
+  const patch: {
+    address?: string;
+    address_for_display?: string;
+    apn?: string[];
+    instrument_number?: string;
+  } = {};
+
+  const address = typeof row.Address === "string" ? row.Address.trim() : "";
+  if (address) {
+    patch.address = address;
+    patch.address_for_display = address;
+  }
+
+  const apnVal = row.APN;
+  if (typeof apnVal === "string" && apnVal.trim()) {
+    patch.apn = apnVal
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const rec = row.Recording;
+  if (typeof rec === "string" && rec.trim()) {
+    patch.instrument_number = rec.trim();
+  }
+
+  return patch;
+}
+
 export interface UseCompParsedDataReturn {
   parsedData: CompParsedDataRow | null;
   isLoading: boolean;
@@ -110,6 +153,17 @@ export function useCompParsedData(compId: string): UseCompParsedDataReturn {
 
       if (upsertResult.error) {
         throw new Error(upsertResult.error.message);
+      }
+
+      const comparablesPatch = comparableRowPatchFromRawData(rawData);
+      if (Object.keys(comparablesPatch).length > 0) {
+        const comparablesResult = await supabase
+          .from("comparables")
+          .update(comparablesPatch)
+          .eq("id", compId);
+        if (comparablesResult.error) {
+          throw new Error(comparablesResult.error.message);
+        }
       }
 
       if (isMountedRef.current) {
