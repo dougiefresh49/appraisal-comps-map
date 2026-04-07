@@ -39,9 +39,9 @@ interface ProcessingState {
 // Thumbnail helper
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildThumbnailUrl(fileId: string | null, size = "w200"): string {
+function buildThumbnailUrl(fileId: string | null, sz = "200"): string {
   if (!fileId) return "";
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
+  return `/api/drive/thumbnail/${fileId}?sz=${sz}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

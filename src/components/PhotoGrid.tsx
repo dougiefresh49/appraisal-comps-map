@@ -415,7 +415,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         >
           {isDenseGrid ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {displayPhotos.map((photo, index) => (
+              {displayPhotos.map((photo) => (
                 <PhotoCard
                   key={photo.id}
                   photo={photo}
@@ -423,7 +423,6 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
                   onArchive={archivePhoto}
                   onPreview={setSelectedPhotoId}
                   isDense
-                  index={index}
                   isArchived={showArchived}
                   onRestore={restorePhoto}
                 />
@@ -440,27 +439,20 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
                         : "grid-cols-2"
                     }`}
                   >
-                    {pagePhotos[pageIndex]?.map((photo, photoIndex) => {
-                      const globalIndex =
-                        pageIndex === 0
-                          ? photoIndex
-                          : 3 + (pageIndex - 1) * 6 + photoIndex;
-                      return (
-                        <PhotoCard
-                          key={photo.id}
-                          photo={photo}
-                          onLabelChange={(newLabel) =>
-                            updateLabel(photo.id, newLabel)
-                          }
-                          onArchive={archivePhoto}
-                          onPreview={setSelectedPhotoId}
-                          isDense={false}
-                          index={globalIndex}
-                          isArchived={showArchived}
-                          onRestore={restorePhoto}
-                        />
-                      );
-                    })}
+                    {pagePhotos[pageIndex]?.map((photo) => (
+                      <PhotoCard
+                        key={photo.id}
+                        photo={photo}
+                        onLabelChange={(newLabel) =>
+                          updateLabel(photo.id, newLabel)
+                        }
+                        onArchive={archivePhoto}
+                        onPreview={setSelectedPhotoId}
+                        isDense={false}
+                        isArchived={showArchived}
+                        onRestore={restorePhoto}
+                      />
+                    ))}
                   </div>
                   {pageIndex < numPages - 1 && (
                     <div className="mt-6 border-t-2 border-gray-300 pt-6 dark:border-gray-600">

@@ -11,9 +11,9 @@ interface PhotoDetailPanelProps {
   onLabelChange?: (photoId: string, label: string) => void;
 }
 
-function buildThumbnailUrl(fileId: string | null, size = "w1200") {
+function buildThumbnailUrl(fileId: string | null, sz = "1200") {
   if (!fileId) return "";
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
+  return `/api/drive/thumbnail/${fileId}?sz=${sz}`;
 }
 
 const IMPROVEMENT_LABELS = IMPROVEMENT_DISPLAY_LABELS;
