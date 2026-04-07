@@ -12,8 +12,10 @@ export default function ProjectPhotosPage({ params }: PhotosPageProps) {
   const { projectId } = use(params);
 
   return (
-    <Suspense fallback={<PhotoGridSkeleton />}>
-      <PhotoGrid projectId={projectId} />
-    </Suspense>
+    <div className="p-6 md:p-8">
+      <Suspense fallback={<PhotoGridSkeleton />}>
+        <PhotoGrid projectId={projectId} />
+      </Suspense>
+    </div>
   );
 }

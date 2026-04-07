@@ -102,7 +102,8 @@ interface LandSaleData {
   "Sale Price / AC": Generated;
   "Sale Price / SF": Generated;
   "Land Size (AC)": number | null;
-  "Land Size (SF)": number | null;
+  /** Formula: =AC_TO_SF(R30) */
+  "Land Size (SF)": Generated;
   APN: string | null;
   Legal: string | null;
   Corner: boolean;
@@ -117,12 +118,14 @@ interface LandSaleData {
   Surface: LandSurface | null;
   "Zoning Location": ZoningLocation;
   "Zoning Description": string;
-  Zoning: string | null;
+  /** Formula: =GET_ZONE_VAL(AU30,AV30) */
+  Zoning: Generated; // string
   Taxes: number | null;
   "MLS #": string | null;
   "Verification Type": VerificationType | null;
   "Verified By": string | null;
-  Verification: Generated;
+  /** Formula: =GET_VERIFICATION_VAL(BM30, BN30, BL30) */
+  Verification: Generated; // string
   Comments: string | null;
 }
 

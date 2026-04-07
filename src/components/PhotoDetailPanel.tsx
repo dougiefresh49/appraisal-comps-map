@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
+import { IMPROVEMENT_DISPLAY_LABELS } from "~/lib/improvement-constants";
 
 interface PhotoDetailPanelProps {
   photo: PhotoAnalysis | null;
@@ -15,29 +16,7 @@ function buildThumbnailUrl(fileId: string | null, size = "w1200") {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
 }
 
-const IMPROVEMENT_LABELS: Record<string, string> = {
-  foundation: "Foundation",
-  roof: "Roof Type / Material",
-  building_frame: "Building Frame",
-  exterior_walls: "Exterior Walls",
-  floors: "Floors",
-  walls: "Walls",
-  ceiling: "Ceiling",
-  lighting: "Lighting",
-  restrooms: "Restrooms",
-  electrical: "Electrical",
-  plumbing: "Plumbing",
-  heating: "Heating",
-  hvac: "Air Conditioning / HVAC",
-  fire_protection: "Fire Protection / Sprinklers",
-  elevators: "Elevators",
-  site_improvements: "Site Improvements",
-  landscaping: "Landscaping",
-  parking: "Parking",
-  condition: "Condition",
-  construction_quality: "Construction Quality",
-  stories: "Stories",
-};
+const IMPROVEMENT_LABELS = IMPROVEMENT_DISPLAY_LABELS;
 
 export function PhotoDetailPanel({
   photo,

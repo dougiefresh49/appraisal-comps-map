@@ -434,14 +434,9 @@ const SALES_SECTIONS: SectionDef[] = [
         label: "Age",
         variant: "computed",
         computeFn: (d) => {
-          const raw = d["Year Built"];
-          const yb =
-            typeof raw === "string"
-              ? parseInt(raw, 10)
-              : typeof raw === "number"
-                ? raw
-                : NaN;
-          const val = !Number.isNaN(yb) ? calcAge(yb) : null;
+          const val = calcAge(
+            d["Year Built"] as string | number | null | undefined,
+          );
           return val != null ? formatNumber(val, 0) : "—";
         },
       },

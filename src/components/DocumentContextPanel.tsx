@@ -853,18 +853,30 @@ export function DocumentPanelToggle({
   onClick,
   documentCount,
   variant = "default",
+  title: titleProp,
+  /** When true, no native `title` (use when the parent shows a CSS hover hint). */
+  omitNativeTitle = false,
 }: {
   onClick: () => void;
   documentCount?: number;
   variant?: "default" | "icon";
+  /** Hover / accessible name; default explains the documents drawer. */
+  title?: string;
+  omitNativeTitle?: boolean;
 }) {
+  const docDrawerTitle =
+    titleProp ??
+    "Open the documents panel: browse uploaded files (deeds, CAD, engagement letters) and their extracted text for this section.";
+  const shortLabel = "Open documents panel";
+
   if (variant === "icon") {
     return (
       <button
         type="button"
         onClick={onClick}
-        title="View document context"
-        aria-label="View document context"
+        {...(omitNativeTitle
+          ? { "aria-label": shortLabel }
+          : { title: docDrawerTitle, "aria-label": docDrawerTitle })}
         className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
       >
         <DocumentTextIcon className="h-4 w-4" aria-hidden />
@@ -881,7 +893,7 @@ export function DocumentPanelToggle({
     <button
       type="button"
       onClick={onClick}
-      title="View document context"
+      title={docDrawerTitle}
       className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-600 hover:bg-gray-800 hover:text-gray-200"
     >
       <svg

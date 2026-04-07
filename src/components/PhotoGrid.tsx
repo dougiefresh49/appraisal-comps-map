@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -15,10 +15,20 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
+import {
+  ArchiveBoxIcon,
+  ArrowPathIcon,
+  CloudArrowUpIcon,
+  ListBulletIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+} from "@heroicons/react/24/outline";
 import { PhotoCard } from "./PhotoCard";
 import { PhotoDetailPanel } from "./PhotoDetailPanel";
+import { PhotoAnalysisDialog } from "./PhotoAnalysisDialog";
 import { useProjectPhotos } from "~/hooks/useProjectPhotos";
 import { useProject } from "~/hooks/useProject";
+import { useSubjectData } from "~/hooks/useSubjectData";
 import { usePresence } from "~/hooks/usePresence";
 import { PresenceBanner } from "~/components/PresenceBanner";
 
@@ -41,6 +51,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
   } = useProjectPhotos(projectId);
 
   const { project } = useProject(projectId);
+  const { saveSubjectData } = useSubjectData(projectId);
   const { isOtherUserEditing, otherUserName } = usePresence(
     projectId,
     "photos",
@@ -48,17 +59,32 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
 
   const [isDenseGrid, setIsDenseGrid] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisTotal, setAnalysisTotal] = useState<number | null>(null);
+  const [isAnalysisDialogOpen, setIsAnalysisDialogOpen] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const processedCount = photos.length + archivedPhotos.length;
-  const isAnalysisInProgress =
-    analysisTotal !== null && processedCount < analysisTotal;
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    const handleScroll = () => {
+      const y = main.scrollTop;
+      if (y < 60) {
+        setIsHeaderVisible(true);
+      } else if (y > lastScrollYRef.current + 6) {
+        setIsHeaderVisible(false);
+      } else if (y < lastScrollYRef.current - 6) {
+        setIsHeaderVisible(true);
+      }
+      lastScrollYRef.current = y;
+    };
+    main.addEventListener("scroll", handleScroll, { passive: true });
+    return () => main.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const displayPhotos = showArchived ? archivedPhotos : photos;
   const selectedPhoto =
@@ -140,59 +166,15 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
     }
   };
 
-  const handleAnalyzePhotos = async () => {
-    if (!project?.projectFolderId) {
-      setStatusMessage({
-        type: "error",
-        text: "Project folder ID not found. Cannot analyze.",
-      });
-      return;
+  const handleDialogClose = (didUpdate?: boolean) => {
+    setIsAnalysisDialogOpen(false);
+    if (didUpdate) {
+      void refreshPhotos();
     }
+  };
 
-    setIsAnalyzing(true);
-    setStatusMessage(null);
-
-    try {
-      const response = await fetch("/api/photos/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectFolderId: project.projectFolderId,
-          projectId,
-        }),
-      });
-
-      const result = (await response.json()) as {
-        success: boolean;
-        totalPhotos?: number;
-        error?: string;
-      };
-
-      if (result.success) {
-        if (result.totalPhotos) {
-          setAnalysisTotal(result.totalPhotos);
-        }
-        setStatusMessage({
-          type: "success",
-          text: result.totalPhotos
-            ? `Analysis started for ${result.totalPhotos} photos. Progress is tracked below.`
-            : "Photo analysis triggered. New photos will appear as they are processed.",
-        });
-      } else {
-        setStatusMessage({
-          type: "error",
-          text: result.error ?? "Failed to trigger analysis",
-        });
-      }
-    } catch (error) {
-      setStatusMessage({
-        type: "error",
-        text:
-          error instanceof Error ? error.message : "Unknown error occurred",
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
+  const handleSaveCore = async (core: Record<string, unknown>) => {
+    await saveSubjectData({ core });
   };
 
   if (isLoading) {
@@ -228,55 +210,13 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         <p className="mb-4 text-gray-600 dark:text-gray-400">
           Run the photo analysis workflow to process and classify images.
         </p>
-        {project?.projectFolderId && !isAnalyzing && (
+        {project?.projectFolderId && !isAnalysisDialogOpen && (
           <button
-            onClick={() => void handleAnalyzePhotos()}
-            disabled={isAnalyzing}
-            className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setIsAnalysisDialogOpen(true)}
+            className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700"
           >
             Analyze Photos
           </button>
-        )}
-        {(isAnalyzing || isAnalysisInProgress) && (
-          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div className="mb-2 flex items-center justify-center gap-3">
-              <svg
-                className="h-5 w-5 animate-spin text-blue-600"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              <p className="text-sm font-medium text-blue-800">
-                {analysisTotal
-                  ? `Processing photos: ${processedCount} / ${analysisTotal}`
-                  : "Photo analysis has been triggered..."}
-              </p>
-            </div>
-            {analysisTotal && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-blue-200">
-                <div
-                  className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"
-                  style={{
-                    width: `${Math.round((processedCount / analysisTotal) * 100)}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
         )}
       </div>
     );
@@ -290,50 +230,136 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         otherUserName={otherUserName}
       />
 
-      {/* Action Buttons */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => void handleExportToDrive()}
-            disabled={isExporting || showArchived}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isExporting ? "Exporting..." : "Export to Drive"}
-          </button>
-          <button
-            onClick={() => void handleAnalyzePhotos()}
-            disabled={isAnalyzing}
-            className="rounded-lg border border-blue-300 bg-white px-5 py-2.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-600 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700"
-          >
-            {isAnalyzing ? "Analyzing..." : "Analyze Photos"}
-          </button>
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className={`rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors ${
-              showArchived
-                ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            {showArchived
-              ? `Archived (${archivedPhotos.length})`
-              : `Show Archived (${archivedPhotos.length})`}
-          </button>
-          <button
-            onClick={() => setIsDenseGrid(!isDenseGrid)}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            {isDenseGrid ? "Document View" : "Dense Grid"}
-          </button>
+      {/* Page Header */}
+      <header
+        className={`sticky top-14 z-10 -mx-6 mb-4 flex flex-col gap-3 border-b border-gray-800/60 bg-gray-950 px-6 pb-4 pt-4 transition-transform duration-300 ease-in-out md:-mx-8 md:top-0 md:flex-row md:items-start md:justify-between md:px-8 ${
+          isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Photos
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Subject property photos, organized and labeled for the report.
+          </p>
         </div>
 
-        <button
-          onClick={() => void refreshPhotos()}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-        >
-          Refresh
-        </button>
-      </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Export to Drive */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => void handleExportToDrive()}
+              disabled={isExporting || showArchived}
+              aria-label="Export to Drive"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isExporting ? (
+                <ArrowPathIcon className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <CloudArrowUpIcon className="h-4 w-4" aria-hidden />
+              )}
+            </button>
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+              {isExporting ? "Exporting…" : "Export to Drive"}
+            </span>
+          </div>
+
+          {/* Analyze Photos */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setIsAnalysisDialogOpen(true)}
+              aria-label="Analyze Photos"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50"
+            >
+              <SparklesIcon className="h-4 w-4" aria-hidden />
+            </button>
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+              Analyze Photos
+            </span>
+          </div>
+
+          <span className="mx-0.5 h-4 w-px bg-gray-700" aria-hidden />
+
+          {/* Archived toggle */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setShowArchived(!showArchived)}
+              aria-label={showArchived ? "Show active photos" : "Show archived photos"}
+              aria-pressed={showArchived}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
+                showArchived
+                  ? "border-amber-600 bg-amber-900/40 text-amber-400 hover:bg-amber-900/60"
+                  : "border-gray-700 bg-gray-800/80 text-gray-300 hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100"
+              }`}
+            >
+              <ArchiveBoxIcon className="h-4 w-4" aria-hidden />
+            </button>
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+              {showArchived
+                ? `Archived (${archivedPhotos.length}) — show active`
+                : `Show Archived (${archivedPhotos.length})`}
+            </span>
+          </div>
+
+          {/* View mode segmented control */}
+          <div className="group relative">
+            <div
+              role="group"
+              aria-label="View mode"
+              className="flex rounded-md border border-gray-700 bg-gray-900/80 p-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => setIsDenseGrid(false)}
+                aria-pressed={!isDenseGrid}
+                aria-label="Document view"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
+                  !isDenseGrid
+                    ? "bg-gray-600 text-gray-100 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <ListBulletIcon className="h-4 w-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDenseGrid(true)}
+                aria-pressed={isDenseGrid}
+                aria-label="Dense grid view"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
+                  isDenseGrid
+                    ? "bg-gray-600 text-gray-100 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <Squares2X2Icon className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+              {isDenseGrid ? "Dense Grid — switch to Document" : "Document View — switch to Dense Grid"}
+            </span>
+          </div>
+
+          {/* Refresh */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => void refreshPhotos()}
+              aria-label="Refresh photos"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50"
+            >
+              <ArrowPathIcon className="h-4 w-4" aria-hidden />
+            </button>
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+              Refresh
+            </span>
+          </div>
+        </div>
+      </header>
 
       {/* Status Message */}
       {statusMessage && (
@@ -377,49 +403,6 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
       )}
 
       {/* Analysis Progress */}
-      {isAnalysisInProgress && (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/30">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg
-                className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                Processing photos...
-              </span>
-            </div>
-            <span className="text-sm font-mono text-blue-700 dark:text-blue-300">
-              {processedCount} / {analysisTotal}
-            </span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-blue-200 dark:bg-blue-800">
-            <div
-              className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out dark:bg-blue-400"
-              style={{
-                width: `${Math.round((processedCount / analysisTotal) * 100)}%`,
-              }}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Photo Grid */}
       <DndContext
         sensors={sensors}
@@ -500,6 +483,16 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         photo={selectedPhoto}
         onClose={() => setSelectedPhotoId(null)}
         onLabelChange={(photoId, label) => updateLabel(photoId, label)}
+      />
+
+      {/* Photo Analysis Dialog */}
+      <PhotoAnalysisDialog
+        isOpen={isAnalysisDialogOpen}
+        projectId={projectId}
+        projectFolderId={project?.projectFolderId}
+        photos={photos}
+        onClose={handleDialogClose}
+        onSaveCore={handleSaveCore}
       />
     </div>
   );

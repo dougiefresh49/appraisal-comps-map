@@ -345,8 +345,7 @@ const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
     if (str(d.hoisting)) patch.Hoisting = str(d.hoisting);
     if (d.corner_lot === true) patch.Corner = true;
     else if (d.corner_lot === false) patch.Corner = false;
-    if (d.highway_frontage === true) patch["Highway Frontage"] = true;
-    else if (d.highway_frontage === false) patch["Highway Frontage"] = false;
+    if (d.highway_frontage === true) patch.Frontage = "Highway";
     return patch;
   },
 

@@ -1936,6 +1936,303 @@ function PhotoBackfillPanel() {
   );
 }
 
+interface PhotoLabelsBackfillResultRow {
+  project_id: string;
+  project_name: string;
+  md_file: string | null;
+  label_count: number;
+  photo_count: number;
+  mode: "positional" | "gemini" | "skipped";
+  updated: number;
+  errors?: string[];
+}
+
+interface PhotoLabelsBackfillResponse {
+  success?: boolean;
+  dry_run?: boolean;
+  results?: PhotoLabelsBackfillResultRow[];
+  error?: string;
+}
+
+interface PhotoLabelsProjectsResponse {
+  projects?: { id: string; name: string }[];
+  error?: string;
+}
+
+function PhotoLabelsFromReportsPanel() {
+  const { signIn } = useAuth();
+  const [mapProjects, setMapProjects] = useState<{ id: string; name: string }[]>(
+    [],
+  );
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState("");
+  const [dryRun, setDryRun] = useState(false);
+  const [forceGemini, setForceGemini] = useState(false);
+  const [usePositional, setUsePositional] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
+  const [result, setResult] = useState<PhotoLabelsBackfillResponse | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setListLoading(true);
+      setListError(null);
+      try {
+        const res = await fetch("/api/seed/backfill-photo-labels");
+        const data = (await res.json()) as PhotoLabelsProjectsResponse;
+        if (!res.ok) {
+          if (!cancelled) {
+            setListError(data.error ?? `HTTP ${res.status}`);
+            setMapProjects([]);
+          }
+          return;
+        }
+        if (!cancelled) {
+          setMapProjects(data.projects ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setListError(
+            e instanceof Error ? e.message : "Failed to load project map",
+          );
+          setMapProjects([]);
+        }
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const runBackfill = async () => {
+    setIsRunning(true);
+    setResult(null);
+    try {
+      const body: Record<string, unknown> = {
+        dry_run: dryRun,
+        force_gemini: forceGemini,
+        use_positional_when_counts_match: usePositional,
+      };
+      if (projectId.trim()) {
+        body.project_id = projectId.trim();
+      }
+      const res = await fetch("/api/seed/backfill-photo-labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as PhotoLabelsBackfillResponse;
+      if (!res.ok) {
+        setResult({
+          success: false,
+          error: data.error ?? `HTTP ${res.status}`,
+        });
+        return;
+      }
+      setResult(data);
+    } catch (err) {
+      setResult({
+        success: false,
+        error: err instanceof Error ? err.message : "Request failed",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Backfill photo labels from past reports
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Parses the{" "}
+          <span className="font-medium text-gray-700 dark:text-gray-300">
+            SUBJECT PHOTOS
+          </span>{" "}
+          section of each markdown file in{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            docs/past-reports/
+          </code>
+          , then updates{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            photo_analyses.label
+          </code>{" "}
+          to match published captions. When label count equals included photo
+          count, applies by sort order (fast). Otherwise uses Gemini + Drive to
+          match each image to the report label list. Uses{" "}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-900">
+            projects_rows.json
+          </code>{" "}
+          for project IDs unless you pick a single project below.
+        </p>
+      </div>
+
+      <p className="mb-3 text-xs text-amber-800 dark:text-amber-200/90">
+        Requires{" "}
+        <code className="rounded bg-amber-100 px-1 text-[10px] dark:bg-amber-950/80">
+          GOOGLE_GEMINI_API_KEY
+        </code>{" "}
+        and a signed-in Google session with Drive access (same as reference photo
+        analysis).
+      </p>
+
+      {listLoading ? (
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          Loading project map…
+        </p>
+      ) : listError ? (
+        <div className="mb-3 space-y-2">
+          <p className="text-sm text-red-700 dark:text-red-300">{listError}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Ensure <code className="text-xs">docs/past-reports/projects_rows.json</code>{" "}
+            exists locally.
+          </p>
+        </div>
+      ) : (
+        <label className="mb-3 block text-sm text-gray-700 dark:text-gray-300">
+          <span className="mb-1 block font-medium">Scope</span>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            disabled={isRunning}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+          >
+            <option value="">
+              All projects in projects_rows.json ({mapProjects.length})
+            </option>
+            {mapProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <div className="mb-4 space-y-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={usePositional}
+            onChange={(e) => setUsePositional(e.target.checked)}
+            disabled={isRunning}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Use positional assignment when label count matches photo count (skip
+          Gemini for that project)
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={forceGemini}
+            onChange={(e) => setForceGemini(e.target.checked)}
+            disabled={isRunning}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Force Gemini for every photo (even when counts match)
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={dryRun}
+            onChange={(e) => setDryRun(e.target.checked)}
+            disabled={isRunning}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Dry run (no DB writes; skips Gemini calls when counts do not match)
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void runBackfill()}
+          disabled={isRunning || listLoading || !!listError}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-gray-600"
+        >
+          {isRunning ? "Running…" : "Run backfill"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void signIn("/project/seed")}
+          disabled={isRunning}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"
+        >
+          Sign in with Google
+        </button>
+      </div>
+
+      {result && (
+        <div
+          className={`mt-4 rounded-md border p-3 text-sm ${
+            result.error || result.success === false
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          }`}
+        >
+          {result.error && <p className="font-medium">Error: {result.error}</p>}
+          {result.success !== false && !result.error && (
+            <>
+              <p className="font-medium text-gray-900 dark:text-gray-100">
+                {result.dry_run ? "Dry run complete" : "Backfill complete"}
+              </p>
+              {result.results && result.results.length > 0 && (
+                <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto text-xs text-gray-800 dark:text-gray-200">
+                  {result.results.map((r) => (
+                    <li
+                      key={r.project_id}
+                      className="rounded-md border border-gray-200 bg-white/80 p-2 dark:border-gray-700 dark:bg-gray-900/60"
+                    >
+                      <span className="font-medium">{r.project_name}</span>
+                      {r.md_file ? (
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {" "}
+                          · {r.md_file}
+                        </span>
+                      ) : null}
+                      <br />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        labels {r.label_count} · photos {r.photo_count} · mode{" "}
+                        <code className="text-[10px]">{r.mode}</code> · updated{" "}
+                        {r.updated}
+                      </span>
+                      {r.errors && r.errors.length > 0 && (
+                        <ul className="mt-1 list-disc pl-4 text-red-700 dark:text-red-300">
+                          {r.errors.slice(0, 8).map((e, i) => (
+                            <li key={i}>{e}</li>
+                          ))}
+                          {r.errors.length > 8 && (
+                            <li>… and {r.errors.length - 8} more</li>
+                          )}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <details className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                <summary className="cursor-pointer font-medium text-gray-700 dark:text-gray-300">
+                  Raw JSON
+                </summary>
+                <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-gray-900 p-3 text-[10px] text-gray-100">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </details>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SeedPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -1977,6 +2274,8 @@ export default function SeedPage() {
         <PatternsPanel />
 
         <PhotoBackfillPanel />
+
+        <PhotoLabelsFromReportsPanel />
       </div>
     </div>
   );

@@ -2,6 +2,8 @@
 // Utility Types
 // ============================================================
 
+import type { FrontageType } from "./comp-field-options";
+
 export type Generated = "GENERATED" | "BLANK" | null;
 
 export type Condition = "Good" | "Average" | "Fair" | "Poor";
@@ -246,16 +248,20 @@ export interface SubjectData {
   Hoisting: YesNoUnknown;
   "Wash Bay": YesNoUnknown;
   Corner: boolean;
-  "Highway Frontage": boolean;
+  Frontage: FrontageType | null;
   "Utils - Electricity": YesNoUnknown;
   "Utils - Water": UtilsWater | null;
   "Utils - Sewer": UtilsSewer | null;
   Surface: LandSurface | null;
   Construction: string | null;
   Condition: Condition;
-  "Year Built": number | null;
+  /** Comma-separated years when multiple buildings (e.g. "2021, 2010"); single year as number or string ok */
+  "Year Built": number | string | null;
+  /** When true, `Age` is user-entered; when false/omitted, age is derived from Year Built + effective date */
+  "Age Override"?: boolean;
   Age: number | null;
-  "Effective Age": Generated;
+  /** Sheet may store a computed number or Generated sentinels */
+  "Effective Age": Generated | number | null;
   "Est Insurance": number | null;
   "Est Expences": number | null;
 }
