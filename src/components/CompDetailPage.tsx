@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { MapBanner } from "~/components/MapBanner";
 import {
   DocumentContextPanel,
   DocumentPanelToggle,
 } from "~/components/DocumentContextPanel";
 import { CompAddFlow } from "~/components/CompAddFlow";
+import { DataMergeDialog } from "~/components/DataMergeDialog";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
 import { ToggleSwitch } from "~/components/ToggleField";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
@@ -834,6 +835,8 @@ export function CompDetailPage({
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
   const [showParseFlow, setShowParseFlow] = useState(false);
+  const [showReparseFlow, setShowReparseFlow] = useState(false);
+  const [pendingProposedData, setPendingProposedData] = useState<Record<string, unknown> | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -1077,6 +1080,17 @@ export function CompDetailPage({
             <span className="text-xs text-red-400">Save failed</span>
           )}
           {parsedData && (
+            <button
+              type="button"
+              onClick={() => setShowReparseFlow(true)}
+              title="Re-parse with new documents"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-gray-700 hover:text-gray-100"
+            >
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+              Re-parse
+            </button>
+          )}
+          {parsedData && (
             <PushToSheetButton
               confirmDescription={`${compType.toLowerCase()} comp #${displayNumber} data to the spreadsheet`}
               confirmDetail="All non-formula fields will be written. If the comp is found by Use Type + Recording, its existing row is updated. Otherwise a new row is appended."
@@ -1286,6 +1300,50 @@ export function CompDetailPage({
             setShowParseFlow(false);
           }}
           onClose={() => setShowParseFlow(false)}
+        />
+      )}
+
+      {/* Re-parse flow: preview-only mode */}
+      {showReparseFlow && (
+        <CompAddFlow
+          projectId={projectId}
+          compId={compId}
+          compType={compType}
+          compsFolderId={
+            project.folderStructure?.compsFolderIds?.[
+              compType === "Land"
+                ? "land"
+                : compType === "Sales"
+                  ? "sales"
+                  : "rentals"
+            ]
+          }
+          projectFolderId={project.projectFolderId}
+          initialFolderId={compFolderId}
+          onComplete={() => {
+            void refreshParsedData();
+            setShowReparseFlow(false);
+          }}
+          onClose={() => setShowReparseFlow(false)}
+          onPreviewComplete={(proposed) => {
+            setPendingProposedData(proposed);
+            setShowReparseFlow(false);
+          }}
+        />
+      )}
+
+      {/* Data merge dialog */}
+      {pendingProposedData && parsedData && (
+        <DataMergeDialog
+          isOpen
+          title="Review & Merge Re-parse Results"
+          currentData={parsedData.raw_data as Record<string, unknown>}
+          proposedData={pendingProposedData}
+          onConfirm={async (merged) => {
+            await saveParsedData(merged);
+            setPendingProposedData(null);
+          }}
+          onCancel={() => setPendingProposedData(null)}
         />
       )}
     </div>

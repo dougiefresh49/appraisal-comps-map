@@ -357,6 +357,83 @@ const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
   },
 };
 
+/**
+ * Compute a proposed `core` patch by re-applying the MERGE_MAP to all
+ * structured data from the provided documents, treating all fields as fresh
+ * proposals (no fill-empty-only constraint). Returns the merged result.
+ *
+ * This is used for the reparse-preview endpoint to show diffs without writing.
+ */
+export function computeProposedCoreFromDocuments(
+  documents: Array<{ document_type: string; structured_data: unknown }>,
+): Record<string, unknown> {
+  const proposed: Record<string, unknown> = {};
+
+  for (const doc of documents) {
+    const { document_type, structured_data } = doc;
+
+    if (!structured_data || typeof structured_data !== "object") continue;
+
+    const fields = (
+      typeof (structured_data as Record<string, unknown>).structured_data === "object" &&
+      (structured_data as Record<string, unknown>).structured_data !== null
+        ? (structured_data as Record<string, unknown>).structured_data
+        : structured_data
+    ) as Record<string, unknown>;
+
+    const mapper = MERGE_MAP[document_type];
+    if (!mapper) continue;
+
+    const patch = mapper(fields);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value != null && value !== "") {
+        // Later documents overwrite earlier ones (most recent wins)
+        proposed[key] = value;
+      }
+    }
+  }
+
+  return proposed;
+}
+
+/**
+ * Compute a proposed `fema` patch from flood_map documents.
+ */
+export function computeProposedFemaFromDocuments(
+  documents: Array<{ document_type: string; structured_data: unknown }>,
+): Record<string, unknown> {
+  const proposed: Record<string, unknown> = {};
+
+  for (const doc of documents) {
+    if (doc.document_type !== "flood_map") continue;
+    const { structured_data } = doc;
+    if (!structured_data || typeof structured_data !== "object") continue;
+
+    const fields = (
+      typeof (structured_data as Record<string, unknown>).structured_data === "object" &&
+      (structured_data as Record<string, unknown>).structured_data !== null
+        ? (structured_data as Record<string, unknown>).structured_data
+        : structured_data
+    ) as Record<string, unknown>;
+
+    const mapNum = str(fields.fema_map_number);
+    const zone = str(fields.flood_zone);
+    const mapDate = str(fields.map_effective_date);
+    const hazard = fields.in_special_flood_hazard_area;
+
+    if (mapNum) proposed.FemaMapNum = mapNum;
+    if (zone) proposed.FemaZone = zone;
+    if (mapDate) proposed.FemaMapDate = mapDate;
+    if (hazard === true || hazard === "true") proposed.FemaIsHazardZone = true;
+    else if (hazard === false || hazard === "false") proposed.FemaIsHazardZone = false;
+  }
+
+  return proposed;
+}
+
+// Re-export MERGE_MAP for use in the reparse-preview route
+export { MERGE_MAP };
+
 // ------------------------------------------------------------------
 // Value helpers
 // ------------------------------------------------------------------

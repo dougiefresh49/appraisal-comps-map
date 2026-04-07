@@ -29,12 +29,17 @@ export interface ParseCompInput {
   }[];
   extraContext?: string;
   driveToken?: string;
+  /** When true, skips all DB writes and returns fullRawData in `proposedData`. */
+  previewOnly?: boolean;
 }
 
 export interface ParseCompResult {
   ok: boolean;
   data?: LandSaleData | SaleData | RentalData;
   error?: string;
+  /** Set when previewOnly=true; contains the full raw_data that would have been saved. */
+  proposedData?: Record<string, unknown>;
+  preview?: boolean;
 }
 
 /**
@@ -90,11 +95,13 @@ export async function parseCompFiles(
 ): Promise<ParseCompResult> {
   const supabase = await createClient();
 
-  // Mark as processing
-  await supabase
-    .from("comparables")
-    .update({ parsed_data_status: "processing" })
-    .eq("id", input.compId);
+  // Only mark as processing when we intend to write to DB
+  if (!input.previewOnly) {
+    await supabase
+      .from("comparables")
+      .update({ parsed_data_status: "processing" })
+      .eq("id", input.compId);
+  }
 
   try {
     const ai = getAI();
@@ -148,6 +155,11 @@ export async function parseCompFiles(
       _parcelData: parcelData,
       _parcelImprovements: parcelImprovements,
     };
+
+    // Preview-only mode: return data without writing to DB
+    if (input.previewOnly) {
+      return { ok: true, proposedData: fullRawData, preview: true };
+    }
 
     const { error: upsertError } = await supabase
       .from("comp_parsed_data")
@@ -207,11 +219,13 @@ export async function parseCompFiles(
     const errorMessage =
       err instanceof Error ? err.message : "Unknown parsing error";
 
-    // Mark as error
-    await supabase
-      .from("comparables")
-      .update({ parsed_data_status: "error" })
-      .eq("id", input.compId);
+    // Only update status when we were doing a real parse
+    if (!input.previewOnly) {
+      await supabase
+        .from("comparables")
+        .update({ parsed_data_status: "error" })
+        .eq("id", input.compId);
+    }
 
     return { ok: false, error: errorMessage };
   }
@@ -227,6 +241,7 @@ export async function parseCompFromDrive(input: {
   fileIds: string[];
   driveToken: string;
   extraContext?: string;
+  previewOnly?: boolean;
 }): Promise<ParseCompResult> {
   const fileBuffers: {
     buffer: Buffer;
@@ -253,5 +268,6 @@ export async function parseCompFromDrive(input: {
     fileBuffers,
     extraContext: input.extraContext,
     driveToken: input.driveToken,
+    previewOnly: input.previewOnly,
   });
 }
