@@ -6,9 +6,9 @@ import { useState } from "react";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
 import { LazyImage } from "./LazyImage";
 
-function buildThumbnailUrl(fileId: string | null, size = "w800") {
+function buildThumbnailUrl(fileId: string | null, sz = "400") {
   if (!fileId) return "";
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
+  return `/api/drive/thumbnail/${fileId}?sz=${sz}`;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -30,7 +30,6 @@ interface PhotoCardProps {
   onArchive: (photoId: string) => void;
   onPreview: (photoId: string) => void;
   isDense?: boolean;
-  index?: number;
   isArchived?: boolean;
   onRestore?: (photoId: string) => void;
 }
@@ -41,11 +40,9 @@ export function PhotoCard({
   onArchive,
   onPreview,
   isDense = false,
-  index = 0,
   isArchived = false,
   onRestore,
 }: PhotoCardProps) {
-  const loadDelay = index * 100;
   const [isEditing, setIsEditing] = useState(false);
   const [editLabel, setEditLabel] = useState(photo.label);
 
@@ -102,7 +99,6 @@ export function PhotoCard({
               src={thumbnailUrl}
               alt={photo.label}
               className="h-full w-full object-cover"
-              delay={loadDelay}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-gray-400">

@@ -264,7 +264,7 @@ function ComparableListCard({
                   <img
                     src={
                       image.webViewUrl ??
-                      `https://drive.google.com/thumbnail?id=${image.id}&sz=w800`
+                      `/api/drive/thumbnail/${image.id}?sz=800`
                     }
                     alt={image.name}
                     className="h-full w-full object-cover transition hover:scale-105"

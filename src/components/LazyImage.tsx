@@ -1,116 +1,157 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { thumbnailQueue } from "~/utils/thumbnail-queue";
 
 interface LazyImageProps {
   src: string;
   alt: string;
   className?: string;
-  delay?: number; // Stagger delay in milliseconds
   width?: number;
   height?: number;
 }
+
+const maxRetries = 3;
+const baseRetryDelayMs = 2000;
 
 export function LazyImage({
   src,
   alt,
   className = "",
-  delay = 0,
   width,
   height,
 }: LazyImageProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [showBroken, setShowBroken] = useState(false);
+
+  const mountedRef = useRef(true);
+  const slotHeldRef = useRef(false);
+  /** True from startLoad entry until onLoad/onError or reset (prevents duplicate concurrent loads). */
+  const sessionActiveRef = useRef(false);
+  const completedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const loadGenerationRef = useRef(0);
+
+  const imageSrcRef = useRef<string | null>(null);
+  const showBrokenRef = useRef(false);
+  showBrokenRef.current = showBroken;
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const isLoadedRef = useRef(false);
+  const startLoadRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
-  const maxRetries = 3;
-  const baseRetryDelay = 2000; // 2 second base delay for rate limiting
+  const releaseSlotIfHeld = useCallback(() => {
+    if (slotHeldRef.current) {
+      slotHeldRef.current = false;
+      thumbnailQueue.release();
+    }
+  }, []);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
-  const loadImage = async (url: string, retry = 0) => {
-    // Add delay for staggered loading on first attempt
-    if (delay > 0 && retry === 0 && !isLoadedRef.current) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
+  const clearSession = useCallback(() => {
+    sessionActiveRef.current = false;
+  }, []);
+
+  const startLoad = useCallback(async () => {
+    if (
+      sessionActiveRef.current ||
+      completedRef.current ||
+      showBrokenRef.current
+    ) {
+      return;
+    }
+    sessionActiveRef.current = true;
+
+    const generation = ++loadGenerationRef.current;
+
+    if (retryCountRef.current > 0) {
+      const retryDelay =
+        baseRetryDelayMs * Math.pow(2, retryCountRef.current - 1);
+      await new Promise((r) => setTimeout(r, retryDelay));
+      if (!mountedRef.current || generation !== loadGenerationRef.current) {
+        clearSession();
+        return;
+      }
     }
 
-    // For retries, add exponential backoff
-    if (retry > 0) {
-      const retryDelay = baseRetryDelay * Math.pow(2, retry - 1);
-      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    await thumbnailQueue.acquire();
+
+    if (!mountedRef.current || generation !== loadGenerationRef.current) {
+      thumbnailQueue.release();
+      clearSession();
+      return;
     }
 
-    // Set the image source - Next.js Image will handle loading
-    // Error handling is done via onError handler
-    setImageSrc(url);
-    setError(false);
-    isLoadedRef.current = true;
-  };
+    slotHeldRef.current = true;
+    imageSrcRef.current = src;
+    setImageSrc(src);
+  }, [src, clearSession]);
 
-  const handleImageError = () => {
-    if (retryCount < maxRetries && !isLoadedRef.current) {
-      const newRetryCount = retryCount + 1;
-      setRetryCount(newRetryCount);
-      // Retry loading with exponential backoff
-      const retryDelay = baseRetryDelay * Math.pow(2, newRetryCount - 1);
-      setTimeout(() => {
-        void loadImage(src, newRetryCount);
-      }, retryDelay);
+  startLoadRef.current = startLoad;
+
+  const handleLoad = useCallback(() => {
+    completedRef.current = true;
+    releaseSlotIfHeld();
+    thumbnailQueue.recordSuccess();
+    retryCountRef.current = 0;
+    clearSession();
+  }, [releaseSlotIfHeld, clearSession]);
+
+  const handleError = useCallback(() => {
+    releaseSlotIfHeld();
+    void thumbnailQueue.recordLoadError();
+
+    imageSrcRef.current = null;
+    setImageSrc(null);
+    clearSession();
+
+    retryCountRef.current += 1;
+    if (retryCountRef.current <= maxRetries) {
+      void startLoad();
     } else {
-      setError(true);
+      setShowBroken(true);
     }
-  };
+  }, [releaseSlotIfHeld, clearSession, startLoad]);
+
+  /* Reset when URL changes */
+  useEffect(() => {
+    releaseSlotIfHeld();
+    clearSession();
+    imageSrcRef.current = null;
+    setImageSrc(null);
+    setShowBroken(false);
+    completedRef.current = false;
+    retryCountRef.current = 0;
+    loadGenerationRef.current = 0;
+  }, [src, releaseSlotIfHeld, clearSession]);
 
   useEffect(() => {
+    mountedRef.current = true;
     const container = containerRef.current;
-    if (!container || isLoadedRef.current) return;
+    if (!container) return;
 
-    // Create Intersection Observer
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (
-            entry.isIntersecting &&
-            !imageSrc &&
-            !error &&
-            !isLoadedRef.current
-          ) {
-            void loadImage(src, retryCount);
-            observerRef.current?.unobserve(container);
-          }
-        });
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (completedRef.current || showBrokenRef.current) return;
+        if (imageSrcRef.current) return;
+        void startLoadRef.current();
       },
-      {
-        rootMargin: "100px", // Start loading well before image enters viewport
-      },
+      { rootMargin: "200px" },
     );
 
-    observerRef.current.observe(container);
+    observer.observe(container);
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      mountedRef.current = false;
+      observer.disconnect();
+      if (slotHeldRef.current) {
+        slotHeldRef.current = false;
+        thumbnailQueue.release();
       }
+      sessionActiveRef.current = false;
     };
-  }, [src, delay]); // Keep existing deps logic as this effect starts the observer
+  }, [src]);
 
-  // Retry on error with updated retry count
-  useEffect(() => {
-    if (error && retryCount < maxRetries && !isLoadedRef.current) {
-      const retryDelay = baseRetryDelay * Math.pow(2, retryCount);
-      const timeoutId = setTimeout(() => {
-        setError(false);
-        void loadImage(src, retryCount);
-      }, retryDelay);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [error, retryCount, src]);
-  /* eslint-enable react-hooks/exhaustive-deps */
-
-  // Use fill for aspect ratio container, or provided width/height
   const useFill = !width || !height;
 
   return (
@@ -118,11 +159,11 @@ export function LazyImage({
       ref={containerRef}
       className={`relative ${useFill ? "h-full w-full" : ""} ${className}`}
     >
-      {!imageSrc && !error && (
-        <div className="absolute inset-0 animate-pulse bg-gray-200" />
+      {!imageSrc && !showBroken && (
+        <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-gray-700" />
       )}
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
+      {showBroken && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
           <svg
             className="h-8 w-8"
             fill="none"
@@ -146,12 +187,12 @@ export function LazyImage({
           width={useFill ? undefined : width}
           height={useFill ? undefined : height}
           className={`${className} object-cover`}
-          onError={handleImageError}
-          unoptimized={true} // Disable Next.js optimization for external Google Drive images to avoid issues
+          onLoad={handleLoad}
+          onError={handleError}
+          unoptimized={true}
           loading="lazy"
         />
       )}
-      {/* Invisible placeholder to maintain aspect ratio and enable intersection observer */}
       {!imageSrc && (
         <div className="absolute inset-0 opacity-0" aria-hidden="true" />
       )}

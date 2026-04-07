@@ -710,7 +710,7 @@ export function BorrowNeighborhoodPanel({
                           preview.mapImageFileId && (
                             // eslint-disable-next-line @next/next/no-img-element -- external Drive thumbnail URL
                             <img
-                              src={`https://drive.google.com/thumbnail?id=${encodeURIComponent(preview.mapImageFileId)}&sz=w200`}
+                              src={`/api/drive/thumbnail/${encodeURIComponent(preview.mapImageFileId)}?sz=200`}
                               alt="Neighborhood map preview"
                               className="mt-2 h-auto max-w-full rounded border border-gray-800"
                             />

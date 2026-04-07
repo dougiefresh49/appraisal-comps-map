@@ -10,6 +10,7 @@ import {
   analyzeProjectPhotos,
   buildSubjectPhotoContext,
   generateSmartLabel,
+  redescribeFromLabel,
   resizeForGemini,
   resolveImageMimeType,
   type PhotoCategory,
@@ -258,6 +259,121 @@ export async function relabelPhotos(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[relabelPhotos] Error:", message);
+    return { success: false, updatedCount: 0, error: message };
+  }
+}
+
+/**
+ * Regenerates description and improvements_observed using each photo's current
+ * label in the database (typically user-corrected). Does not change category or label.
+ */
+export async function redescribePhotos(
+  projectId: string,
+  photoIds: string[],
+): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+  try {
+    if (!projectId || photoIds.length === 0) {
+      return {
+        success: false,
+        updatedCount: 0,
+        error: "projectId and photoIds are required",
+      };
+    }
+
+    const { token, error: driveAuthError } = await getGoogleToken();
+    if (!token) {
+      return {
+        success: false,
+        updatedCount: 0,
+        error: driveAuthError ?? "Not authenticated — please sign in again",
+      };
+    }
+
+    const supabase = await createClient();
+
+    const { data: subjectRow } = await supabase
+      .from("subject_data")
+      .select("core")
+      .eq("project_id", projectId)
+      .single();
+    const core = (subjectRow as { core: Record<string, unknown> } | null)?.core ?? {};
+    const subjectContext = buildSubjectPhotoContext(core);
+
+    const { data: photoRows, error: fetchError } = await supabase
+      .from("photo_analyses")
+      .select(
+        "id, file_id, file_name, label, category, property_type, subject_address",
+      )
+      .eq("project_id", projectId)
+      .in("file_id", photoIds);
+
+    if (fetchError) throw fetchError;
+    if (!photoRows || photoRows.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    const serviceClient = createServiceClient();
+    let updatedCount = 0;
+    const concurrency = 2;
+
+    for (let i = 0; i < photoRows.length; i += concurrency) {
+      const batch = photoRows.slice(i, i + concurrency);
+      await Promise.all(
+        batch.map(async (row) => {
+          try {
+            const typedRow = row as {
+              id: string;
+              file_id: string | null;
+              file_name: string;
+              label: string;
+              category: string;
+              property_type: string | null;
+              subject_address: string | null;
+            };
+
+            if (!typedRow.file_id) return;
+
+            const arrayBuffer = await downloadFile(token, typedRow.file_id);
+            const rawBuffer = Buffer.from(arrayBuffer);
+            const mimeType = resolveImageMimeType(typedRow.file_name, "");
+            const { buffer: resizedBuffer, mimeType: resizedMimeType } =
+              await resizeForGemini(rawBuffer, mimeType);
+
+            const { description, improvements_observed } =
+              await redescribeFromLabel(
+                resizedBuffer,
+                resizedMimeType,
+                typedRow.category as PhotoCategory,
+                typedRow.label,
+                typedRow.property_type ?? "Commercial",
+                typedRow.subject_address ?? "",
+                subjectContext,
+              );
+
+            await serviceClient
+              .from("photo_analyses")
+              .update({
+                description,
+                improvements_observed,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", typedRow.id);
+
+            updatedCount++;
+            console.log(
+              `[redescribePhotos] Updated ${typedRow.file_name} from label "${typedRow.label}"`,
+            );
+          } catch (err) {
+            console.error(`[redescribePhotos] Error for photo ${row.id}:`, err);
+          }
+        }),
+      );
+    }
+
+    return { success: true, updatedCount };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[redescribePhotos] Error:", message);
     return { success: false, updatedCount: 0, error: message };
   }
 }

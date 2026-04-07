@@ -39,6 +39,11 @@ interface DescribeImageResponse {
   improvements_observed: Record<string, string>;
 }
 
+/** Optional behavior for `describeImage` (e.g. human-corrected caption). */
+export interface DescribeImageOptions {
+  humanVerifiedLabel?: boolean;
+}
+
 function getAI(): GoogleGenAI {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) {
@@ -243,8 +248,13 @@ export async function describeImage(
   propertyType: string,
   subjectAddress: string,
   subjectContext: string,
+  options?: DescribeImageOptions,
 ): Promise<{ description: string; improvements_observed: Record<string, string> }> {
-  const prompt = `You are an expert commercial real estate appraiser documenting a property inspection. This image has been labeled as: "${label}" and categorized as "${category}" for a ${propertyType} property at ${subjectAddress}.
+  const humanVerifiedPrefix = options?.humanVerifiedLabel
+    ? `The photo caption below was set or corrected by a human appraiser. Treat it as authoritative: describe only what the image supports and align the narrative and improvements_observed with that caption. Do not contradict the caption.\n\n`
+    : "";
+
+  const prompt = `You are an expert commercial real estate appraiser documenting a property inspection. ${humanVerifiedPrefix}This image has been labeled as: "${label}" and categorized as "${category}" for a ${propertyType} property at ${subjectAddress}.
 
 A short description of the subject property is as follows:
 ${subjectContext}
@@ -317,6 +327,32 @@ For the "improvements_observed" object, ONLY include keys for characteristics th
     console.warn("[describeImage] Failed to parse Gemini JSON response:", raw.slice(0, 200));
     return { description: raw, improvements_observed: {} };
   }
+}
+
+/**
+ * Regenerate description and improvements_observed using a user-provided label
+ * (e.g. after manual correction). Inverse of {@link generateSmartLabel}.
+ */
+export async function redescribeFromLabel(
+  imageBuffer: Buffer,
+  mimeType: string,
+  category: PhotoCategory,
+  userLabel: string,
+  propertyType: string,
+  subjectAddress: string,
+  subjectContext: string,
+): Promise<{ description: string; improvements_observed: Record<string, string> }> {
+  const label = userLabel.trim() || "Subject photo";
+  return describeImage(
+    imageBuffer,
+    mimeType,
+    category,
+    label,
+    propertyType,
+    subjectAddress,
+    subjectContext,
+    { humanVerifiedLabel: true },
+  );
 }
 
 /**
