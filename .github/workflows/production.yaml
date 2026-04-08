@@ -1,4 +1,4 @@
-name: Production Deployment
+name: Release
 
 on:
   push:
@@ -8,13 +8,9 @@ on:
 permissions:
   contents: write
 
-env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
 jobs:
-  deploy-production:
-    name: Bump, Deploy & Release
+  release:
+    name: Tag & GitHub Release
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
@@ -22,45 +18,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve bump type
-        id: resolve
-        run: bash scripts/resolve-bump.sh
-        env:
-          GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
-
-      - name: Bump version
-        id: bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          BUMP_TYPE="${{ steps.resolve.outputs.bump_type }}"
-          NEW_VERSION=$(npm version "$BUMP_TYPE" -m "v%s [skip ci]" --no-git-tag-version)
-          git add package.json
-          git commit -m "${NEW_VERSION} [skip ci]"
-          git tag "$NEW_VERSION"
-          git push --follow-tags
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+      - name: Create tag and GitHub Release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          git fetch --tags origin 2>/dev/null || true
 
-      - name: Pull Vercel Environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally."
+          elif git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            echo "Tag $TAG already exists on remote."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
-      - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Create GitHub Release
-        run: gh release create "${{ steps.bump.outputs.version }}" --generate-notes
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

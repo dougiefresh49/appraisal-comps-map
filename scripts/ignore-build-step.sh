@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# All deployments (preview + production) are handled by GitHub Actions.
-# This script tells Vercel's automatic Git integration to skip every build.
-# See .github/workflows/preview.yaml and .github/workflows/production.yaml.
-echo "Build handled by GitHub Actions. Skipping Vercel automatic build."
+# Always build Production (main branch)
+if [[ "$VERCEL_ENV" == "production" ]]; then
+  exit 1
+fi
+
+# Build Previews only when associated with a PR
+if [[ "$VERCEL_ENV" == "preview" && -n "$VERCEL_GIT_PULL_REQUEST_ID" ]]; then
+  exit 1
+fi
+
+# Skip everything else
 exit 0
