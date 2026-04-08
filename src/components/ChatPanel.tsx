@@ -111,7 +111,6 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     activeThreadId,
     isLoadingThreads,
     setActiveThreadId,
-    createThread,
     archiveThread,
     renameThread,
     refreshThreads,

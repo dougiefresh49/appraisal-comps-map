@@ -14,14 +14,14 @@ export async function createThread(
   title?: string,
 ): Promise<ChatThread> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const insertResult = await supabase
     .from("chat_threads")
     .insert({ project_id: projectId, user_id: userId, title: title ?? null })
     .select()
     .single();
 
-  if (error) throw error;
-  return rowToThread(data);
+  if (insertResult.error) throw insertResult.error;
+  return rowToThread(insertResult.data as Record<string, unknown>);
 }
 
 export async function listThreads(
