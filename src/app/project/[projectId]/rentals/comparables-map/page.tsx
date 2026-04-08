@@ -11,6 +11,9 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
+import { useAutoPlaceComps } from "~/hooks/useAutoPlaceComps";
+import { AutoPlacePreviewMarkers } from "~/components/AutoPlacePreviewMarkers";
+import { AutoPlaceActionBar } from "~/components/AutoPlaceActionBar";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -380,6 +383,22 @@ export default function RentalsComparablesMapPage({
     [projectId],
   );
 
+  const {
+    proposedComparables,
+    isAutoPlacing,
+    failedCompIds,
+    autoPlace,
+    applyProposal,
+    cancelProposal,
+  } = useAutoPlaceComps({
+    comparables,
+    subjectMarkerPosition,
+    subjectBubblePosition,
+    bubbleSize,
+    mapZoom,
+    onApply: setComparables,
+  });
+
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
       subjectPinnedTailTipPosition ?? subjectMarkerPosition;
@@ -579,6 +598,8 @@ export default function RentalsComparablesMapPage({
         // No Land Map link
         onOpenLandMap={undefined}
         readOnly={mapReadOnly}
+        onAutoPlace={autoPlace}
+        isAutoPlacing={isAutoPlacing}
       />
       ) : null}
 
@@ -741,12 +762,29 @@ export default function RentalsComparablesMapPage({
                 readOnly={readOnly}
               />
             ))}
+
+            {/* Auto-place preview markers */}
+            {proposedComparables && (
+              <AutoPlacePreviewMarkers
+                proposedComparables={proposedComparables}
+                bubbleSize={bubbleSize}
+                compColor="#9333ea"
+              />
+            )}
           </Map>
         </APIProvider>
         <DocumentOverlay
           enabled={showDocumentOverlay}
           size={documentFrameSize}
         />
+        {proposedComparables && (
+          <AutoPlaceActionBar
+            failedCount={failedCompIds.length}
+            totalCount={comparables.length}
+            onApply={applyProposal}
+            onCancel={cancelProposal}
+          />
+        )}
       </div>
           </>
         )}

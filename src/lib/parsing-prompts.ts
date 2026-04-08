@@ -336,7 +336,7 @@ interface SubjectData {
   Zip: string;
   AddressLabel: Generated;
   AddressLocal: Generated;
-  "Zoning Area": string;
+  "Zoning Area": ZoningLocation | null;
   "Zoning Description": string;
   Zoning: string | null;
   "Other Features": string | null;

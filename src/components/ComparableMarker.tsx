@@ -28,6 +28,8 @@ interface ComparableMarkerProps {
   isTailPinned?: boolean;
   pinnedTailTipPosition?: { lat: number; lng: number };
   readOnly?: boolean;
+  /** When true, renders the bubble at reduced opacity to signal a preview state. */
+  previewMode?: boolean;
 }
 
 // Base dimensions (reference: 360x160px)
@@ -50,6 +52,7 @@ export function ComparableMarker({
   isTailPinned = false,
   pinnedTailTipPosition,
   readOnly = false,
+  previewMode = false,
 }: ComparableMarkerProps) {
   // Apply size multiplier to base dimensions
   const bubbleWidth = BASE_WIDTH * sizeMultiplier;
@@ -147,7 +150,7 @@ export function ComparableMarker({
         onClick={readOnly ? undefined : onClick}
       >
         <div
-            className={`relative select-none ${readOnly ? "cursor-default" : "cursor-move"}`}
+            className={`relative select-none ${readOnly ? "cursor-default" : "cursor-move"} ${previewMode ? "opacity-60" : ""}`}
             style={{
                 width: `${bubbleWidth}px`,
                 height: `${shouldShowTail ? bubbleHeight + tailHeight : bubbleHeight}px`,

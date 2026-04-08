@@ -129,6 +129,10 @@ interface ComparablesPanelProps {
   onIsRepositioningSubjectTailChange: (repositioning: boolean) => void;
   onOpenLandMap?: (compId: string) => void;
   readOnly?: boolean;
+  /** Triggers the auto-placement algorithm. */
+  onAutoPlace?: () => void;
+  /** True while geocoding / layout is running. */
+  isAutoPlacing?: boolean;
 }
 
 export function ComparablesPanel({
@@ -158,6 +162,8 @@ export function ComparablesPanel({
   onIsRepositioningSubjectTailChange,
   onOpenLandMap,
   readOnly = false,
+  onAutoPlace,
+  isAutoPlacing = false,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
   const [coordinateInputsById, setCoordinateInputsById] = useState<
@@ -273,6 +279,42 @@ export function ComparablesPanel({
         )}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold dark:text-gray-100">Comparables Map</h2>
+        {onAutoPlace && (
+          <button
+            type="button"
+            disabled={readOnly || isAutoPlacing}
+            onClick={onAutoPlace}
+            title="Auto-place all comps and arrange bubbles to avoid overlaps"
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-purple-400 bg-purple-50 px-2.5 py-1.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-purple-500 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-800/50"
+          >
+            {isAutoPlacing ? (
+              <>
+                <svg
+                  className="h-3.5 w-3.5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+                Placing…
+              </>
+            ) : (
+              <>✨ Auto Place</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Subject Section */}

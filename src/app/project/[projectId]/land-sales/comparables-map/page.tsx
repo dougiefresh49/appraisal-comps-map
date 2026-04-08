@@ -11,6 +11,9 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
+import { useAutoPlaceComps } from "~/hooks/useAutoPlaceComps";
+import { AutoPlacePreviewMarkers } from "~/components/AutoPlacePreviewMarkers";
+import { AutoPlaceActionBar } from "~/components/AutoPlaceActionBar";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -371,6 +374,22 @@ export default function LandComparablesMapPage({
     };
   }, []);
 
+  const {
+    proposedComparables,
+    isAutoPlacing,
+    failedCompIds,
+    autoPlace,
+    applyProposal,
+    cancelProposal,
+  } = useAutoPlaceComps({
+    comparables,
+    subjectMarkerPosition,
+    subjectBubblePosition,
+    bubbleSize,
+    mapZoom,
+    onApply: setComparables,
+  });
+
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
       subjectPinnedTailTipPosition ?? subjectMarkerPosition;
@@ -571,6 +590,8 @@ export default function LandComparablesMapPage({
         onIsRepositioningSubjectTailChange={setIsRepositioningSubjectTail}
         onOpenLandMap={undefined}
         readOnly={mapReadOnly}
+        onAutoPlace={autoPlace}
+        isAutoPlacing={isAutoPlacing}
       />
       ) : null}
 
@@ -738,12 +759,29 @@ export default function LandComparablesMapPage({
                 readOnly={readOnly}
               />
             ))}
+
+            {/* Auto-place preview markers */}
+            {proposedComparables && (
+              <AutoPlacePreviewMarkers
+                proposedComparables={proposedComparables}
+                bubbleSize={bubbleSize}
+                compColor="#10b981"
+              />
+            )}
           </Map>
         </APIProvider>
         <DocumentOverlay
           enabled={showDocumentOverlay}
           size={documentFrameSize}
         />
+        {proposedComparables && (
+          <AutoPlaceActionBar
+            failedCount={failedCompIds.length}
+            totalCount={comparables.length}
+            onApply={applyProposal}
+            onCancel={cancelProposal}
+          />
+        )}
       </div>
           </>
         )}

@@ -48,7 +48,7 @@ const SUBJECT_CORE_SCHEMA = `interface SubjectCoreFields {
   Hoisting?: string | null;          // e.g. "5T (x2)", "None"
 
   // Zoning
-  "Zoning Area"?: string;
+  "Zoning Area"?: "Inside City Limits" | "Inside & Outside City Limits" | "Inside ETJ" | "Outside ETJ" | "None" | null;
   "Zoning Description"?: string;
 
   // Rental / occupancy (if observable)

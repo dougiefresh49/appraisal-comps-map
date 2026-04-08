@@ -90,12 +90,31 @@ const SALES_TX = [
 
 const SALES_PROP = [
   "Location",
-  "Age/Condition",
+  "Age / Condition",
   "Building Size (SF)",
   "Office %",
-  "Land/Bld Ratio",
+  "Land / Bld Ratio",
   "Zoning",
 ] as const;
+
+/** Legacy category names in saved drafts / older suggestions — map to spreadsheet labels */
+const DRAFT_CATEGORY_NAME_ALIASES: Record<string, string> = {
+  "Age/Condition": "Age / Condition",
+  "Land/Bld Ratio": "Land / Bld Ratio",
+};
+
+function migrateCategoryRowName(name: string): string {
+  return DRAFT_CATEGORY_NAME_ALIASES[name] ?? name;
+}
+
+function migrateCategoryRows(
+  rows: unknown[],
+): AdjustmentCategoryState[] {
+  return rows.map((row) => {
+    const r = row as AdjustmentCategoryState;
+    return { ...r, name: migrateCategoryRowName(r.name) };
+  });
+}
 
 function defaultConfig(compType: "land" | "sales"): GridConfig {
   const today = new Date().toISOString().slice(0, 10);
@@ -157,6 +176,43 @@ function subjectAddress(core: Record<string, unknown>): string {
   return parts.join(", ") || "Subject";
 }
 
+/**
+ * Mirrors GET_ADJUSTMENT_DATA "Address" format:
+ *   SUBSTITUTE(LEFT(raw, secondComma - 1), ",", "", 1)
+ * → everything before the second comma, first comma removed → "Street City"
+ * Falls back to the raw string when fewer than two commas are present.
+ */
+function formatGridAddress(raw: string): string {
+  const firstComma = raw.indexOf(",");
+  if (firstComma === -1) return raw.trim();
+  const secondComma = raw.indexOf(",", firstComma + 1);
+  const truncated = secondComma === -1 ? raw : raw.slice(0, secondComma);
+  // Remove the first comma (SUBSTITUTE instance 1)
+  return (truncated.slice(0, firstComma) + truncated.slice(firstComma + 1)).trim();
+}
+
+/**
+ * Format a date string as "MMM YYYY" — mirrors GET_ADJUSTMENT_DATA "Date of Sale" format.
+ */
+function formatSaleDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+/**
+ * Compute the Market Conditions % from comp sale date + config.
+ * Mirrors CALC_MONTHLY_INCREASE in the spreadsheet.
+ */
+function marketConditionsPct(dateOfSale: string, config: GridConfig): number {
+  return calcMonthlyIncrease(
+    dateOfSale,
+    config.report_effective_date,
+    config.percent_inc_per_month,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Calculations (mirror spreadsheet)
 // ---------------------------------------------------------------------------
@@ -165,11 +221,17 @@ function calcTransactionRunning(
   basePriceSf: number,
   transactionCategories: AdjustmentCategoryState[],
   compId: string,
+  compDateOfSale: string,
+  config: GridConfig,
 ): number[] {
   const running: number[] = [];
   let current = basePriceSf;
   for (const cat of transactionCategories) {
-    const pct = cat.comp_values[compId]?.percentage ?? 0;
+    // Market Conditions % is always derived — never stored in state
+    const pct =
+      cat.name === "Market Conditions"
+        ? marketConditionsPct(compDateOfSale, config)
+        : (cat.comp_values[compId]?.percentage ?? 0);
     current = current + current * pct;
     running.push(current);
   }
@@ -209,9 +271,13 @@ function adjustedPriceForComp(
     comp.base_price_per_unit,
     state.transaction_categories,
     compId,
+    comp.date_of_sale,
+    state.config,
   );
   const lastTx =
-    post.length > 0 ? (post[post.length - 1] ?? comp.base_price_per_unit) : comp.base_price_per_unit;
+    post.length > 0
+      ? (post[post.length - 1] ?? comp.base_price_per_unit)
+      : comp.base_price_per_unit;
   const propTotal = calcPropertyAdjTotal(state.property_categories, compId);
   return lastTx + lastTx * propTotal;
 }
@@ -236,7 +302,8 @@ function computeMeanMedianRate(
     const filtered = adjusted.filter((v) => v !== min && v !== max);
     const pool = filtered.length > 0 ? filtered : adjusted;
     rate = pool.reduce((s, v) => s + v, 0) / pool.length;
-    rate = config.round_up ? Math.ceil(rate * 10) / 10 : Math.round(rate * 10) / 10;
+    // GET_ADJ_RATE: exclude_extremes branch always uses ROUNDUP(..., 1)
+    rate = Math.ceil(rate * 10) / 10;
   } else {
     let target = mean;
     if (config.include_median && compType === "sales") {
@@ -244,7 +311,9 @@ function computeMeanMedianRate(
     }
     rate = target;
     if (!config.disable_rounding) {
-      rate = config.round_up ? Math.ceil(rate * 10) / 10 : Math.round(rate * 10) / 10;
+      rate = config.round_up
+        ? Math.ceil(rate * 10) / 10
+        : Math.round(rate * 10) / 10;
     }
   }
 
@@ -299,7 +368,10 @@ function suggestionsToState(
 
   const comps: CompColumnState[] = data.comps.map((c) => ({ ...c }));
 
-  function rowForCategory(name: string, sort_order: number): AdjustmentCategoryState {
+  function rowForCategory(
+    name: string,
+    sort_order: number,
+  ): AdjustmentCategoryState {
     const comp_values: Record<string, AdjustmentCellState> = {};
     for (const c of comps) {
       const sug = map.get(suggestionKey(name, c.id));
@@ -327,7 +399,7 @@ function suggestionsToState(
 
     const subject_value =
       comps[0] != null
-        ? map.get(suggestionKey(name, comps[0].id))?.subject_value ?? ""
+        ? (map.get(suggestionKey(name, comps[0].id))?.subject_value ?? "")
         : "";
 
     return {
@@ -368,18 +440,25 @@ function normalizeLoadedDraft(
   if (!Array.isArray(tx) || !Array.isArray(py) || !Array.isArray(comps)) {
     return null;
   }
+  const mergedConfig = mergeConfig(
+    o.config as Partial<GridConfig> | undefined,
+    compType,
+  );
+  const config =
+    compType === "land"
+      ? { ...mergedConfig, include_median: false }
+      : mergedConfig;
   return {
-    transaction_categories: tx as AdjustmentCategoryState[],
-    property_categories: py as AdjustmentCategoryState[],
+    transaction_categories: migrateCategoryRows(tx),
+    property_categories: migrateCategoryRows(py),
     comps: comps as CompColumnState[],
     subject_size: typeof o.subject_size === "number" ? o.subject_size : 0,
     price_unit: typeof o.price_unit === "string" ? o.price_unit : "$/SF",
-    config: mergeConfig(
-      o.config as Partial<GridConfig> | undefined,
-      compType,
-    ),
+    config,
     source:
-      o.source === "manual" || o.source === "mixed" || o.source === "ai_suggested"
+      o.source === "manual" ||
+      o.source === "mixed" ||
+      o.source === "ai_suggested"
         ? o.source
         : "mixed",
   };
@@ -556,7 +635,10 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
   }, [state, projectId, compType, initializing]);
 
   const { mean, median, rate } = useMemo(
-    () => (state ? computeMeanMedianRate(state, compType) : { mean: 0, median: 0, rate: 0 }),
+    () =>
+      state
+        ? computeMeanMedianRate(state, compType)
+        : { mean: 0, median: 0, rate: 0 },
     [state, compType],
   );
 
@@ -599,7 +681,10 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
         comp_values: {
           ...cat.comp_values,
           [compId]: {
-            qualitative: patch.qualitative ?? cat.comp_values[compId]?.qualitative ?? "Similar",
+            qualitative:
+              patch.qualitative ??
+              cat.comp_values[compId]?.qualitative ??
+              "Similar",
             percentage:
               patch.percentage ?? cat.comp_values[compId]?.percentage ?? 0,
             from_ai: patch.from_ai ?? cat.comp_values[compId]?.from_ai,
@@ -673,8 +758,8 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     lines.push(
       [
         "Address",
-        subjectAddress(subjectCore),
-        ...state.comps.map((c) => c.address),
+        formatGridAddress(subjectAddress(subjectCore)),
+        ...state.comps.map((c) => formatGridAddress(c.address)),
       ].join("\t"),
     );
     lines.push(
@@ -692,21 +777,28 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       ].join("\t"),
     );
     lines.push(
-      ["Sale Price / SF", "—", ...state.comps.map((c) => String(c.base_price_per_unit))].join(
-        "\t",
-      ),
+      [
+        compType === "sales" ? "Sale Price / SF (Adj)" : "Sale Price / SF",
+        "—",
+        ...state.comps.map((c) => String(c.base_price_per_unit)),
+      ].join("\t"),
     );
     lines.push("");
 
     for (const cat of state.transaction_categories) {
-      lines.push([cat.name, cat.subject_value, ...state.comps.map(() => "")].join("\t"));
+      lines.push(
+        [cat.name, cat.subject_value, ...state.comps.map(() => "")].join("\t"),
+      );
       lines.push(
         [
           "",
           "—",
           ...state.comps.map((c) => {
-            const cell = cat.comp_values[c.id];
-            return cell ? `${(cell.percentage * 100).toFixed(2)}%` : "";
+            const pct =
+              cat.name === "Market Conditions"
+                ? marketConditionsPct(c.date_of_sale, state.config)
+                : (cat.comp_values[c.id]?.percentage ?? 0);
+            return `${(pct * 100).toFixed(2)}%`;
           }),
         ].join("\t"),
       );
@@ -719,6 +811,8 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
               c.base_price_per_unit,
               state.transaction_categories,
               c.id,
+              c.date_of_sale,
+              state.config,
             );
             const idx = state.transaction_categories.findIndex(
               (x) => x.name === cat.name,
@@ -731,7 +825,9 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     }
     lines.push("");
     for (const cat of state.property_categories) {
-      lines.push([cat.name, cat.subject_value, ...state.comps.map(() => "")].join("\t"));
+      lines.push(
+        [cat.name, cat.subject_value, ...state.comps.map(() => "")].join("\t"),
+      );
       lines.push(
         [
           "",
@@ -748,8 +844,9 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       [
         "Total Adjustment (property %)",
         "—",
-        ...state.comps.map((c) =>
-          `${(calcPropertyAdjTotal(state.property_categories, c.id) * 100).toFixed(2)}%`,
+        ...state.comps.map(
+          (c) =>
+            `${(calcPropertyAdjTotal(state.property_categories, c.id) * 100).toFixed(2)}%`,
         ),
       ].join("\t"),
     );
@@ -760,16 +857,30 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
         ...state.comps.map((c) => adjustedPriceForComp(state, c.id).toFixed(2)),
       ].join("\t"),
     );
-    lines.push(["Mean $/SF", "", "", "", String(mean)].join("\t"));
+    lines.push(["Adjusted Mean $ / SF", "", "", "", String(mean)].join("\t"));
     if (compType === "sales" && state.config.include_median) {
-      lines.push(["Median $/SF", "", "", "", String(median)].join("\t"));
+      lines.push(
+        ["Adjusted Median $ / SF", "", "", "", String(median)].join("\t"),
+      );
     }
-    lines.push(["$/SF rate", "", "", "", String(rate)].join("\t"));
+    lines.push(["$ / SF", "", "", "", String(rate)].join("\t"));
     if (compType === "land") {
-      lines.push(["$/AC rate", "", "", "", String(ratePerAc)].join("\t"));
+      lines.push(["$ / AC", "", "", "", String(ratePerAc)].join("\t"));
     }
-    lines.push(["Value indication", "", "", "", String(valueIndication)].join("\t"));
-    lines.push(["Concluded", "", "", "", String(concluded)].join("\t"));
+    lines.push(
+      ["Value Indication", "", "", "", String(valueIndication)].join("\t"),
+    );
+    lines.push(
+      [
+        compType === "land"
+          ? "Concluded Value - Land"
+          : "Concluded Value - Site and Improvements",
+        "",
+        "",
+        "",
+        String(concluded),
+      ].join("\t"),
+    );
 
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
@@ -834,7 +945,7 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
 
   if (loadError) {
     return (
-      <div className="rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
+      <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
         {loadError}
       </div>
     );
@@ -842,9 +953,9 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
 
   if (initializing || subjectLoading) {
     return (
-      <div className="animate-pulse space-y-3 rounded-lg border border-gray-800 bg-gray-900/50 p-6">
-        <div className="h-8 w-1/3 rounded bg-gray-800" />
-        <div className="h-64 rounded bg-gray-800" />
+      <div className="animate-pulse space-y-3 rounded-lg border border-gray-200 bg-gray-100 p-6 dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="h-8 w-1/3 rounded bg-gray-200 dark:bg-gray-800" />
+        <div className="h-64 rounded bg-gray-200 dark:bg-gray-800" />
       </div>
     );
   }
@@ -855,30 +966,38 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
 
   if (state.comps.length === 0) {
     return (
-      <div className="rounded-lg border border-amber-800/60 bg-amber-950/20 p-4 text-sm text-amber-100">
-        No {compType === "land" ? "land" : "sales"} comparables found for this project. Add
-        comps first, then return to the adjustment grid.
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-100">
+        No {compType === "land" ? "land" : "sales"} comparables found for this
+        project. Add comps first, then return to the adjustment grid.
       </div>
     );
   }
 
   const colCount = 2 + state.comps.length;
 
+  const concludedLabel =
+    compType === "land"
+      ? "Concluded Value - Land"
+      : "Concluded Value - Site and Improvements";
+  const valueSummarySizeLabel =
+    compType === "land" ? "Land Size (SF)" : "Improvement Size (SF)";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* Action bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={resetToAi}
-            className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700"
           >
             Reset to AI Suggestions
           </button>
           <button
             type="button"
             onClick={copyGrid}
-            className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 hover:bg-gray-700"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700"
           >
             Copy Grid
           </button>
@@ -888,147 +1007,191 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             onPick={addPropertyCategory}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={state.config.exclude_extremes}
-              onChange={(e) => updateConfig({ exclude_extremes: e.target.checked })}
-            />
-            Exclude extremes
-          </label>
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={state.config.round_up}
-              onChange={(e) => updateConfig({ round_up: e.target.checked })}
-            />
-            Round up
-          </label>
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={state.config.disable_rounding}
-              onChange={(e) => updateConfig({ disable_rounding: e.target.checked })}
-            />
-            Disable rounding
-          </label>
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={state.config.round_final_value}
-              onChange={(e) => updateConfig({ round_final_value: e.target.checked })}
-            />
-            Round final value
-          </label>
-          {compType === "sales" && (
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={state.config.round_to_5k}
-                onChange={(e) => updateConfig({ round_to_5k: e.target.checked })}
-              />
-              Round to $5k
-            </label>
+        <div className="flex items-center gap-2 text-xs">
+          {saveStatus === "saving" && (
+            <span className="text-gray-400 dark:text-gray-500">Saving…</span>
           )}
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={state.config.include_median}
-              onChange={(e) => updateConfig({ include_median: e.target.checked })}
-            />
-            Include median
-          </label>
-          <span className="text-gray-500">|</span>
-          <label className="flex items-center gap-1">
-            %/mo
-            <input
-              type="number"
-              step={0.1}
-              className="w-16 rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-gray-100"
-              value={state.config.percent_inc_per_month}
-              onChange={(e) =>
-                updateConfig({
-                  percent_inc_per_month: Number.parseFloat(e.target.value) || 0,
-                })
-              }
-            />
-          </label>
-          <label className="flex items-center gap-1">
-            Eff. date
-            <input
-              type="date"
-              className="rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-gray-100"
-              value={state.config.report_effective_date.slice(0, 10)}
-              onChange={(e) =>
-                updateConfig({ report_effective_date: e.target.value })
-              }
-            />
-          </label>
-          {saveStatus === "saving" && <span>Saving…</span>}
-          {saveStatus === "saved" && <span className="text-green-400">Saved</span>}
-          {copyMsg && <span className="text-blue-400">{copyMsg}</span>}
+          {saveStatus === "saved" && (
+            <span className="font-medium text-green-600 dark:text-green-400">
+              Saved
+            </span>
+          )}
+          {copyMsg && (
+            <span className="text-blue-600 dark:text-blue-400">{copyMsg}</span>
+          )}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-800 bg-gray-950">
-        <table className="min-w-full border-collapse text-left text-xs text-gray-100">
+      {/* Config bar */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-400">
+        <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+          <input
+            type="checkbox"
+            checked={state.config.exclude_extremes}
+            onChange={(e) =>
+              updateConfig({ exclude_extremes: e.target.checked })
+            }
+          />
+          Exclude extremes
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+          <input
+            type="checkbox"
+            checked={state.config.round_up}
+            onChange={(e) => updateConfig({ round_up: e.target.checked })}
+          />
+          Round up
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+          <input
+            type="checkbox"
+            checked={state.config.disable_rounding}
+            onChange={(e) =>
+              updateConfig({ disable_rounding: e.target.checked })
+            }
+          />
+          Disable rounding
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+          <input
+            type="checkbox"
+            checked={state.config.round_final_value}
+            onChange={(e) =>
+              updateConfig({ round_final_value: e.target.checked })
+            }
+          />
+          Round final value
+        </label>
+        {compType === "sales" && (
+          <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+            <input
+              type="checkbox"
+              checked={state.config.round_to_5k}
+              onChange={(e) => updateConfig({ round_to_5k: e.target.checked })}
+            />
+            Round to $5k
+          </label>
+        )}
+        {compType === "sales" && (
+          <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
+            <input
+              type="checkbox"
+              checked={state.config.include_median}
+              onChange={(e) =>
+                updateConfig({ include_median: e.target.checked })
+              }
+            />
+            Include median
+          </label>
+        )}
+        <div className="h-3 w-px bg-gray-300 dark:bg-gray-700" />
+        <label className="flex items-center gap-1.5">
+          <span className="text-gray-400 dark:text-gray-500">%/mo</span>
+          <input
+            type="number"
+            step={0.1}
+            className="w-14 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-gray-700 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:focus:border-blue-700"
+            value={state.config.percent_inc_per_month}
+            onChange={(e) =>
+              updateConfig({
+                percent_inc_per_month: Number.parseFloat(e.target.value) || 0,
+              })
+            }
+          />
+        </label>
+        <label className="flex items-center gap-1.5">
+          <span className="text-gray-400 dark:text-gray-500">Eff. date</span>
+          <input
+            type="date"
+            className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-gray-700 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:focus:border-blue-700"
+            value={state.config.report_effective_date.slice(0, 10)}
+            onChange={(e) =>
+              updateConfig({ report_effective_date: e.target.value })
+            }
+          />
+        </label>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-gray-300 bg-white dark:border-gray-800 dark:bg-gray-950">
+        <table
+          className="border-collapse text-left text-xs text-gray-700 dark:text-gray-100"
+          style={{
+            tableLayout: "fixed",
+            minWidth: `${176 + 152 + state.comps.length * 152}px`,
+          }}
+        >
           <thead>
-            <tr className="border-b border-gray-800 bg-gray-900">
-              <th className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-2 font-medium">
+            <tr className="border-b-2 border-gray-500 bg-gray-500 dark:border-gray-700 dark:bg-gray-900">
+              <th className="sticky left-0 z-10 w-44 border-r border-gray-500 bg-gray-500 px-3 py-3 text-left text-[10px] font-semibold tracking-widest text-gray-100 uppercase dark:border-gray-700 dark:bg-gray-900 dark:text-gray-500">
                 Field
               </th>
-              <th className="border-r border-gray-800 px-2 py-2 font-medium">Subject</th>
+              <th className="w-38 border-r border-gray-500 px-3 py-3 text-left text-[10px] font-semibold tracking-widest text-gray-100 uppercase dark:border-gray-700 dark:text-gray-500">
+                Subject
+              </th>
               {state.comps.map((c) => (
                 <th
                   key={c.id}
-                  className="min-w-[120px] border-r border-gray-800 px-2 py-2 font-medium last:border-r-0"
+                  className="w-38 border-r border-gray-500 px-3 py-3 text-left last:border-r-0 dark:border-gray-700"
                 >
-                  Comp #{c.number}
+                  <div className="text-[11px] font-semibold text-white dark:text-gray-200">
+                    Comp #{c.number}
+                  </div>
+                  <div className="mt-0.5 text-[10px] leading-snug font-normal break-words text-gray-200 dark:text-gray-500">
+                    {c.address}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-gray-800">
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5">
+            <tr className="border-b border-gray-200 dark:border-gray-800/60">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
                 Address
               </td>
-              <td className="border-r border-gray-800 px-2 py-1.5">
-                {subjectAddress(subjectCore)}
+              <td className="border-r border-gray-200 px-3 py-2 break-words text-gray-600 dark:border-gray-800 dark:text-gray-300">
+                {formatGridAddress(subjectAddress(subjectCore))}
               </td>
               {state.comps.map((c) => (
-                <td key={c.id} className="border-r border-gray-800 px-2 py-1.5">
-                  {c.address}
+                <td
+                  key={c.id}
+                  className="border-r border-gray-200 px-3 py-2 break-words text-gray-600 dark:border-gray-800 dark:text-gray-300"
+                >
+                  {formatGridAddress(c.address)}
                 </td>
               ))}
             </tr>
-            <tr className="border-b border-gray-800">
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5">
+            <tr className="border-b border-gray-200 dark:border-gray-800/60">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
                 Date of Sale
               </td>
-              <td className="border-r border-gray-800 px-2 py-1.5">Current</td>
+              <td className="border-r border-gray-200 px-3 py-2 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                Current
+              </td>
               {state.comps.map((c) => (
-                <td key={c.id} className="border-r border-gray-800 px-2 py-1.5">
+                <td
+                  key={c.id}
+                  className="border-r border-gray-200 px-3 py-2 text-gray-500 dark:border-gray-800 dark:text-gray-400"
+                >
                   {c.date_of_sale || "—"}
                 </td>
               ))}
             </tr>
-            <tr className="border-b border-gray-800">
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5">
+            <tr className="border-b border-gray-200 dark:border-gray-800/60">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
                 {compType === "land" ? "Land Size (SF)" : "Building Size (SF)"}
               </td>
-              <td className="border-r border-gray-800 px-2 py-1.5">
+              <td className="border-r border-gray-200 px-3 py-2 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
                 <input
                   type="number"
-                  className="w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5"
+                  className="w-full bg-transparent font-mono text-gray-700 outline-none focus:outline-none dark:text-gray-200"
                   value={state.subject_size || ""}
                   onChange={(e) =>
                     setState((prev) =>
                       prev
                         ? {
                             ...prev,
-                            subject_size: Number.parseFloat(e.target.value) || 0,
+                            subject_size:
+                              Number.parseFloat(e.target.value) || 0,
                           }
                         : prev,
                     )
@@ -1036,20 +1199,27 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                 />
               </td>
               {state.comps.map((c) => (
-                <td key={c.id} className="border-r border-gray-800 px-2 py-1.5">
-                  {c.size || "—"}
+                <td
+                  key={c.id}
+                  className="border-r border-gray-200 px-3 py-2 font-mono text-gray-500 dark:border-gray-800 dark:text-gray-400"
+                >
+                  {c.size ? c.size.toLocaleString() : "—"}
                 </td>
               ))}
             </tr>
-            <tr className="border-b border-gray-800">
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5">
-                Sale Price / SF
+            <tr className="border-b-2 border-gray-300 dark:border-gray-700">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
+                {compType === "sales"
+                  ? "Sale Price / SF (Adj)"
+                  : "Sale Price / SF"}
               </td>
-              <td className="border-r border-gray-800 bg-gray-800/40 px-2 py-1.5">—</td>
+              <td className="border-r border-gray-200 bg-gray-100 px-3 py-2 text-gray-400 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-600">
+                —
+              </td>
               {state.comps.map((c) => (
                 <td
                   key={c.id}
-                  className="border-r border-gray-800 bg-gray-800/40 px-2 py-1.5"
+                  className="border-r border-gray-200 bg-gray-100 px-3 py-2 font-mono font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-200"
                 >
                   ${c.base_price_per_unit.toFixed(2)}
                 </td>
@@ -1058,16 +1228,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             <tr>
               <td
                 colSpan={colCount}
-                className="h-2 bg-gray-950"
+                className="h-2 bg-gray-100 dark:bg-gray-950"
               />
             </tr>
 
-            <tr className="bg-gray-900/80">
+            <tr className="border-b-2 border-gray-700 bg-gray-400 dark:border-gray-700/60 dark:bg-gray-900/80">
               <td
                 colSpan={colCount}
-                className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+                className="border-l-4 border-l-gray-500 px-3 py-2 text-[10px] font-bold tracking-widest text-gray-200 uppercase dark:border-l-gray-600 dark:text-gray-300"
               >
-                Transaction adjustments
+                Transaction Adjustments
               </td>
             </tr>
             {state.transaction_categories.map((cat, ci) => (
@@ -1077,6 +1247,7 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                 catIndex={ci}
                 comps={state.comps}
                 transactionCategories={state.transaction_categories}
+                config={state.config}
                 onQualChange={(compId, q) =>
                   updateCell("tx", ci, compId, { qualitative: q })
                 }
@@ -1103,16 +1274,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             <tr>
               <td
                 colSpan={colCount}
-                className="h-2 bg-gray-950"
+                className="h-2 bg-gray-100 dark:bg-gray-950"
               />
             </tr>
 
-            <tr className="bg-gray-900/80">
+            <tr className="border-b-2 border-gray-700 bg-gray-400 dark:border-gray-700/60 dark:bg-gray-900/80">
               <td
                 colSpan={colCount}
-                className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+                className="border-l-4 border-l-gray-500 px-3 py-2 text-[10px] font-bold tracking-widest text-gray-200 uppercase dark:border-l-gray-600 dark:text-gray-300"
               >
-                Property adjustments
+                Property Adjustments
               </td>
             </tr>
             {state.property_categories.map((cat, ci) => (
@@ -1148,126 +1319,140 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             <tr>
               <td
                 colSpan={colCount}
-                className="h-2 bg-gray-950"
+                className="h-3 bg-gray-100 dark:bg-gray-950"
               />
             </tr>
 
-            <tr className="border-t border-gray-800">
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
+            <tr className="border-t-2 border-gray-400 bg-gray-200 dark:border-gray-700 dark:bg-gray-800/70">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                 Total adjustment (property %)
               </td>
-              <td className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5">—</td>
+              <td className="border-r border-gray-300 bg-gray-200 px-3 py-2 text-gray-400 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-600">
+                —
+              </td>
               {state.comps.map((c) => (
                 <td
                   key={c.id}
-                  className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5"
+                  className="border-r border-gray-300 bg-gray-200 px-3 py-2 font-mono text-xs font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200"
                 >
-                  {(calcPropertyAdjTotal(state.property_categories, c.id) * 100).toFixed(2)}%
+                  {(
+                    calcPropertyAdjTotal(state.property_categories, c.id) * 100
+                  ).toFixed(1)}
+                  %
                 </td>
               ))}
             </tr>
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
+            <tr className="border-b border-gray-300 dark:border-gray-700/60">
+              <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                 Adjusted $/SF
               </td>
-              <td className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5">—</td>
+              <td className="border-r border-gray-300 bg-gray-200 px-3 py-2 text-gray-400 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-600">
+                —
+              </td>
               {state.comps.map((c) => (
                 <td
                   key={c.id}
-                  className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5"
+                  className="border-r border-gray-300 bg-gray-200 px-3 py-2 font-mono text-xs font-semibold text-blue-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-blue-300"
                 >
                   ${adjustedPriceForComp(state, c.id).toFixed(2)}
                 </td>
               ))}
             </tr>
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                Adjusted mean $/SF
-              </td>
-              <td
-                colSpan={1 + state.comps.length}
-                className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-medium"
-              >
-                ${mean.toFixed(2)}
-              </td>
-            </tr>
-            {compType === "sales" && state.config.include_median && (
-              <tr>
-                <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                  Adjusted median $/SF
-                </td>
-                <td
-                  colSpan={1 + state.comps.length}
-                  className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-medium"
-                >
-                  ${median.toFixed(2)}
-                </td>
-              </tr>
-            )}
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                $/SF rate
-              </td>
-              <td
-                colSpan={1 + state.comps.length}
-                className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-semibold text-blue-300"
-              >
-                ${rate.toFixed(2)}
-              </td>
-            </tr>
-            {compType === "land" && (
-              <tr>
-                <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                  $/AC rate
-                </td>
-                <td
-                  colSpan={1 + state.comps.length}
-                  className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-medium"
-                >
-                  ${ratePerAc.toFixed(2)}
-                </td>
-              </tr>
-            )}
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                Value indication
-              </td>
-              <td
-                colSpan={1 + state.comps.length}
-                className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-medium"
-              >
-                ${valueIndication.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </td>
-            </tr>
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1.5 font-medium">
-                Concluded value
-              </td>
-              <td
-                colSpan={1 + state.comps.length}
-                className="border-r border-gray-800 bg-gray-800/50 px-2 py-1.5 text-right font-semibold text-green-300"
-              >
-                ${concluded.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </td>
-            </tr>
           </tbody>
         </table>
       </div>
 
+      {/* Value summary card */}
+      <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 dark:border-gray-700/60 dark:bg-gray-900">
+        <div className="mb-3 text-[10px] font-semibold tracking-widest text-gray-400 uppercase dark:text-gray-600">
+          Value Summary
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">
+              Adjusted Mean $ / SF
+            </div>
+            <div className="font-mono text-sm text-gray-700 dark:text-gray-300">
+              ${mean.toFixed(2)}
+            </div>
+          </div>
+          {compType === "sales" && state.config.include_median && (
+            <div className="space-y-0.5">
+              <div className="text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">
+                Adjusted Median $ / SF
+              </div>
+              <div className="font-mono text-sm text-gray-700 dark:text-gray-300">
+                ${median.toFixed(2)}
+              </div>
+            </div>
+          )}
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-semibold tracking-wide text-blue-500 uppercase dark:text-blue-500">
+              $ / SF
+            </div>
+            <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-300">
+              ${rate.toFixed(2)}
+            </div>
+          </div>
+          {compType === "land" && (
+            <div className="space-y-0.5">
+              <div className="text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">
+                $ / AC
+              </div>
+              <div className="font-mono text-sm text-gray-700 dark:text-gray-300">
+                ${ratePerAc.toFixed(2)}
+              </div>
+            </div>
+          )}
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">
+              {valueSummarySizeLabel}
+            </div>
+            <div className="font-mono text-sm text-gray-600 dark:text-gray-400">
+              {state.subject_size.toLocaleString()}
+            </div>
+          </div>
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">
+              Value Indication
+            </div>
+            <div className="font-mono text-sm text-gray-700 dark:text-gray-300">
+              $
+              {valueIndication.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+              })}
+            </div>
+          </div>
+          <div className="ml-auto rounded-lg bg-emerald-50 px-5 py-3 ring-1 ring-emerald-300/60 ring-inset dark:bg-emerald-950/50 dark:ring-emerald-800/40">
+            <div className="text-[10px] font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-600">
+              {concludedLabel}
+            </div>
+            <div className="mt-0.5 font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300">
+              $
+              {concluded.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {popover && (
         <div
-          className="fixed z-50 max-w-sm rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-200 shadow-xl"
+          className="fixed z-50 max-w-sm rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
           style={{ left: popover.x + 8, top: popover.y + 8 }}
         >
           <button
             type="button"
-            className="float-right text-gray-500 hover:text-gray-300"
+            className="float-right text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
             onClick={() => setPopover(null)}
           >
             ×
           </button>
-          <p className="mb-1 font-semibold text-gray-100">{popover.category}</p>
-          <p className="text-gray-400">{popover.text}</p>
+          <p className="mb-1 font-semibold text-gray-800 dark:text-gray-100">
+            {popover.category}
+          </p>
+          <p className="text-gray-500 dark:text-gray-400">{popover.text}</p>
         </div>
       )}
     </div>
@@ -1283,6 +1468,7 @@ function FragmentCategoryRows({
   catIndex,
   comps,
   transactionCategories,
+  config,
   onQualChange,
   onPctChange,
   onSubjectChange,
@@ -1292,53 +1478,96 @@ function FragmentCategoryRows({
   catIndex: number;
   comps: CompColumnState[];
   transactionCategories: AdjustmentCategoryState[];
+  config: GridConfig;
   onQualChange: (compId: string, q: string) => void;
   onPctChange: (compId: string, pct: number) => void;
   onSubjectChange: (v: string) => void;
   onSuggestClick: (compId: string, e: MouseEvent) => void;
 }) {
+  const isMC = cat.name === "Market Conditions";
   return (
     <>
-      <tr className="border-b border-gray-800/80">
-        <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1 font-medium">
+      {/* Qualitative row */}
+      <tr className="border-b border-gray-200 dark:border-gray-800/50">
+        <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1.5 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
           {cat.name}
         </td>
-        <td className="border-r border-gray-800 px-1 py-1">
-          <input
-            className="w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[11px]"
-            value={cat.subject_value}
-            onChange={(e) => onSubjectChange(e.target.value)}
-          />
-        </td>
-        {comps.map((c) => (
-          <td key={c.id} className="border-r border-gray-800 px-1 py-1">
-            <QualSelect
-              value={cat.comp_values[c.id]?.qualitative ?? "Similar"}
-              onChange={(q) => onQualChange(c.id, q)}
+        {isMC ? (
+          <td className="border-r border-gray-200 px-3 py-1.5 dark:border-gray-800">
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">
+              Current
+            </span>
+          </td>
+        ) : (
+          <td className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
+            <input
+              className="w-full bg-transparent text-[11px] text-gray-600 outline-none focus:outline-none dark:text-gray-200"
+              value={cat.subject_value}
+              onChange={(e) => onSubjectChange(e.target.value)}
             />
           </td>
-        ))}
+        )}
+        {comps.map((c) =>
+          isMC ? (
+            <td
+              key={c.id}
+              className="border-r border-gray-200 px-3 py-1.5 dark:border-gray-800"
+            >
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                {formatSaleDate(c.date_of_sale)}
+              </span>
+            </td>
+          ) : (
+            <td
+              key={c.id}
+              className="border-r border-gray-200 px-2 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
+            >
+              <QualSelect
+                value={cat.comp_values[c.id]?.qualitative ?? "Similar"}
+                onChange={(q) => onQualChange(c.id, q)}
+              />
+            </td>
+          ),
+        )}
       </tr>
-      <tr className="border-b border-gray-800/80">
-        <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1 text-gray-500">
+      {/* Percentage row */}
+      <tr className="border-b border-gray-200 dark:border-gray-800/50">
+        <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1 text-[10px] font-semibold tracking-wide text-gray-400 uppercase dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
           %
         </td>
-        <td className="border-r border-gray-800 bg-gray-800/30 px-2 py-1">—</td>
+        <td className="border-r border-gray-200 bg-gray-100 px-3 py-1 text-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
+          —
+        </td>
         {comps.map((c) => {
+          if (isMC) {
+            const pct = marketConditionsPct(c.date_of_sale, config);
+            return (
+              <td
+                key={c.id}
+                className="border-r border-gray-200 bg-gray-100 px-3 py-1 dark:border-gray-800 dark:bg-gray-950"
+              >
+                <span className="font-mono text-[11px] text-gray-500 dark:text-gray-400">
+                  {(pct * 100).toFixed(2)}%
+                </span>
+              </td>
+            );
+          }
           const cell = cat.comp_values[c.id] ?? emptyCell();
           const displayPct = (cell.percentage * 100).toFixed(2);
           return (
             <td
               key={c.id}
-              className={`border-r border-gray-800 px-1 py-1 ${
-                cell.from_ai ? "bg-blue-500/10" : ""
+              className={`border-r border-gray-200 px-1.5 py-1 transition-colors dark:border-gray-800 ${
+                cell.from_ai
+                  ? "border-l-2 border-l-blue-400 bg-blue-50 dark:border-l-blue-600 dark:bg-blue-950/50"
+                  : "bg-gray-100 hover:bg-sky-50 dark:bg-gray-950 dark:hover:bg-sky-950/20"
               }`}
             >
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   step={0.01}
-                  className="w-full min-w-[72px] rounded border border-gray-700 bg-gray-900 px-1 py-0.5"
+                  className="w-full min-w-[56px] bg-transparent font-mono text-[11px] text-gray-700 outline-none focus:outline-none dark:text-gray-200"
                   value={displayPct}
                   onChange={(e) => {
                     const v = Number.parseFloat(e.target.value);
@@ -1348,11 +1577,11 @@ function FragmentCategoryRows({
                 {cell.from_ai && (
                   <button
                     type="button"
-                    title="AI suggestion"
-                    className="shrink-0 text-[10px] text-blue-400"
+                    title="AI suggestion — click to see rationale"
+                    className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-blue-500 hover:bg-blue-100 hover:text-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/60 dark:hover:text-blue-300"
                     onClick={(e) => onSuggestClick(c.id, e)}
                   >
-                    i
+                    AI
                   </button>
                 )}
               </div>
@@ -1360,22 +1589,27 @@ function FragmentCategoryRows({
           );
         })}
       </tr>
-      <tr className="border-b border-gray-800">
-        <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1 text-gray-500">
+      {/* Running $/SF row — emphasis border separates each category group */}
+      <tr className="border-b-2 border-gray-300 dark:border-gray-700/60">
+        <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1 text-[10px] font-semibold tracking-wide text-gray-400 uppercase dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
           Running $/SF
         </td>
-        <td className="border-r border-gray-800 bg-gray-800/40 px-2 py-1">—</td>
+        <td className="border-r border-gray-200 bg-gray-100 px-3 py-1 text-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
+          —
+        </td>
         {comps.map((c) => {
           const running = calcTransactionRunning(
             c.base_price_per_unit,
             transactionCategories,
             c.id,
+            c.date_of_sale,
+            config,
           );
           const v = running[catIndex];
           return (
             <td
               key={c.id}
-              className="border-r border-gray-800 bg-gray-800/40 px-2 py-1"
+              className="border-r border-gray-200 bg-gray-100 px-3 py-1 font-mono text-[11px] text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-500"
             >
               {v != null ? `$${v.toFixed(2)}` : "—"}
             </td>
@@ -1408,29 +1642,33 @@ function FragmentPropertyRows({
   void _ci;
   return (
     <>
-      <tr className="border-b border-gray-800/80">
-        <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1 font-medium">
+      {/* Qualitative row */}
+      <tr className="border-b border-gray-200 dark:border-gray-800/50">
+        <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1.5 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
           <span className="flex items-center justify-between gap-1">
             {cat.name}
             <button
               type="button"
               onClick={onRemove}
-              className="text-gray-500 hover:text-red-400"
+              className="ml-1 shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:text-gray-600 dark:hover:bg-red-950/60 dark:hover:text-red-400"
               title="Remove row"
             >
               ×
             </button>
           </span>
         </td>
-        <td className="border-r border-gray-800 px-1 py-1">
+        <td className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
           <input
-            className="w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[11px]"
+            className="w-full bg-transparent text-[11px] text-gray-600 outline-none focus:outline-none dark:text-gray-200"
             value={cat.subject_value}
             onChange={(e) => onSubjectChange(e.target.value)}
           />
         </td>
         {comps.map((c) => (
-          <td key={c.id} className="border-r border-gray-800 px-1 py-1">
+          <td
+            key={c.id}
+            className="border-r border-gray-200 px-2 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
+          >
             <QualSelect
               value={cat.comp_values[c.id]?.qualitative ?? "Similar"}
               onChange={(q) => onQualChange(c.id, q)}
@@ -1438,26 +1676,31 @@ function FragmentPropertyRows({
           </td>
         ))}
       </tr>
-      <tr className="border-b border-gray-800">
-        <td className="sticky left-0 z-10 border-r border-gray-800 bg-gray-900 px-2 py-1 text-gray-500">
+      {/* Percentage row — emphasis border separates each property category group */}
+      <tr className="border-b-2 border-gray-300 dark:border-gray-700/60">
+        <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1 text-[10px] font-semibold tracking-wide text-gray-400 uppercase dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
           %
         </td>
-        <td className="border-r border-gray-800 bg-gray-800/30 px-2 py-1">—</td>
+        <td className="border-r border-gray-200 bg-gray-100 px-3 py-1 text-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
+          —
+        </td>
         {comps.map((c) => {
           const cell = cat.comp_values[c.id] ?? emptyCell();
           const displayPct = (cell.percentage * 100).toFixed(2);
           return (
             <td
               key={c.id}
-              className={`border-r border-gray-800 px-1 py-1 ${
-                cell.from_ai ? "bg-blue-500/10" : ""
+              className={`border-r border-gray-200 px-1.5 py-1 transition-colors dark:border-gray-800 ${
+                cell.from_ai
+                  ? "border-l-2 border-l-blue-400 bg-blue-50 dark:border-l-blue-600 dark:bg-blue-950/50"
+                  : "bg-gray-100 hover:bg-sky-50 dark:bg-gray-950 dark:hover:bg-sky-950/20"
               }`}
             >
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   step={0.01}
-                  className="w-full min-w-[72px] rounded border border-gray-700 bg-gray-900 px-1 py-0.5"
+                  className="w-full min-w-[56px] bg-transparent font-mono text-[11px] text-gray-700 outline-none focus:outline-none dark:text-gray-200"
                   value={displayPct}
                   onChange={(e) => {
                     const v = Number.parseFloat(e.target.value);
@@ -1467,11 +1710,11 @@ function FragmentPropertyRows({
                 {cell.from_ai && (
                   <button
                     type="button"
-                    title="AI suggestion"
-                    className="shrink-0 text-[10px] text-blue-400"
+                    title="AI suggestion — click to see rationale"
+                    className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-blue-500 hover:bg-blue-100 hover:text-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/60 dark:hover:text-blue-300"
                     onClick={(e) => onSuggestClick(c.id, e)}
                   >
-                    i
+                    AI
                   </button>
                 )}
               </div>
@@ -1483,6 +1726,13 @@ function FragmentPropertyRows({
   );
 }
 
+function qualColor(value: string): string {
+  if (value === "Inferior") return "text-red-600 dark:text-red-400";
+  if (value === "Superior") return "text-emerald-600 dark:text-emerald-400";
+  if (value === "TODO") return "text-amber-600 dark:text-amber-400";
+  return "text-gray-600 dark:text-gray-300";
+}
+
 function QualSelect({
   value,
   onChange,
@@ -1491,10 +1741,11 @@ function QualSelect({
   onChange: (q: string) => void;
 }) {
   const isPreset = (QUAL_OPTIONS as readonly string[]).includes(value);
+  const colorCls = qualColor(value);
   return (
     <div className="flex flex-col gap-0.5">
       <select
-        className="w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[11px]"
+        className={`w-full border-0 bg-transparent text-[11px] font-medium outline-none focus:outline-none ${colorCls}`}
         value={isPreset ? value : "CUSTOM"}
         onChange={(e) => {
           if (e.target.value === "CUSTOM") {
@@ -1513,7 +1764,7 @@ function QualSelect({
       </select>
       {!isPreset && (
         <input
-          className="w-full rounded border border-gray-600 bg-gray-900 px-1 py-0.5 text-[10px]"
+          className="w-full border-0 bg-transparent text-[10px] text-gray-600 outline-none focus:outline-none dark:text-gray-300"
           placeholder="Custom"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1541,14 +1792,14 @@ function AddCategoryMenu({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-100"
+        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
       >
         Add category
       </button>
       {open && (
-        <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-gray-700 bg-gray-900 p-2 shadow-lg">
+        <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
           <select
-            className="mb-2 w-full rounded border border-gray-700 bg-gray-950 px-2 py-1 text-xs"
+            className="mb-2 w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
             onChange={(e) => {
               if (e.target.value) {
                 onPick(e.target.value);
@@ -1566,14 +1817,14 @@ function AddCategoryMenu({
           </select>
           <div className="flex gap-1">
             <input
-              className="flex-1 rounded border border-gray-700 bg-gray-950 px-2 py-1 text-xs"
+              className="flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
               placeholder="Custom name"
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
             />
             <button
               type="button"
-              className="rounded bg-blue-600 px-2 py-1 text-xs text-white"
+              className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500"
               onClick={() => {
                 onPick(custom);
                 setCustom("");

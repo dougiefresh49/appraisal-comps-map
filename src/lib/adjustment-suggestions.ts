@@ -59,10 +59,10 @@ const SALES_TRANSACTION = [
 
 const SALES_PROPERTY = [
   "Location",
-  "Age/Condition",
+  "Age / Condition",
   "Building Size (SF)",
   "Office %",
-  "Land/Bld Ratio",
+  "Land / Bld Ratio",
   "Zoning",
 ] as const;
 
@@ -124,20 +124,25 @@ function confidenceFromOccurrences(n: number): "high" | "medium" | "low" {
   return "low";
 }
 
+/** Normalize so "Age / Condition" and "Age/Condition" match spreadsheet / extracted rows */
+function adjustmentCategoryKey(category: string): string {
+  return category.trim().toLowerCase().replace(/\s*\/\s*/g, "/");
+}
+
 function findPattern(
   patterns: AdjustmentPatternSummary[],
   category: string,
 ): AdjustmentPatternSummary | null {
-  const n = category.trim().toLowerCase();
+  const n = adjustmentCategoryKey(category);
   const exact = patterns.find(
-    (p) => p.category.trim().toLowerCase() === n,
+    (p) => adjustmentCategoryKey(p.category) === n,
   );
   if (exact) {
     return exact;
   }
   return (
     patterns.find((p) => {
-      const c = p.category.trim().toLowerCase();
+      const c = adjustmentCategoryKey(p.category);
       return n.includes(c) || c.includes(n);
     }) ?? null
   );
@@ -230,7 +235,12 @@ function extractSubjectValue(
   if (c === "frontage") {
     return subjectFrontage(core);
   }
-  if (c === "age/condition" || c === "age" || c === "condition") {
+  if (
+    c === "age/condition" ||
+    c === "age / condition" ||
+    c === "age" ||
+    c === "condition"
+  ) {
     return compType === "sales" ? subjectAgeCondition(core) : null;
   }
   if (c === "building size (sf)" || c === "building size") {
@@ -245,7 +255,7 @@ function extractSubjectValue(
     }
     return strVal(o);
   }
-  if (c === "land/bld ratio") {
+  if (c === "land/bld ratio" || c === "land / bld ratio") {
     const r = core["Land / Bld Ratio"];
     return typeof r === "number" && !Number.isNaN(r) ? String(r) : strVal(r);
   }
@@ -321,7 +331,12 @@ function extractCompValue(
     const parts = [corner, hw].filter(Boolean);
     return parts.length ? parts.join("; ") : "—";
   }
-  if (c === "age/condition" || c === "age" || c === "condition") {
+  if (
+    c === "age/condition" ||
+    c === "age / condition" ||
+    c === "age" ||
+    c === "condition"
+  ) {
     if (compType !== "sales") {
       return null;
     }
@@ -343,7 +358,7 @@ function extractCompValue(
     }
     return strVal(o);
   }
-  if (c === "land/bld ratio") {
+  if (c === "land/bld ratio" || c === "land / bld ratio") {
     const r = raw["Land / Bld Ratio"];
     return typeof r === "number" && !Number.isNaN(r) ? String(r) : strVal(r);
   }
