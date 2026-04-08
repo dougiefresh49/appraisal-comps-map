@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { XMarkIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import { PhotoIcon } from "@heroicons/react/24/outline";
+import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 import { useProject } from "~/hooks/useProject";
 
 interface FolderStructure {
@@ -55,30 +56,32 @@ function SketchThumbnailCard({
     return () => observer.disconnect();
   }, []);
 
-  const thumbUrl = `/api/drive/thumbnail/${file.id}?sz=600`;
+  const thumbUrl = `/api/drive/thumbnail/${file.id}?sz=1024`;
 
   return (
     <button
       ref={cardRef}
       type="button"
       onClick={onOpen}
-      className="group relative aspect-square overflow-hidden rounded-lg border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+      className="group relative flex min-h-[min(52vw,420px)] w-full flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none sm:min-h-[320px]"
     >
-      {shouldLoad ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={thumbUrl}
-          alt={file.name}
-          className="h-full w-full object-cover transition group-hover:opacity-90"
-          loading="lazy"
-        />
-      ) : (
-        <div
-          className="h-full w-full animate-pulse bg-gray-800/90"
-          aria-hidden
-        />
-      )}
-      <span className="absolute inset-x-0 bottom-0 truncate bg-gray-950/85 px-2 py-1 text-[10px] text-gray-400">
+      <div className="relative min-h-[200px] flex-1 bg-gray-950/80 sm:min-h-[260px]">
+        {shouldLoad ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={thumbUrl}
+            alt={file.name}
+            className="h-full max-h-[min(56vh,520px)] w-full object-contain object-center transition group-hover:opacity-95 sm:max-h-[480px]"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="h-full min-h-[200px] w-full animate-pulse bg-gray-800/90 sm:min-h-[260px]"
+            aria-hidden
+          />
+        )}
+      </div>
+      <span className="truncate border-t border-gray-800/80 bg-gray-950/90 px-3 py-2 text-left text-xs text-gray-400">
         {file.name}
       </span>
     </button>
@@ -136,15 +139,6 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
     void loadFiles();
   }, [loadFiles]);
 
-  useEffect(() => {
-    if (!lightboxId) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightboxId(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightboxId]);
-
   const images = files.filter(isImageFile);
 
   const openLightbox = (file: DriveListFile) => {
@@ -192,7 +186,7 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
             <p className="mt-3 text-sm text-gray-400">No images in this folder.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
             {images.map((file) => (
               <SketchThumbnailCard
                 key={file.id}
@@ -204,42 +198,13 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
         )}
       </div>
 
-      {lightboxId && (
-        <div
-          role="presentation"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
-          onClick={() => setLightboxId(null)}
-        >
-          <span
-            className="relative max-h-[90vh] max-w-[min(96vw,1200px)] overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <div className="flex items-center justify-between gap-4 border-b border-gray-800 px-4 py-2">
-              <span className="min-w-0 truncate text-sm font-medium text-gray-200">
-                {lightboxName}
-              </span>
-              <button
-                type="button"
-                onClick={() => setLightboxId(null)}
-                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-100"
-                aria-label="Close"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="max-h-[calc(90vh-3rem)] overflow-auto p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/drive/thumbnail/${lightboxId}?sz=1600`}
-                alt={lightboxName}
-                className="mx-auto max-h-[calc(90vh-5rem)] w-auto max-w-full object-contain"
-              />
-            </div>
-          </span>
-        </div>
-      )}
+      {lightboxId ? (
+        <ImageZoomLightbox
+          imageSrc={`/api/drive/file/${lightboxId}`}
+          title={lightboxName}
+          onClose={() => setLightboxId(null)}
+        />
+      ) : null}
     </div>
   );
 }

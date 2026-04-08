@@ -7,6 +7,100 @@ import { createClient } from "~/utils/supabase/server";
 // Tool declarations for Gemini function calling
 // ---------------------------------------------------------------------------
 
+// --- Read tools ---
+
+const searchAllProjects: FunctionDeclaration = {
+  name: "search_all_projects",
+  description:
+    "Search across ALL appraisal projects in the database. Use this when the user asks about a property or report that is not the current active project. Returns project id, name, subject address, and property type for each match. Call this first to get the project_id, then use query_subject_data or list_project_comps with that project_id.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      address_search: {
+        type: Type.STRING,
+        description:
+          "Partial address or street name to search for across all projects (case-insensitive).",
+      },
+      name_search: {
+        type: Type.STRING,
+        description:
+          "Partial project name to search for (case-insensitive).",
+      },
+    },
+  },
+};
+
+const querySubjectData: FunctionDeclaration = {
+  name: "query_subject_data",
+  description:
+    "Retrieve a specific section of the subject property data. Defaults to the current active project, but you can pass a project_id to query any other project. Use this to look up any subject data field before answering a question about it. Returns the raw JSON for the requested section.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      section: {
+        type: Type.STRING,
+        description:
+          "Which section of subject_data to retrieve: 'core' for main property fields (address, land size, year built, zoning, etc.), 'taxes' for tax data, 'parcels' for parcel-level data, 'improvements' for building improvements, 'fema' for flood data, 'improvement_analysis' for improvement analysis.",
+        enum: ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"],
+      },
+      project_id: {
+        type: Type.STRING,
+        description:
+          "Optional UUID of a different project to query. Omit to query the current active project. Use search_all_projects first to find the project_id for another report.",
+      },
+    },
+    required: ["section"],
+  },
+};
+
+const listProjectComps: FunctionDeclaration = {
+  name: "list_project_comps",
+  description:
+    "List all comparables for a project. Defaults to the current active project, but you can pass a project_id to list comps from any other project. Returns id, address, type, and number for each comp. Use this to discover comp IDs before calling query_comp_data.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      type_filter: {
+        type: Type.STRING,
+        description:
+          "Optional: filter by comp type (e.g. 'land', 'sales', 'rentals'). Omit to return all comps.",
+      },
+      project_id: {
+        type: Type.STRING,
+        description:
+          "Optional UUID of a different project to query. Omit to use the current active project.",
+      },
+    },
+  },
+};
+
+const queryCompData: FunctionDeclaration = {
+  name: "query_comp_data",
+  description:
+    "Retrieve the full parsed data for a comparable. Defaults to searching within the current active project, but you can pass a project_id to search in any other project. Use this when asked about a specific comp's fields (sale price, land size, year built, etc.) that aren't already in the conversation context. You can look up by comp_id UUID or by an address substring.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      comp_id: {
+        type: Type.STRING,
+        description: "The UUID of the comparable to retrieve. Use if you have the exact id.",
+      },
+      address_search: {
+        type: Type.STRING,
+        description:
+          "A partial address string to search for (case-insensitive substring match). Use if you don't have the exact comp_id.",
+      },
+      project_id: {
+        type: Type.STRING,
+        description:
+          "Optional UUID of a different project to search within. Omit to search in the current active project.",
+      },
+    },
+  },
+};
+
+// --- Write tools ---
+
 const updateSubjectField: FunctionDeclaration = {
   name: "update_subject_field",
   description:
@@ -86,7 +180,15 @@ const updateParcelField: FunctionDeclaration = {
 };
 
 export const toolConfig = {
-  functionDeclarations: [updateSubjectField, updateCompField, updateParcelField],
+  functionDeclarations: [
+    searchAllProjects,
+    querySubjectData,
+    listProjectComps,
+    queryCompData,
+    updateSubjectField,
+    updateCompField,
+    updateParcelField,
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -98,6 +200,10 @@ export interface ToolCallResult {
   args: Record<string, string>;
   success: boolean;
   message: string;
+  /** Data returned by read tools — not sent to client, only fed back to the model */
+  data?: unknown;
+  /** True for read-only tools that shouldn't show a UI result bubble */
+  silent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +226,14 @@ export async function executeToolCall(
 ): Promise<ToolCallResult> {
   try {
     switch (toolName) {
+      case "search_all_projects":
+        return await executeSearchAllProjects(args);
+      case "query_subject_data":
+        return await executeQuerySubjectData(args, projectId);
+      case "list_project_comps":
+        return await executeListProjectComps(args, projectId);
+      case "query_comp_data":
+        return await executeQueryCompData(args, projectId);
       case "update_subject_field":
         return await executeUpdateSubjectField(args, projectId);
       case "update_comp_field":
@@ -143,6 +257,275 @@ export async function executeToolCall(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Read tool implementations
+// ---------------------------------------------------------------------------
+
+async function executeSearchAllProjects(
+  args: Record<string, string>,
+): Promise<ToolCallResult> {
+  const { address_search, name_search } = args;
+
+  if (!address_search && !name_search) {
+    return {
+      toolName: "search_all_projects",
+      args,
+      success: false,
+      message: "Provide at least one of: address_search or name_search",
+      silent: true,
+    };
+  }
+
+  const supabase = await createClient();
+
+  // Fetch all non-archived, non-reference projects with their subject address
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, name, property_type, subject_data(core)")
+    .is("archived_at", null)
+    .or("is_reference.is.null,is_reference.eq.false");
+
+  if (error) {
+    return {
+      toolName: "search_all_projects",
+      args,
+      success: false,
+      message: `Database error: ${error.message}`,
+      silent: true,
+    };
+  }
+
+  // Filter by address or name in JS (Supabase can't ilike on nested JSONB easily)
+  const addrLower = address_search?.toLowerCase();
+  const nameLower = name_search?.toLowerCase();
+
+  type ProjectRow = {
+    id: string;
+    name: string | null;
+    property_type: string | null;
+    subject_data: { core: Record<string, unknown> } | { core: Record<string, unknown> }[] | null;
+  };
+
+  const matches = ((data ?? []) as ProjectRow[])
+    .map((row) => {
+      const sd = row.subject_data;
+      const core: Record<string, unknown> | null = sd == null
+        ? null
+        : Array.isArray(sd)
+          ? (sd[0]?.core ?? null)
+          : sd.core ?? null;
+      const address = typeof core?.Address === "string" ? core.Address : "";
+      const city = typeof core?.City === "string" ? core.City : "";
+      return { id: row.id, name: row.name, address, city, property_type: row.property_type };
+    })
+    .filter((r) => {
+      const addressMatch = addrLower
+        ? r.address.toLowerCase().includes(addrLower) ||
+          r.city.toLowerCase().includes(addrLower)
+        : false;
+      const nameMatch = nameLower
+        ? (r.name ?? "").toLowerCase().includes(nameLower)
+        : false;
+      return addressMatch || nameMatch;
+    });
+
+  return {
+    toolName: "search_all_projects",
+    args,
+    success: true,
+    message: `Found ${matches.length} matching project(s)`,
+    data: matches,
+    silent: true,
+  };
+}
+
+async function executeQuerySubjectData(
+  args: Record<string, string>,
+  activeProjectId: string,
+): Promise<ToolCallResult> {
+  const { section, project_id } = args;
+  const targetProjectId = project_id ?? activeProjectId;
+  if (!section) {
+    return {
+      toolName: "query_subject_data",
+      args,
+      success: false,
+      message: "Missing required argument: section",
+      silent: true,
+    };
+  }
+
+  const validSections = ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"];
+  if (!validSections.includes(section)) {
+    return {
+      toolName: "query_subject_data",
+      args,
+      success: false,
+      message: `Invalid section: ${section}. Must be one of: ${validSections.join(", ")}`,
+      silent: true,
+    };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("subject_data")
+    .select(section)
+    .eq("project_id", targetProjectId)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      toolName: "query_subject_data",
+      args,
+      success: false,
+      message: `Database error: ${error.message}`,
+      silent: true,
+    };
+  }
+
+  const sectionData = (data as Record<string, unknown> | null)?.[section] ?? null;
+
+  return {
+    toolName: "query_subject_data",
+    args,
+    success: true,
+    message: `Retrieved subject_data.${section}`,
+    data: sectionData,
+    silent: true,
+  };
+}
+
+async function executeListProjectComps(
+  args: Record<string, string>,
+  activeProjectId: string,
+): Promise<ToolCallResult> {
+  const targetProjectId = args.project_id ?? activeProjectId;
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("comparables")
+    .select("id, address, address_for_display, type, number")
+    .eq("project_id", targetProjectId)
+    .order("number", { ascending: true });
+
+  if (args.type_filter) {
+    query = query.ilike("type", `%${args.type_filter}%`);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return {
+      toolName: "list_project_comps",
+      args,
+      success: false,
+      message: `Database error: ${error.message}`,
+      silent: true,
+    };
+  }
+
+  const comps = (data ?? []).map((c) => ({
+    id: c.id as string,
+    address: (c.address_for_display as string | null) ?? (c.address as string),
+    type: c.type as string,
+    number: c.number as string | null,
+  }));
+
+  return {
+    toolName: "list_project_comps",
+    args,
+    success: true,
+    message: `Found ${comps.length} comparable(s)`,
+    data: comps,
+    silent: true,
+  };
+}
+
+async function executeQueryCompData(
+  args: Record<string, string>,
+  activeProjectId: string,
+): Promise<ToolCallResult> {
+  const { comp_id, address_search } = args;
+  const targetProjectId = args.project_id ?? activeProjectId;
+
+  if (!comp_id && !address_search) {
+    return {
+      toolName: "query_comp_data",
+      args,
+      success: false,
+      message: "Provide either comp_id or address_search",
+      silent: true,
+    };
+  }
+
+  const supabase = await createClient();
+
+  // Resolve comp_id from address search if needed
+  let resolvedCompId = comp_id;
+  if (!resolvedCompId && address_search) {
+    const { data: matches } = await supabase
+      .from("comparables")
+      .select("id, address, address_for_display")
+      .eq("project_id", targetProjectId)
+      .or(
+        `address.ilike.%${address_search}%,address_for_display.ilike.%${address_search}%`,
+      )
+      .limit(1);
+
+    if (!matches || matches.length === 0) {
+      return {
+        toolName: "query_comp_data",
+        args,
+        success: false,
+        message: `No comparable found matching address: "${address_search}"`,
+        silent: true,
+      };
+    }
+    resolvedCompId = matches[0]!.id as string;
+  }
+
+  const { data: comp } = await supabase
+    .from("comparables")
+    .select("id, address, address_for_display, type, number")
+    .eq("id", resolvedCompId!)
+    .maybeSingle();
+
+  const { data: parsed } = await supabase
+    .from("comp_parsed_data")
+    .select("raw_data")
+    .eq("comp_id", resolvedCompId!)
+    .maybeSingle();
+
+  if (!comp) {
+    return {
+      toolName: "query_comp_data",
+      args,
+      success: false,
+      message: `No comparable found with id: ${resolvedCompId}`,
+      silent: true,
+    };
+  }
+
+  return {
+    toolName: "query_comp_data",
+    args,
+    success: true,
+    message: `Retrieved data for comp: ${(comp.address_for_display as string | null) ?? (comp.address as string)}`,
+    data: {
+      id: comp.id as string,
+      address: (comp.address_for_display as string | null) ?? (comp.address as string),
+      type: comp.type as string,
+      number: comp.number as string | null,
+      raw_data: (parsed?.raw_data as Record<string, unknown> | null) ?? null,
+    },
+    silent: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Write tool implementations
+// ---------------------------------------------------------------------------
 
 async function executeUpdateSubjectField(
   args: Record<string, string>,

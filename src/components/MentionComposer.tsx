@@ -14,15 +14,15 @@ import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
 // ---------------------------------------------------------------------------
 
 export interface MentionEntity {
-  type: "doc" | "comp";
+  type: "doc" | "comp" | "project";
   id: string;
   label: string;
-  /** Secondary info — document type or comp type */
+  /** Secondary info — document type, comp type, or city */
   badge?: string;
 }
 
 export interface ResolvedMention {
-  type: "doc" | "comp";
+  type: "doc" | "comp" | "project";
   id: string;
 }
 
@@ -37,14 +37,14 @@ interface MentionComposerProps {
 // Token format: @[label](type:id)
 // ---------------------------------------------------------------------------
 
-const MENTION_RE = /@\[([^\]]+)\]\((doc|comp):([^)]+)\)/g;
+const MENTION_RE = /@\[([^\]]+)\]\((doc|comp|project):([^)]+)\)/g;
 
 export function parseMentions(text: string): ResolvedMention[] {
   const mentions: ResolvedMention[] = [];
   let match: RegExpExecArray | null;
   const re = new RegExp(MENTION_RE.source, "g");
   while ((match = re.exec(text)) !== null) {
-    mentions.push({ type: match[2] as "doc" | "comp", id: match[3]! });
+    mentions.push({ type: match[2] as "doc" | "comp" | "project", id: match[3]! });
   }
   return mentions;
 }
@@ -62,7 +62,7 @@ export function MentionComposer({
   entities,
   onSend,
   disabled = false,
-  placeholder = "Ask about your project data... use @ to reference docs or comps",
+  placeholder = "Ask about your project data... use @ to reference docs, comps, or reports",
 }: MentionComposerProps) {
   const [value, setValue] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -248,10 +248,12 @@ export function MentionComposer({
                 className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                   entity.type === "doc"
                     ? "bg-amber-900/40 text-amber-300"
-                    : "bg-blue-900/40 text-blue-300"
+                    : entity.type === "project"
+                      ? "bg-emerald-900/40 text-emerald-300"
+                      : "bg-blue-900/40 text-blue-300"
                 }`}
               >
-                {entity.type === "doc" ? "doc" : "comp"}
+                {entity.type === "doc" ? "doc" : entity.type === "project" ? "report" : "comp"}
               </span>
               <span className="min-w-0 flex-1 truncate">{entity.label}</span>
               {entity.badge && (

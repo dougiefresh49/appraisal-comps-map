@@ -1,5 +1,6 @@
 import { buildChatPrompt, type ChatMention, type ChatMessage } from "~/lib/chat-context";
 import { generateChatStream } from "~/lib/gemini";
+import { classifyQuery } from "~/lib/chat-router";
 
 interface ChatRequestBody {
   projectId?: string;
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
           (m): m is ChatMention =>
             typeof m === "object" &&
             m !== null &&
-            (m.type === "doc" || m.type === "comp") &&
+            (m.type === "doc" || m.type === "comp" || m.type === "project") &&
             typeof m.id === "string",
         )
       : [];
@@ -54,7 +55,13 @@ export async function POST(request: Request) {
       history,
     );
 
-    const stream = await generateChatStream(systemPrompt, contents, projectId);
+    // Classify the query to pick the right model tier:
+    // data_lookup / update → Thinking (gemini-3-flash-preview)
+    // analysis             → Pro (gemini-3.1-pro-preview)
+    const subjectAddress = extractSubjectAddress(systemPrompt);
+    const { model } = await classifyQuery(message.trim(), subjectAddress);
+
+    const stream = await generateChatStream(systemPrompt, contents, projectId, model);
 
     return new Response(stream, {
       headers: {
@@ -73,4 +80,13 @@ export async function POST(request: Request) {
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
+}
+
+/**
+ * Pull the subject address out of the already-built system prompt so we
+ * can pass a brief hint to the classifier without re-querying the DB.
+ */
+function extractSubjectAddress(systemPrompt: string): string | undefined {
+  const match = /Address:\s*(.+)/i.exec(systemPrompt);
+  return match?.[1]?.trim();
 }
