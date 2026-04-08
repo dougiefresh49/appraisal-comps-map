@@ -47,6 +47,26 @@ interface ChatPanelProps {
   onClose: () => void;
 }
 
+const CHAT_PANEL_WIDTH_KEY = "ai-chat-panel-width";
+const CHAT_PANEL_DEFAULT_WIDTH = 420;
+const CHAT_PANEL_MIN_WIDTH = 280;
+const CHAT_PANEL_MAX_WIDTH = 900;
+
+function clampChatPanelWidth(px: number): number {
+  if (typeof window === "undefined") {
+    return Math.min(
+      CHAT_PANEL_MAX_WIDTH,
+      Math.max(CHAT_PANEL_MIN_WIDTH, px),
+    );
+  }
+  const maxByViewport = Math.max(
+    CHAT_PANEL_MIN_WIDTH,
+    Math.floor(window.innerWidth * 0.92),
+  );
+  const max = Math.min(CHAT_PANEL_MAX_WIDTH, maxByViewport);
+  return Math.min(max, Math.max(CHAT_PANEL_MIN_WIDTH, px));
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -64,8 +84,71 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
+  const [panelWidth, setPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
+  const [isResizingChat, setIsResizingChat] = useState(false);
+  const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(
+    null,
+  );
+  const panelWidthDuringResizeRef = useRef(panelWidth);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_PANEL_WIDTH_KEY);
+      if (raw == null) return;
+      const n = Number.parseInt(raw, 10);
+      if (Number.isNaN(n)) return;
+      setPanelWidth(clampChatPanelWidth(n));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingChat) return;
+
+    const onMove = (e: PointerEvent) => {
+      const drag = chatResizeDragRef.current;
+      if (!drag) return;
+      const next = clampChatPanelWidth(
+        drag.startWidth + (drag.startX - e.clientX),
+      );
+      panelWidthDuringResizeRef.current = next;
+      setPanelWidth(next);
+    };
+
+    const onUp = () => {
+      chatResizeDragRef.current = null;
+      setIsResizingChat(false);
+      try {
+        localStorage.setItem(
+          CHAT_PANEL_WIDTH_KEY,
+          String(panelWidthDuringResizeRef.current),
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [isResizingChat]);
+
+  useEffect(() => {
+    panelWidthDuringResizeRef.current = panelWidth;
+  }, [panelWidth]);
 
   // Load mention entities (documents + comps + other projects) for this project
   useEffect(() => {
@@ -304,6 +387,20 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     setIsStreaming(false);
   }, [isStreaming]);
 
+  const onChatResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      panelWidthDuringResizeRef.current = panelWidth;
+      chatResizeDragRef.current = {
+        startX: e.clientX,
+        startWidth: panelWidth,
+      };
+      setIsResizingChat(true);
+    },
+    [panelWidth],
+  );
+
   if (!isOpen) return null;
 
   const projectName =
@@ -368,7 +465,49 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   return (
     <>
       {/* Desktop: inline panel (rendered via layout portal slot) */}
-      <div className="hidden h-full w-[420px] shrink-0 md:block">
+      <div
+        className="relative hidden h-full shrink-0 md:block"
+        style={{ width: panelWidth }}
+      >
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat panel"
+          aria-valuenow={panelWidth}
+          aria-valuemin={CHAT_PANEL_MIN_WIDTH}
+          aria-valuemax={CHAT_PANEL_MAX_WIDTH}
+          tabIndex={0}
+          className={`absolute left-0 top-0 z-10 h-full w-3 -translate-x-1/2 touch-none select-none md:cursor-col-resize ${
+            isResizingChat ? "bg-blue-500/30" : "hover:bg-gray-800/80"
+          }`}
+          onPointerDown={onChatResizePointerDown}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 40 : 16;
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampChatPanelWidth(w + step);
+                try {
+                  localStorage.setItem(CHAT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampChatPanelWidth(w - step);
+                try {
+                  localStorage.setItem(CHAT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }
+          }}
+        />
         {panelContent}
       </div>
 

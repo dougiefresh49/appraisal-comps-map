@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
 import { IMPROVEMENT_DISPLAY_LABELS } from "~/lib/improvement-constants";
+import { VALID_CATEGORIES } from "~/lib/photo-category-constants";
 
 interface PhotoDetailPanelProps {
   photo: PhotoAnalysis | null;
   projectId: string;
   onClose: () => void;
   onLabelChange?: (photoId: string, label: string) => void;
+  onCategoryChange?: (photoId: string, category: string) => void;
 }
 
 function buildThumbnailUrl(fileId: string | null, sz = "1200") {
@@ -25,15 +27,44 @@ export function PhotoDetailPanel({
   projectId,
   onClose,
   onLabelChange,
+  onCategoryChange,
 }: PhotoDetailPanelProps) {
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editLabel, setEditLabel] = useState("");
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const categoryMenuRef = useRef<HTMLDivElement>(null);
   const [isRedescribing, setIsRedescribing] = useState(false);
   const [redescribeError, setRedescribeError] = useState<string | null>(null);
 
   useEffect(() => {
     setRedescribeError(null);
   }, [photo?.id]);
+
+  useEffect(() => {
+    setIsCategoryMenuOpen(false);
+  }, [photo?.id]);
+
+  useEffect(() => {
+    if (!isCategoryMenuOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const el = categoryMenuRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setIsCategoryMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsCategoryMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isCategoryMenuOpen]);
 
   if (!photo) return null;
 
@@ -169,9 +200,51 @@ export function PhotoDetailPanel({
               Category
             </dt>
             <dd className="mt-1">
-              <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {photo.category}
-              </span>
+              <div className="relative inline-block text-left" ref={categoryMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryMenuOpen((o) => !o)}
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200/80 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 dark:focus:ring-offset-gray-900"
+                  aria-haspopup="listbox"
+                  aria-expanded={isCategoryMenuOpen}
+                  title="Change category"
+                >
+                  {photo.category}
+                  <ChevronDownIcon
+                    className={`h-3.5 w-3.5 shrink-0 opacity-80 transition-transform ${isCategoryMenuOpen ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </button>
+                {isCategoryMenuOpen && (
+                  <ul
+                    role="listbox"
+                    className="absolute left-0 z-50 mt-1 max-h-60 min-w-[16rem] overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    {VALID_CATEGORIES.map((cat) => (
+                      <li key={cat} role="none">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={cat === photo.category}
+                          onClick={() => {
+                            setIsCategoryMenuOpen(false);
+                            if (cat !== photo.category) {
+                              onCategoryChange?.(photo.id, cat);
+                            }
+                          }}
+                          className={`flex w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                            cat === photo.category
+                              ? "bg-blue-50 font-medium text-blue-900 dark:bg-blue-950/50 dark:text-blue-100"
+                              : "text-gray-900 dark:text-gray-100"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </dd>
           </div>
 

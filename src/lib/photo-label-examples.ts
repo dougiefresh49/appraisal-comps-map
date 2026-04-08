@@ -1,4 +1,4 @@
-import type { PhotoCategory } from "~/lib/photo-analyzer";
+import type { PhotoCategory } from "~/lib/photo-category-constants";
 
 export interface LabelExample {
   category: PhotoCategory;

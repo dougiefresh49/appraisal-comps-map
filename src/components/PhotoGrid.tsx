@@ -44,6 +44,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
     showArchived,
     setShowArchived,
     updateLabel,
+    updateCategory,
     reorder,
     archivePhoto,
     restorePhoto,
@@ -232,7 +233,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
 
       {/* Page Header */}
       <header
-        className={`sticky top-14 z-10 -mx-6 mb-4 flex flex-col gap-3 border-b border-gray-800/60 bg-gray-950 px-6 pb-4 pt-4 transition-transform duration-300 ease-in-out md:-mx-8 md:top-0 md:flex-row md:items-start md:justify-between md:px-8 ${
+        className={`sticky top-14 z-10 -mx-6 mb-4 flex flex-col gap-3 border-b border-gray-200/80 bg-gray-50 px-6 pb-4 pt-4 transition-transform duration-300 ease-in-out md:-mx-8 md:top-0 md:flex-row md:items-start md:justify-between md:px-8 dark:border-gray-800/60 dark:bg-gray-950 ${
           isHeaderVisible ? "translate-y-0" : "-translate-y-full"
         }`}
       >
@@ -253,7 +254,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
               onClick={() => void handleExportToDrive()}
               disabled={isExporting || showArchived}
               aria-label="Export to Drive"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
             >
               {isExporting ? (
                 <ArrowPathIcon className="h-4 w-4 animate-spin" aria-hidden />
@@ -261,7 +262,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
                 <CloudArrowUpIcon className="h-4 w-4" aria-hidden />
               )}
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               {isExporting ? "Exporting…" : "Export to Drive"}
             </span>
           </div>
@@ -272,16 +273,16 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
               type="button"
               onClick={() => setIsAnalysisDialogOpen(true)}
               aria-label="Analyze Photos"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
             >
               <SparklesIcon className="h-4 w-4" aria-hidden />
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               Analyze Photos
             </span>
           </div>
 
-          <span className="mx-0.5 h-4 w-px bg-gray-700" aria-hidden />
+          <span className="mx-0.5 h-4 w-px bg-gray-300 dark:bg-gray-700" aria-hidden />
 
           {/* Archived toggle */}
           <div className="group relative">
@@ -292,13 +293,13 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
               aria-pressed={showArchived}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
                 showArchived
-                  ? "border-amber-600 bg-amber-900/40 text-amber-400 hover:bg-amber-900/60"
-                  : "border-gray-700 bg-gray-800/80 text-gray-300 hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100"
+                  ? "border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60"
+                  : "border-gray-300 bg-white text-gray-500 shadow-sm hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
               }`}
             >
               <ArchiveBoxIcon className="h-4 w-4" aria-hidden />
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               {showArchived
                 ? `Archived (${archivedPhotos.length}) — show active`
                 : `Show Archived (${archivedPhotos.length})`}
@@ -310,7 +311,7 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
             <div
               role="group"
               aria-label="View mode"
-              className="flex rounded-md border border-gray-700 bg-gray-900/80 p-0.5"
+              className="flex rounded-md border border-gray-300 bg-gray-100 p-0.5 dark:border-gray-700 dark:bg-gray-900/80"
             >
               <button
                 type="button"
@@ -319,8 +320,8 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
                 aria-label="Document view"
                 className={`inline-flex h-7 w-7 items-center justify-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
                   !isDenseGrid
-                    ? "bg-gray-600 text-gray-100 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
+                    ? "bg-white text-gray-700 shadow-sm dark:bg-gray-600 dark:text-gray-100"
+                    : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                 }`}
               >
                 <ListBulletIcon className="h-4 w-4" aria-hidden />
@@ -332,14 +333,14 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
                 aria-label="Dense grid view"
                 className={`inline-flex h-7 w-7 items-center justify-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 ${
                   isDenseGrid
-                    ? "bg-gray-600 text-gray-100 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
+                    ? "bg-white text-gray-700 shadow-sm dark:bg-gray-600 dark:text-gray-100"
+                    : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                 }`}
               >
                 <Squares2X2Icon className="h-4 w-4" aria-hidden />
               </button>
             </div>
-            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               {isDenseGrid ? "Dense Grid — switch to Document" : "Document View — switch to Dense Grid"}
             </span>
           </div>
@@ -350,11 +351,11 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
               type="button"
               onClick={() => void refreshPhotos()}
               aria-label="Refresh photos"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
             >
               <ArrowPathIcon className="h-4 w-4" aria-hidden />
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg ring-1 ring-gray-700 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               Refresh
             </span>
           </div>
@@ -476,6 +477,9 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
         projectId={projectId}
         onClose={() => setSelectedPhotoId(null)}
         onLabelChange={(photoId, label) => updateLabel(photoId, label)}
+        onCategoryChange={(photoId, category) =>
+          updateCategory(photoId, category)
+        }
       />
 
       {/* Photo Analysis Dialog */}
