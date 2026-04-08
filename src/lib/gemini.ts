@@ -127,14 +127,18 @@ export async function extractDocumentContent(
  * 1. Send messages + tool declarations to Gemini (non-streaming first call
  *    so we can detect function calls).
  * 2. If Gemini returns function calls, execute them, send status SSE events
- *    to the client, feed results back to Gemini, and repeat.
+ *    to the client for write tools (silent for read tools), feed results
+ *    back to Gemini, and repeat.
  * 3. Once Gemini returns text (no more function calls), stream that final
  *    response to the client.
+ *
+ * @param model - Gemini model ID to use (defaults to CHAT_MODEL / Thinking tier)
  */
 export async function generateChatStream(
   systemPrompt: string,
   messages: ChatMessage[],
   projectId: string,
+  model: string = CHAT_MODEL,
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
@@ -153,7 +157,7 @@ export async function generateChatStream(
           loopCount++;
 
           const response = await getAI().models.generateContent({
-            model: CHAT_MODEL,
+            model,
             contents,
             config: {
               systemInstruction: systemPrompt,
@@ -201,12 +205,14 @@ export async function generateChatStream(
               projectId,
             );
 
-            // Send tool status event to client
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ toolResult: result })}\n\n`,
-              ),
-            );
+            // Only send UI event for write tools; read tools are silent
+            if (!result.silent) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ toolResult: result })}\n\n`,
+                ),
+              );
+            }
 
             functionResponses.push({
               functionResponse: {
@@ -214,6 +220,8 @@ export async function generateChatStream(
                 response: {
                   success: result.success,
                   message: result.message,
+                  // Include retrieved data so the model can use it in its answer
+                  ...(result.data !== undefined ? { data: result.data } : {}),
                 },
               },
             });

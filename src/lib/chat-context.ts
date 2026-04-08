@@ -33,11 +33,12 @@ interface CompContext {
 }
 
 interface SubjectContext {
-  address?: string;
-  propertyType?: string;
-  city?: string;
-  county?: string;
-  state?: string;
+  core: Record<string, unknown> | null;
+  taxes: unknown | null;
+  parcels: unknown | null;
+  improvements: unknown | null;
+  fema: unknown | null;
+  improvement_analysis: unknown | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,23 +94,82 @@ async function loadSubjectContext(
   const supabase = await createClient();
   const { data } = await supabase
     .from("subject_data")
-    .select("core")
+    .select("core, taxes, parcels, improvements, fema, improvement_analysis")
     .eq("project_id", projectId)
     .maybeSingle();
 
-  if (!data?.core) return null;
-  const core = data.core as Record<string, unknown>;
+  if (!data) return null;
+
   return {
-    address: core.Address as string | undefined,
-    propertyType: core["Property Type"] as string | undefined,
-    city: core.City as string | undefined,
-    county: core.County as string | undefined,
-    state: core.State as string | undefined,
+    core: (data.core as Record<string, unknown>) ?? null,
+    taxes: data.taxes ?? null,
+    parcels: data.parcels ?? null,
+    improvements: data.improvements ?? null,
+    fema: data.fema ?? null,
+    improvement_analysis: data.improvement_analysis ?? null,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Build the Gemini prompt from chat context
+// Context serialization helpers
+// ---------------------------------------------------------------------------
+
+const MAX_CONTEXT_CHARS = 30_000;
+
+function serializeSection(label: string, data: unknown): string {
+  if (!data) return "";
+  const json = JSON.stringify(data, null, 2);
+  return `### ${label}\n${json}`;
+}
+
+function formatSubjectBlock(subject: SubjectContext): string {
+  const parts: string[] = ["## Current Project - Subject Property"];
+
+  // Core is always present — serialize all fields as a key-value block
+  if (subject.core && Object.keys(subject.core).length > 0) {
+    const coreLines = Object.entries(subject.core)
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .map(([k, v]) => `  ${k}: ${String(v)}`);
+    parts.push("### Core Data\n" + coreLines.join("\n"));
+  }
+
+  // Build remaining sections
+  const optionalSections: string[] = [];
+  if (subject.taxes) {
+    optionalSections.push(serializeSection("Tax Data", subject.taxes));
+  }
+  if (subject.fema) {
+    optionalSections.push(serializeSection("FEMA Flood Data", subject.fema));
+  }
+  if (subject.parcels) {
+    optionalSections.push(serializeSection("Parcels", subject.parcels));
+  }
+  if (subject.improvements) {
+    optionalSections.push(serializeSection("Improvements", subject.improvements));
+  }
+  if (subject.improvement_analysis) {
+    optionalSections.push(
+      serializeSection("Improvement Analysis", subject.improvement_analysis),
+    );
+  }
+
+  // Add optional sections, respecting the total context budget
+  let block = parts.join("\n");
+  for (const section of optionalSections) {
+    if (block.length + section.length < MAX_CONTEXT_CHARS) {
+      block += "\n" + section;
+    } else {
+      block +=
+        "\n[Note: Additional subject data sections omitted due to context size limits. Use query_subject_data tool to retrieve them.]";
+      break;
+    }
+  }
+
+  return block;
+}
+
+// ---------------------------------------------------------------------------
+// Format mentioned entities
 // ---------------------------------------------------------------------------
 
 function formatDocumentBlock(doc: DocumentContext): string {
@@ -137,6 +197,10 @@ function formatCompBlock(comp: CompContext): string {
   return lines.join("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Build the Gemini prompt from chat context
+// ---------------------------------------------------------------------------
+
 export async function buildChatPrompt(
   projectId: string,
   userMessage: string,
@@ -158,25 +222,31 @@ export async function buildChatPrompt(
     "When performing calculations or analysis, show your work.",
     "Format responses with markdown when helpful (tables, lists, bold for key values).",
     "",
-    "## Data Update Tools",
-    "You have tools to update project data when the user asks you to save, set, or update values:",
-    "- update_subject_field: Update fields on the subject property (section 'core' for most fields, 'fema' for flood data).",
-    "- update_comp_field: Update fields on a comparable's parsed data. You must use the comp's UUID as comp_id.",
+    "## Critical Rules",
+    "- NEVER fabricate, estimate, or guess data values. If a value isn't in the context provided, use a query tool to look it up.",
+    "- If the user asks for a specific field value and you cannot find it with certainty in the context, call query_subject_data or query_comp_data before answering.",
+    "- If you cannot find data even after querying, say so explicitly — do not invent numbers.",
+    "",
+    "## Available Tools",
+    "You have tools to both READ and UPDATE project data:",
+    "",
+    "**Read tools (use these to look up data before answering questions):**",
+    "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, parcels, improvements, fema, improvement_analysis). Use when you need to verify or look up subject property data.",
+    "- list_project_comps: List all comparables for this project (id, address, type, number). Use before querying a specific comp.",
+    "- query_comp_data: Retrieve the full parsed data for a comparable by comp_id or address substring. Use when asked about a specific comp's data.",
+    "",
+    "**Write tools (use ONLY when the user explicitly asks to save/update/set a value):**",
+    "- update_subject_field: Update a field on the subject property (section 'core' for most fields, 'fema' for flood data).",
+    "- update_comp_field: Update a field on a comparable's parsed data. You must use the comp's UUID as comp_id.",
     "- update_parcel_field: Update parcel-level data by APN (e.g. County Appraised Value, Total Tax Amount).",
     "",
-    "IMPORTANT: Only call these tools when the user explicitly asks to save/update/set a value.",
-    "Do NOT call tools when the user is just asking a question.",
+    "IMPORTANT: Only call write tools when the user explicitly asks to save/update/set a value.",
+    "Do NOT call write tools when the user is just asking a question.",
     "After a successful update, confirm what was changed in your response.",
   ];
 
   if (subject) {
-    const subjectLines = ["", "## Current Project - Subject Property"];
-    if (subject.address) subjectLines.push(`Address: ${subject.address}`);
-    if (subject.propertyType) subjectLines.push(`Property Type: ${subject.propertyType}`);
-    if (subject.city) subjectLines.push(`City: ${subject.city}`);
-    if (subject.county) subjectLines.push(`County: ${subject.county}`);
-    if (subject.state) subjectLines.push(`State: ${subject.state}`);
-    systemParts.push(subjectLines.join("\n"));
+    systemParts.push("", formatSubjectBlock(subject));
   }
 
   if (docs.length > 0) {
