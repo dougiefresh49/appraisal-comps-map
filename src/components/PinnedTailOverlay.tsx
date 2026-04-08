@@ -11,6 +11,8 @@ interface PinnedTailOverlayProps {
   color?: string;
   strokeColor?: string;
   strokeWeight?: number;
+  /** Fill opacity from 0 to 1. Defaults to 1. */
+  fillOpacity?: number;
 }
 
 export function PinnedTailOverlay({
@@ -21,6 +23,7 @@ export function PinnedTailOverlay({
   color = "#10b981",
   strokeColor,
   strokeWeight = 1,
+  fillOpacity = 1,
 }: PinnedTailOverlayProps) {
   const map = useMap();
   const polygonRef = useRef<google.maps.Polygon | null>(null);
@@ -179,7 +182,7 @@ export function PinnedTailOverlay({
       polygonRef.current = new google.maps.Polygon({
         paths: path,
         fillColor: color,
-        fillOpacity: 1,
+        fillOpacity: fillOpacity,
         strokeColor: finalStrokeColor,
         strokeOpacity: 0.8,
         strokeWeight: strokeWeight,
@@ -190,6 +193,7 @@ export function PinnedTailOverlay({
       polygonRef.current.setPaths(path);
       polygonRef.current.setOptions({
         fillColor: color,
+        fillOpacity: fillOpacity,
         strokeWeight: strokeWeight,
         strokeColor: finalStrokeColor,
       });
@@ -212,6 +216,7 @@ export function PinnedTailOverlay({
     color,
     strokeColor,
     strokeWeight,
+    fillOpacity,
   ]);
 
   return null;

@@ -2,7 +2,9 @@
 // Utility Types
 // ============================================================
 
-import type { FrontageType } from "./comp-field-options";
+import type { FrontageType, ZoningLocation } from "./comp-field-options";
+
+export type { ZoningLocation } from "./comp-field-options";
 
 export type Generated = "GENERATED" | "BLANK" | null;
 
@@ -13,13 +15,6 @@ export type YesNoUnknown = boolean | null;
 export type UseType = "Sale" | "Extra" | "Rental";
 
 export type SubjectParcelType = "Improvements" | "Excess Land";
-
-export type ZoningLocation =
-  | "Inside City Limits"
-  | "Inside & Outside City Limits"
-  | "Inside ETJ"
-  | "Outside ETJ"
-  | "None";
 
 export type ExpenseStructure = "NNN" | "NN" | "N" | "None";
 
@@ -241,7 +236,8 @@ export interface SubjectData {
   Zip: string;
   AddressLabel: Generated;
   AddressLocal: Generated;
-  "Zoning Area": string;
+  /** Jurisdiction for zoning (matches comp "Zoning Location" options). */
+  "Zoning Area": ZoningLocation | null;
   "Zoning Description": string;
   Zoning: string | null;
   "Other Features": string | null;

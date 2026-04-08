@@ -47,6 +47,18 @@ export const ZONING_LOCATION_OPTIONS = [
   "None",
 ] as const;
 
+/** Same union as spreadsheet / comp forms — derived from {@link ZONING_LOCATION_OPTIONS}. */
+export type ZoningLocation = (typeof ZONING_LOCATION_OPTIONS)[number];
+
+export function parseZoningLocation(raw: unknown): ZoningLocation | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  return (ZONING_LOCATION_OPTIONS as readonly string[]).includes(s)
+    ? (s as ZoningLocation)
+    : null;
+}
+
 export const CONDITIONS_OF_SALE_OPTIONS = [
   "Arm's Length",
   "Owner Finance",

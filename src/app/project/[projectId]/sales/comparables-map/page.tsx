@@ -11,6 +11,9 @@ import { PinnedTailOverlay } from "~/components/PinnedTailOverlay";
 import { DocumentOverlay } from "~/components/DocumentOverlay";
 import { MapLockGuard } from "~/components/MapLockGuard";
 import { useProject } from "~/hooks/useProject";
+import { useAutoPlaceComps } from "~/hooks/useAutoPlaceComps";
+import { AutoPlacePreviewMarkers } from "~/components/AutoPlacePreviewMarkers";
+import { AutoPlaceActionBar } from "~/components/AutoPlaceActionBar";
 import {
   normalizeProjectData,
   DEFAULT_MAP_CENTER,
@@ -384,6 +387,22 @@ export default function SalesComparablesMapPage({
     [projectId],
   );
 
+  const {
+    proposedComparables,
+    isAutoPlacing,
+    failedCompIds,
+    autoPlace,
+    applyProposal,
+    cancelProposal,
+  } = useAutoPlaceComps({
+    comparables,
+    subjectMarkerPosition,
+    subjectBubblePosition,
+    bubbleSize,
+    mapZoom,
+    onApply: setComparables,
+  });
+
   const comparablesWithDistance = useMemo(() => {
     const subjectRefPoint =
       subjectPinnedTailTipPosition ?? subjectMarkerPosition;
@@ -583,6 +602,8 @@ export default function SalesComparablesMapPage({
         // No Land Map link for Sales
         onOpenLandMap={undefined}
         readOnly={mapReadOnly}
+        onAutoPlace={autoPlace}
+        isAutoPlacing={isAutoPlacing}
       />
       ) : null}
 
@@ -745,12 +766,29 @@ export default function SalesComparablesMapPage({
                 readOnly={readOnly}
               />
             ))}
+
+            {/* Auto-place preview markers (rendered on top of live markers) */}
+            {proposedComparables && (
+              <AutoPlacePreviewMarkers
+                proposedComparables={proposedComparables}
+                bubbleSize={bubbleSize}
+                compColor="#2563eb"
+              />
+            )}
           </Map>
         </APIProvider>
         <DocumentOverlay
           enabled={showDocumentOverlay}
           size={documentFrameSize}
         />
+        {proposedComparables && (
+          <AutoPlaceActionBar
+            failedCount={failedCompIds.length}
+            totalCount={comparables.length}
+            onApply={applyProposal}
+            onCancel={cancelProposal}
+          />
+        )}
       </div>
           </>
         )}

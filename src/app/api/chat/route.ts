@@ -235,8 +235,8 @@ async function persistTurn(
     reader.releaseLock();
   }
 
-  // Don't persist if the AI returned an error with no content
-  if (hadError && !assistantText.trim()) return;
+  // Don't persist if there's nothing to save (no user message content either)
+  if (!opts.userMessage.trim() && !assistantText.trim()) return;
 
   const messages: MessageToSave[] = [
     {
@@ -254,11 +254,16 @@ async function persistTurn(
       tool_result: tr as unknown,
       sort_order: i + 1,
     })),
-    {
-      role: "assistant",
-      content: assistantText,
-      sort_order: toolMessages.length + 1,
-    },
+    // Only include the assistant message if it has content
+    ...(assistantText.trim()
+      ? [
+          {
+            role: "assistant" as const,
+            content: assistantText,
+            sort_order: toolMessages.length + 1,
+          },
+        ]
+      : []),
   ];
 
   await saveMessages(opts.threadId, messages);

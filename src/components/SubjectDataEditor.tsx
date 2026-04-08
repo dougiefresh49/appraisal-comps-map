@@ -34,6 +34,8 @@ import {
   UTILITIES_STATUS_OPTIONS,
   WASH_BAY_OPTIONS,
   EXPENSE_STRUCTURE_OPTIONS,
+  ZONING_LOCATION_OPTIONS,
+  parseZoningLocation,
 } from "~/types/comp-field-options";
 import {
   acToSf,
@@ -791,11 +793,19 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               title="Zoning & Location"
               className="mb-4 w-full break-inside-avoid"
             >
-              <FormField
+              <SelectField
                 label="Zoning Area"
-                value={core["Zoning Area"]}
-                onChange={(v) => updateCore("Zoning Area", v)}
-                onBlur={saveNow}
+                value={
+                  parseZoningLocation(core["Zoning Area"] as unknown) ?? ""
+                }
+                options={ZONING_LOCATION_OPTIONS.map((o) => ({
+                  label: o,
+                  value: o,
+                }))}
+                onChange={(v) => {
+                  updateCore("Zoning Area", v ? parseZoningLocation(v) : null);
+                  scheduleSaveNow();
+                }}
               />
               <FormField
                 label="Zoning Description"

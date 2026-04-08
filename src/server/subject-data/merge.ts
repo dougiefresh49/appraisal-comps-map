@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "~/utils/supabase/server";
+import { parseZoningLocation } from "~/types/comp-field-options";
 
 type StructuredData = Record<string, unknown>;
 
@@ -332,7 +333,8 @@ const MERGE_MAP: Record<string, (data: StructuredData) => CorePatch> = {
     if (num(d.land_size_ac)) patch["Land Size (AC)"] = num(d.land_size_ac);
     if (num(d.land_size_sf)) patch["Land Size (SF)"] = num(d.land_size_sf);
     if (str(d.zoning)) patch.Zoning = str(d.zoning);
-    if (str(d.zoning_area)) patch["Zoning Area"] = str(d.zoning_area);
+    const zArea = parseZoningLocation(str(d.zoning_area));
+    if (zArea != null) patch["Zoning Area"] = zArea;
     if (num(d.year_built)) patch["Year Built"] = num(d.year_built);
     if (num(d.building_size_sf)) patch["Building Size (SF)"] = num(d.building_size_sf);
     if (str(d.construction)) patch.Construction = str(d.construction);

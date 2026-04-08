@@ -8,6 +8,7 @@ import type {
   SubjectTax,
   TaxEntity,
 } from "~/types/comp-data";
+import { parseZoningLocation } from "~/types/comp-field-options";
 
 const TAG = "[report-md-parser]";
 /** Pass 1: lightweight flash model for narrative + metadata extraction. */
@@ -1067,7 +1068,7 @@ export function normalizeSubjectCoreForDb(
     Zip: zip,
     AddressLabel: patch.AddressLabel ?? null,
     AddressLocal: patch.AddressLocal ?? null,
-    "Zoning Area": patch["Zoning Area"] ?? "",
+    "Zoning Area": parseZoningLocation(patch["Zoning Area"]) ?? null,
     "Zoning Description": patch["Zoning Description"] ?? "",
     Zoning: patch.Zoning ?? null,
     "Other Features": patch["Other Features"] ?? null,
@@ -1088,5 +1089,7 @@ export function normalizeSubjectCoreForDb(
     "Est Expences": patch["Est Expences"] ?? null,
   };
 
-  return { ...defaults, ...patch, Address: addr };
+  const merged: Record<string, unknown> = { ...defaults, ...patch, Address: addr };
+  merged["Zoning Area"] = parseZoningLocation(merged["Zoning Area"]);
+  return merged;
 }

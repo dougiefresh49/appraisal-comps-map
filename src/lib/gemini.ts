@@ -181,7 +181,34 @@ export async function generateChatStream(
 
           if (!functionCalls || functionCalls.length === 0) {
             const text = response.text ?? "";
-            if (text) {
+            const finishReason = candidate.finishReason;
+
+            if (!text) {
+              // Log so it's visible in server logs for debugging
+              console.warn(
+                `[generateChatStream] Empty response from model "${model}". finishReason="${finishReason ?? "unknown"}"`,
+              );
+
+              // Map known finish reasons to human-readable messages
+              let fallback: string;
+              if (finishReason === "SAFETY") {
+                fallback =
+                  "The AI model declined to answer this question due to content safety filters. Please try rephrasing your question.";
+              } else if (finishReason === "RECITATION") {
+                fallback =
+                  "The AI model blocked this response due to a recitation/copyright concern with the source material. Try asking in a different way or referencing a different part of the document.";
+              } else if (finishReason === "MAX_TOKENS") {
+                fallback =
+                  "The response was cut off because it exceeded the maximum length. Try asking a more specific question.";
+              } else {
+                fallback =
+                  `I wasn't able to generate a response${finishReason && finishReason !== "STOP" ? ` (reason: ${finishReason})` : ""}. Please try rephrasing your question.`;
+              }
+
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(fallback)}\n\n`),
+              );
+            } else {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(text)}\n\n`));
             }
             break;
