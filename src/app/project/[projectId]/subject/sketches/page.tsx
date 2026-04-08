@@ -4,11 +4,23 @@ import {
   use,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { XMarkIcon, PhotoIcon } from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
+
+/** Clamp n to [min, max]. */
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+function touchDistance(a: Touch, b: Touch): number {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
 
 interface FolderStructure {
   subjectSketchesFolderId?: string;
@@ -55,33 +67,205 @@ function SketchThumbnailCard({
     return () => observer.disconnect();
   }, []);
 
-  const thumbUrl = `/api/drive/thumbnail/${file.id}?sz=600`;
+  const thumbUrl = `/api/drive/thumbnail/${file.id}?sz=1024`;
 
   return (
     <button
       ref={cardRef}
       type="button"
       onClick={onOpen}
-      className="group relative aspect-square overflow-hidden rounded-lg border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+      className="group relative flex min-h-[min(52vw,420px)] w-full flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900 text-left transition hover:border-gray-600 hover:ring-2 hover:ring-blue-600/40 focus:ring-2 focus:ring-blue-500 focus:outline-none sm:min-h-[320px]"
     >
-      {shouldLoad ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={thumbUrl}
-          alt={file.name}
-          className="h-full w-full object-cover transition group-hover:opacity-90"
-          loading="lazy"
-        />
-      ) : (
-        <div
-          className="h-full w-full animate-pulse bg-gray-800/90"
-          aria-hidden
-        />
-      )}
-      <span className="absolute inset-x-0 bottom-0 truncate bg-gray-950/85 px-2 py-1 text-[10px] text-gray-400">
+      <div className="relative min-h-[200px] flex-1 bg-gray-950/80 sm:min-h-[260px]">
+        {shouldLoad ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={thumbUrl}
+            alt={file.name}
+            className="h-full max-h-[min(56vh,520px)] w-full object-contain object-center transition group-hover:opacity-95 sm:max-h-[480px]"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="h-full min-h-[200px] w-full animate-pulse bg-gray-800/90 sm:min-h-[260px]"
+            aria-hidden
+          />
+        )}
+      </div>
+      <span className="truncate border-t border-gray-800/80 bg-gray-950/90 px-3 py-2 text-left text-xs text-gray-400">
         {file.name}
       </span>
     </button>
+  );
+}
+
+function SketchPreviewLightbox({
+  fileId,
+  fileName,
+  onClose,
+}: {
+  fileId: string;
+  fileName: string;
+  onClose: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const [fitScale, setFitScale] = useState(1);
+  const [userScale, setUserScale] = useState(1);
+  const userScaleRef = useRef(1);
+  userScaleRef.current = userScale;
+  const pinchRef = useRef<{ startDist: number; startUserScale: number } | null>(
+    null,
+  );
+
+  const imageSrc = `/api/drive/file/${fileId}`;
+
+  useLayoutEffect(() => {
+    setNatural(null);
+    setUserScale(1);
+    setFitScale(1);
+  }, [fileId]);
+
+  useLayoutEffect(() => {
+    if (!natural || !scrollRef.current) return;
+    const el = scrollRef.current;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      const pad = 20;
+      const cw = Math.max(1, r.width - pad);
+      const ch = Math.max(1, r.height - pad);
+      const s = Math.min(cw / natural.w, ch / natural.h, 1);
+      setFitScale(Math.max(s, 0.001));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [natural, fileId]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const listener = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    };
+    el.addEventListener("wheel", listener, { passive: false });
+    return () => el.removeEventListener("wheel", listener);
+  }, [fileId]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      if (t0 === undefined || t1 === undefined) return;
+      pinchRef.current = {
+        startDist: touchDistance(t0, t1),
+        startUserScale: userScaleRef.current,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !pinchRef.current) return;
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      if (t0 === undefined || t1 === undefined) return;
+      e.preventDefault();
+      const d = touchDistance(t0, t1);
+      const ratio = d / pinchRef.current.startDist;
+      setUserScale(
+        clamp(pinchRef.current.startUserScale * ratio, 0.35, 12),
+      );
+    };
+
+    const endPinch = () => {
+      pinchRef.current = null;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", endPinch);
+    el.addEventListener("touchcancel", endPinch);
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", endPinch);
+      el.removeEventListener("touchcancel", endPinch);
+    };
+  }, [fileId]);
+
+  const combined =
+    natural !== null ? Math.max(fitScale * userScale, 0.001) : undefined;
+  const pixW = natural && combined !== undefined ? Math.round(natural.w * combined) : undefined;
+  const pixH = natural && combined !== undefined ? Math.round(natural.h * combined) : undefined;
+
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    const factor = delta > 0 ? 0.92 : 1.08;
+    setUserScale((s) => clamp(s * factor, 0.35, 12));
+  };
+
+  return (
+    <div
+      role="presentation"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <span
+        className="flex h-[min(92vh,900px)] w-full max-w-[min(96vw,1280px)] flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-800 px-4 py-2">
+          <span className="min-w-0 truncate text-sm font-medium text-gray-200">
+            {fileName}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-100"
+            aria-label="Close"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+        <div
+          ref={scrollRef}
+          className="relative min-h-0 flex-1 overflow-auto overscroll-contain bg-gray-950/90 p-3"
+          onWheel={onWheel}
+        >
+          <div className="flex min-h-full min-w-full items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageSrc}
+              alt={fileName}
+              width={pixW}
+              height={pixH}
+              className={
+                natural
+                  ? "inline-block max-w-none bg-white shadow-lg"
+                  : "max-h-[calc(92vh-8rem)] w-auto max-w-full object-contain shadow-lg"
+              }
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+              }}
+              onDoubleClick={() => setUserScale(1)}
+            />
+          </div>
+        </div>
+        <p className="shrink-0 border-t border-gray-800 px-4 py-2 text-center text-[11px] text-gray-500">
+          Ctrl+scroll or pinch to zoom · double-click resets · Esc to close
+        </p>
+      </span>
+    </div>
   );
 }
 
@@ -192,7 +376,7 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
             <p className="mt-3 text-sm text-gray-400">No images in this folder.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
             {images.map((file) => (
               <SketchThumbnailCard
                 key={file.id}
@@ -205,40 +389,11 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
       </div>
 
       {lightboxId && (
-        <div
-          role="presentation"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
-          onClick={() => setLightboxId(null)}
-        >
-          <span
-            className="relative max-h-[90vh] max-w-[min(96vw,1200px)] overflow-hidden rounded-xl border border-gray-700 bg-gray-900 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <div className="flex items-center justify-between gap-4 border-b border-gray-800 px-4 py-2">
-              <span className="min-w-0 truncate text-sm font-medium text-gray-200">
-                {lightboxName}
-              </span>
-              <button
-                type="button"
-                onClick={() => setLightboxId(null)}
-                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-100"
-                aria-label="Close"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="max-h-[calc(90vh-3rem)] overflow-auto p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/drive/thumbnail/${lightboxId}?sz=1600`}
-                alt={lightboxName}
-                className="mx-auto max-h-[calc(90vh-5rem)] w-auto max-w-full object-contain"
-              />
-            </div>
-          </span>
-        </div>
+        <SketchPreviewLightbox
+          fileId={lightboxId}
+          fileName={lightboxName}
+          onClose={() => setLightboxId(null)}
+        />
       )}
     </div>
   );
