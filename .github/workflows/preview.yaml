@@ -27,6 +27,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm check
+        env:
+          SKIP_ENV_VALIDATION: "1"
 
   deploy-preview:
     name: Deploy Preview
