@@ -426,10 +426,10 @@ async function executeListProjectComps(
   }
 
   const comps = (data ?? []).map((c) => ({
-    id: c.id,
-    address: (c.address_for_display as string) || (c.address as string),
-    type: c.type,
-    number: c.number,
+    id: c.id as string,
+    address: (c.address_for_display as string | null) ?? (c.address as string),
+    type: c.type as string,
+    number: c.number as string | null,
   }));
 
   return {
@@ -511,13 +511,13 @@ async function executeQueryCompData(
     toolName: "query_comp_data",
     args,
     success: true,
-    message: `Retrieved data for comp: ${(comp.address_for_display as string) || (comp.address as string)}`,
+    message: `Retrieved data for comp: ${(comp.address_for_display as string | null) ?? (comp.address as string)}`,
     data: {
-      id: comp.id,
-      address: (comp.address_for_display as string) || (comp.address as string),
-      type: comp.type,
-      number: comp.number,
-      raw_data: parsed?.raw_data ?? null,
+      id: comp.id as string,
+      address: (comp.address_for_display as string | null) ?? (comp.address as string),
+      type: comp.type as string,
+      number: comp.number as string | null,
+      raw_data: (parsed?.raw_data as Record<string, unknown> | null) ?? null,
     },
     silent: true,
   };

@@ -34,11 +34,11 @@ interface CompContext {
 
 interface SubjectContext {
   core: Record<string, unknown> | null;
-  taxes: unknown | null;
-  parcels: unknown | null;
-  improvements: unknown | null;
-  fema: unknown | null;
-  improvement_analysis: unknown | null;
+  taxes: unknown;
+  parcels: unknown;
+  improvements: unknown;
+  fema: unknown;
+  improvement_analysis: unknown;
 }
 
 interface TaggedProjectContext {
