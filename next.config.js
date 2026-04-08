@@ -3,9 +3,15 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import { readFileSync } from "node:fs";
+
+const { version } = JSON.parse(readFileSync("./package.json", "utf8"));
 
 /** @type {import("next").NextConfig} */
 const config = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: version,
+  },
   images: {
     remotePatterns: [
       {

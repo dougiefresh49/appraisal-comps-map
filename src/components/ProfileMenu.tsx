@@ -86,7 +86,12 @@ export function ProfileMenu({
           }
         >
           {/* User info */}
-          <div className="px-4 py-3">
+          <div className="relative px-4 py-3">
+            {process.env.NEXT_PUBLIC_APP_VERSION && (
+              <p className="absolute top-1 right-3 text-[11px] text-gray-400 dark:text-gray-500">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </p>
+            )}
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
               Signed in as
             </p>
@@ -132,6 +137,7 @@ export function ProfileMenu({
             <ArrowRightStartOnRectangleIcon className="h-4 w-4 shrink-0" />
             Sign out
           </button>
+
         </div>
       )}
 
