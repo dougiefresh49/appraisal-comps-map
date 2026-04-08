@@ -9,7 +9,7 @@ CURRENT_VERSION=$(node -p "require('./package.json').version")
 
 # Commits since last tag (or all commits if no tags exist)
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
-COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s" | head -30)
+COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s" -30)
 
 if [ -z "$COMMITS" ]; then
   COMMITS=$(git log -1 --pretty=format:"%s")
