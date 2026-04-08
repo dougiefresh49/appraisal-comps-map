@@ -1,4 +1,9 @@
-import { GoogleGenAI, type Part, type Content } from "@google/genai";
+import {
+  GoogleGenAI,
+  FinishReason,
+  type Part,
+  type Content,
+} from "@google/genai";
 import type { ChatMessage } from "~/lib/chat-context";
 import {
   toolConfig,
@@ -191,18 +196,18 @@ export async function generateChatStream(
 
               // Map known finish reasons to human-readable messages
               let fallback: string;
-              if (finishReason === "SAFETY") {
+              if (finishReason === FinishReason.SAFETY) {
                 fallback =
                   "The AI model declined to answer this question due to content safety filters. Please try rephrasing your question.";
-              } else if (finishReason === "RECITATION") {
+              } else if (finishReason === FinishReason.RECITATION) {
                 fallback =
                   "The AI model blocked this response due to a recitation/copyright concern with the source material. Try asking in a different way or referencing a different part of the document.";
-              } else if (finishReason === "MAX_TOKENS") {
+              } else if (finishReason === FinishReason.MAX_TOKENS) {
                 fallback =
                   "The response was cut off because it exceeded the maximum length. Try asking a more specific question.";
               } else {
                 fallback =
-                  `I wasn't able to generate a response${finishReason && finishReason !== "STOP" ? ` (reason: ${finishReason})` : ""}. Please try rephrasing your question.`;
+                  `I wasn't able to generate a response${finishReason && finishReason !== FinishReason.STOP ? ` (reason: ${finishReason})` : ""}. Please try rephrasing your question.`;
               }
 
               controller.enqueue(

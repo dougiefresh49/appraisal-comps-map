@@ -182,7 +182,6 @@ async function persistTurn(
     success: boolean;
     message: string;
   }> = [];
-  let hadError = false;
 
   try {
     while (true) {
@@ -219,12 +218,6 @@ async function persistTurn(
               }
             ).toolResult;
             toolMessages.push(tr);
-          } else if (
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "error" in parsed
-          ) {
-            hadError = true;
           }
         } catch {
           // ignore SSE parse errors
