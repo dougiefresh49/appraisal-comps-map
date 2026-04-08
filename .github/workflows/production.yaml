@@ -22,14 +22,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve bump type
+        id: resolve
+        run: bash scripts/resolve-bump.sh
+        env:
+          GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
+
       - name: Bump version
         id: bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          NEW_VERSION=$(npm version patch -m "v%s [skip ci]" --no-git-tag-version)
+          BUMP_TYPE="${{ steps.resolve.outputs.bump_type }}"
+          NEW_VERSION=$(npm version "$BUMP_TYPE" -m "v%s [skip ci]" --no-git-tag-version)
           git add package.json
-          git commit -m "v${NEW_VERSION} [skip ci]"
+          git commit -m "${NEW_VERSION} [skip ci]"
           git tag "$NEW_VERSION"
           git push --follow-tags
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
