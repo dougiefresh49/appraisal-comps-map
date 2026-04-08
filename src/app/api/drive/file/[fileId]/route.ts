@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { updateFileContentById } from "~/lib/drive-api";
 import { getGoogleToken } from "~/utils/supabase/server";
 
 const DRIVE_MEDIA = "https://www.googleapis.com/drive/v3/files";
@@ -62,6 +63,57 @@ export async function GET(
     console.error("Drive file route error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to load file" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ fileId: string }> },
+) {
+  try {
+    const { fileId } = await context.params;
+    if (!fileId || !FILE_ID_RE.test(fileId)) {
+      return NextResponse.json({ error: "Invalid fileId" }, { status: 400 });
+    }
+
+    const { token, error: driveAuthError, code } = await getGoogleToken();
+    if (!token) {
+      return NextResponse.json(
+        {
+          error:
+            driveAuthError ??
+            "Not authenticated — please sign in to grant Drive access",
+          code,
+        },
+        { status: 401 },
+      );
+    }
+
+    const body = (await request.json()) as {
+      content?: string;
+      mimeType?: string;
+    };
+    if (typeof body.content !== "string") {
+      return NextResponse.json(
+        { error: "Request body must include a string \"content\" field" },
+        { status: 400 },
+      );
+    }
+
+    const mimeType =
+      typeof body.mimeType === "string" && body.mimeType.length > 0
+        ? body.mimeType
+        : "text/html";
+
+    await updateFileContentById(token, fileId, body.content, mimeType);
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Drive file PATCH error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to update file" },
       { status: 500 },
     );
   }

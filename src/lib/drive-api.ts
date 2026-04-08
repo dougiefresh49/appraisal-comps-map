@@ -248,25 +248,7 @@ export async function uploadOrUpdateFile(
   const existing = await findChildByName(token, folderId, fileName);
 
   if (existing) {
-    // Update existing file content
-    const url = `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(existing.id)}?uploadType=media`;
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: {
-        ...authHeaders(token),
-        "Content-Type": mimeType,
-      },
-      body: content,
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(
-        `Drive updateFile failed (${res.status}): ${text.slice(0, 300)}`,
-      );
-    }
-
-    return (await res.json()) as DriveFile;
+    return updateFileContentById(token, existing.id, content, mimeType);
   }
 
   // Create new file with multipart upload so we can set the parent folder
@@ -328,6 +310,35 @@ export async function uploadOrUpdateFile(
     const text = await res.text();
     throw new Error(
       `Drive uploadFile failed (${res.status}): ${text.slice(0, 300)}`,
+    );
+  }
+
+  return (await res.json()) as DriveFile;
+}
+
+/**
+ * Overwrites a Drive file's media content in place (by file id).
+ */
+export async function updateFileContentById(
+  token: string,
+  fileId: string,
+  content: string | Buffer | ArrayBuffer,
+  mimeType: string,
+): Promise<DriveFile> {
+  const url = `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(fileId)}?uploadType=media`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": mimeType,
+    },
+    body: content,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Drive updateFile failed (${res.status}): ${text.slice(0, 300)}`,
     );
   }
 

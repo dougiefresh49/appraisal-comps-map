@@ -285,11 +285,11 @@ export function MapBanner(props: MapBannerProps) {
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-gray-800 bg-gray-900 ${height}`}
+      className={`relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-900 ${height}`}
     >
       {showBannerSpinner ? (
         <div className="flex h-full items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500 dark:border-gray-700 dark:border-t-blue-500" />
         </div>
       ) : imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -300,9 +300,9 @@ export function MapBanner(props: MapBannerProps) {
         />
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-2">
-          <MapIcon className="h-10 w-10 text-gray-700" />
-          <p className="text-sm font-medium text-gray-500">{label}</p>
-          <p className="text-xs text-gray-600">
+          <MapIcon className="h-10 w-10 text-gray-300 dark:text-gray-700" />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-500">{label}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-600">
             {actionType === "expand"
               ? "Map image will appear here when available in Drive"
               : "Edit the map to update this preview"}
@@ -324,24 +324,24 @@ export function MapBanner(props: MapBannerProps) {
           </button>
           {pickerOpen && (
             <div
-              className="absolute left-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl ring-1 ring-black/40"
+              className="absolute left-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl ring-1 ring-black/10 dark:border-gray-700 dark:bg-gray-950 dark:ring-black/40"
               role="listbox"
             >
               {mapRow?.imageFileId ? (
                 <button
                   type="button"
                   onClick={handleClearSelection}
-                  className="w-full border-b border-gray-800 px-3 py-2 text-left text-xs font-medium text-amber-200/90 transition hover:bg-gray-900"
+                  className="w-full border-b border-gray-200 px-3 py-2 text-left text-xs font-medium text-amber-600 transition hover:bg-gray-100 dark:border-gray-800 dark:text-amber-200/90 dark:hover:bg-gray-900"
                 >
                   Clear selection (use filename match)
                 </button>
               ) : null}
               {listLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500 dark:border-gray-700 dark:border-t-blue-500" />
                 </div>
               ) : folderImages.length === 0 ? (
-                <p className="px-3 py-4 text-center text-xs text-gray-500">
+                <p className="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500">
                   No images found in reports/maps/
                 </p>
               ) : (
@@ -353,8 +353,10 @@ export function MapBanner(props: MapBannerProps) {
                         <button
                           type="button"
                           onClick={() => handlePickImage(f.id)}
-                          className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition hover:bg-gray-900 ${
-                            isSelected ? "bg-blue-950/40 ring-1 ring-inset ring-blue-800/50" : ""
+                          className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition hover:bg-gray-100 dark:hover:bg-gray-900 ${
+                            isSelected
+                              ? "bg-blue-50 ring-1 ring-inset ring-blue-200 dark:bg-blue-950/40 dark:ring-blue-800/50"
+                              : ""
                           }`}
                           role="option"
                           aria-selected={isSelected}
@@ -365,7 +367,7 @@ export function MapBanner(props: MapBannerProps) {
                             alt=""
                             className="h-10 w-10 shrink-0 rounded object-cover"
                           />
-                          <span className="min-w-0 flex-1 truncate text-xs text-gray-200">
+                          <span className="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-200">
                             {f.name}
                           </span>
                         </button>

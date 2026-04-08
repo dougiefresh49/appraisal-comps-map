@@ -862,6 +862,15 @@ export async function updatePhotoLabel(photoId: string, label: string) {
   if (error) throw error;
 }
 
+export async function updatePhotoCategory(photoId: string, category: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("photo_analyses")
+    .update({ category })
+    .eq("id", photoId);
+  if (error) throw error;
+}
+
 export async function updatePhotoSortOrder(
   photos: { id: string; sortOrder: number }[],
 ) {

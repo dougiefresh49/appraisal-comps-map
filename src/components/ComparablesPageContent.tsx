@@ -88,6 +88,9 @@ function contextForCompType(
   }
 }
 
+const TOOLBAR_HOVER_HINT_CLASS =
+  "pointer-events-none absolute -bottom-8 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 opacity-0 shadow transition-opacity group-hover:opacity-100";
+
 export function ComparablesPageContent({
   projectId,
   type,
@@ -273,13 +276,13 @@ export function ComparablesPageContent({
               aria-haspopup="menu"
               title="Actions"
               aria-label="Open actions menu"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
             >
               <EllipsisVerticalIcon className="h-4 w-4" aria-hidden />
             </button>
             {actionsMenuOpen && (
               <ul
-                className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl dark:bg-gray-900"
+                className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-900"
                 role="menu"
                 aria-orientation="vertical"
               >
@@ -287,14 +290,14 @@ export function ComparablesPageContent({
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       closeActionsMenu();
                       setIsExportDialogOpen(true);
                     }}
                   >
                     <ArrowDownTrayIcon
-                      className="h-4 w-4 shrink-0 text-violet-400"
+                      className="h-4 w-4 shrink-0 text-violet-500 dark:text-violet-400"
                       aria-hidden
                     />
                     Export JSON
@@ -304,7 +307,7 @@ export function ComparablesPageContent({
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       closeActionsMenu();
                       setShowReorderDialog(true);
@@ -321,14 +324,14 @@ export function ComparablesPageContent({
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       closeActionsMenu();
                       handleAddComparable();
                     }}
                   >
                     <PlusIcon
-                      className="h-4 w-4 shrink-0 text-blue-400"
+                      className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400"
                       strokeWidth={2}
                       aria-hidden
                     />
@@ -340,33 +343,39 @@ export function ComparablesPageContent({
           </div>
         </div>
         <div className="hidden md:flex md:flex-wrap md:items-center md:justify-end md:gap-1.5">
-          <button
-            type="button"
-            onClick={() => setIsExportDialogOpen(true)}
-            title="Export comp data as JSON for AppScript importer"
-            aria-label="Export JSON"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 dark:border-gray-700"
-          >
-            <ArrowDownTrayIcon className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowReorderDialog(true)}
-            title="Reorder comparables (drag to change comp numbers)"
-            aria-label="Reorder comparables"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
-          >
-            <ArrowsUpDownIcon className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={handleAddComparable}
-            title="Add comparable"
-            aria-label="Add comparable"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            <PlusIcon className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
+          <div className="group relative inline-flex">
+            <button
+              type="button"
+              onClick={() => setIsExportDialogOpen(true)}
+              aria-label="Export JSON"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 hover:text-violet-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" aria-hidden />
+            </button>
+            <span className={TOOLBAR_HOVER_HINT_CLASS}>Export JSON</span>
+          </div>
+          <div className="group relative inline-flex">
+            <button
+              type="button"
+              onClick={() => setShowReorderDialog(true)}
+              aria-label="Reorder comparables"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 shadow-sm transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:shadow-none dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100"
+            >
+              <ArrowsUpDownIcon className="h-4 w-4" aria-hidden />
+            </button>
+            <span className={TOOLBAR_HOVER_HINT_CLASS}>Reorder comparables</span>
+          </div>
+          <div className="group relative inline-flex">
+            <button
+              type="button"
+              onClick={handleAddComparable}
+              aria-label="Add comparable"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+            >
+              <PlusIcon className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <span className={TOOLBAR_HOVER_HINT_CLASS}>Add comparable</span>
+          </div>
         </div>
       </div>
 

@@ -5,18 +5,14 @@ import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { downloadFile, listFolderChildren } from "~/lib/drive-api";
 import { LABEL_EXAMPLES } from "~/lib/photo-label-examples";
+import {
+  type PhotoCategory,
+  VALID_CATEGORIES,
+} from "~/lib/photo-category-constants";
 
 const PHOTO_MODEL = "gemini-3.1-flash-lite-preview";
 
-const VALID_CATEGORIES = [
-  "Site & Grounds",
-  "Building Exterior",
-  "Building Interior",
-  "Residential / Apartment Unit",
-  "Damage & Deferred Maintenance",
-] as const;
-
-export type PhotoCategory = (typeof VALID_CATEGORIES)[number];
+export type { PhotoCategory } from "~/lib/photo-category-constants";
 
 export interface PhotoAnalysisInput {
   projectId: string;

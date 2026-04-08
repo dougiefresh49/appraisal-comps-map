@@ -33,13 +33,13 @@ function parsedStatusBadgeClass(
 ): string {
   switch (status ?? "none") {
     case "parsed":
-      return "bg-emerald-950/80 text-emerald-300 ring-1 ring-emerald-800/80";
+      return "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:ring-emerald-800/80";
     case "processing":
-      return "bg-blue-950/80 text-blue-300 ring-1 ring-blue-800/80 animate-pulse";
+      return "bg-blue-100 text-blue-700 ring-1 ring-blue-300 animate-pulse dark:bg-blue-950/80 dark:text-blue-300 dark:ring-blue-800/80";
     case "error":
-      return "bg-red-950/80 text-red-300 ring-1 ring-red-800/80";
+      return "bg-red-100 text-red-700 ring-1 ring-red-300 dark:bg-red-950/80 dark:text-red-300 dark:ring-red-800/80";
     default:
-      return "bg-gray-800/80 text-gray-400 ring-1 ring-gray-700";
+      return "bg-gray-100 text-gray-500 ring-1 ring-gray-300 dark:bg-gray-800/80 dark:text-gray-400 dark:ring-gray-700";
   }
 }
 
@@ -102,9 +102,9 @@ function ComparableListCard({
   const mapIconClass = type === "Land" ? "text-green-400" : "text-purple-400";
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-gray-700 bg-gray-900/50 p-4 shadow-sm ring-1 ring-black/20 transition hover:border-gray-600 hover:shadow-md">
+    <div className="group relative flex flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm ring-1 ring-black/5 transition hover:border-gray-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-900/50 dark:ring-black/20 dark:hover:border-gray-600">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold tracking-wide text-gray-400 uppercase">
+        <span className="text-xs font-bold tracking-wide text-gray-500 uppercase dark:text-gray-400">
           {type} #{comparable.number ?? index + 1}
         </span>
         <span
@@ -123,13 +123,13 @@ function ComparableListCard({
             aria-haspopup="menu"
             title="Comparable actions"
             aria-label="Open comparable actions"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-800 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500/50"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500/50 dark:hover:bg-gray-800 dark:hover:text-gray-100"
           >
             <EllipsisVerticalIcon className="h-4 w-4" aria-hidden />
           </button>
           {menuOpen && (
             <ul
-              className="absolute top-full right-0 z-50 mt-1 w-52 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl"
+              className="absolute top-full right-0 z-50 mt-1 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-900"
               role="menu"
               aria-orientation="vertical"
             >
@@ -138,8 +138,8 @@ function ComparableListCard({
                   <button
                     type="button"
                     role="menuitem"
-                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800 ${
-                      photosExpanded ? "bg-gray-800/60" : ""
+                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800 ${
+                      photosExpanded ? "bg-gray-100 dark:bg-gray-800/60" : ""
                     }`}
                     onClick={() => {
                       closeMenu();
@@ -147,7 +147,7 @@ function ComparableListCard({
                     }}
                   >
                     <PhotoIcon
-                      className="h-4 w-4 shrink-0 text-sky-400"
+                      className="h-4 w-4 shrink-0 text-sky-500 dark:text-sky-400"
                       aria-hidden
                     />
                     Photos ({imageCount})
@@ -159,7 +159,7 @@ function ComparableListCard({
                   <Link
                     role="menuitem"
                     href={`/project/${projectId}/${typeSlug}/comps/${comparable.id}/location-map`}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={closeMenu}
                   >
                     <MapPinIcon
@@ -174,11 +174,11 @@ function ComparableListCard({
                 <Link
                   role="menuitem"
                   href={`/project/${projectId}/${typeSlug}/comps/${comparable.id}`}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                   onClick={closeMenu}
                 >
                   <DocumentTextIcon
-                    className="h-4 w-4 shrink-0 text-sky-400"
+                    className="h-4 w-4 shrink-0 text-sky-500 dark:text-sky-400"
                     aria-hidden
                   />
                   Details
@@ -188,7 +188,7 @@ function ComparableListCard({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-red-400 hover:bg-gray-800"
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-gray-800"
                   onClick={() => {
                     closeMenu();
                     onRemove();
@@ -208,7 +208,7 @@ function ComparableListCard({
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">
             Address
           </label>
-          <p className="min-h-[1.75rem] rounded-md border border-gray-800 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200">
+          <p className="min-h-[1.75rem] rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950/60 dark:text-gray-200">
             {comparable.address?.trim() ? comparable.address : "—"}
           </p>
         </div>
@@ -223,7 +223,7 @@ function ComparableListCard({
             onChange={(event) =>
               onChange("addressForDisplay", event.target.value)
             }
-            className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 focus:outline-none"
+            className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 focus:outline-none dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-200 dark:placeholder-gray-600"
             placeholder="Same as address"
           />
         </div>
@@ -236,7 +236,7 @@ function ComparableListCard({
             type="text"
             value={comparable.apn?.join(", ") ?? ""}
             onChange={(event) => onChange("apn", event.target.value)}
-            className="w-full rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 focus:outline-none"
+            className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 focus:outline-none dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-200 dark:placeholder-gray-600"
             placeholder="e.g. 123-456, 789-012"
           />
         </div>
@@ -245,21 +245,21 @@ function ComparableListCard({
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">
             Number
           </label>
-          <p className="rounded-md border border-gray-800 bg-gray-950/60 px-2 py-1.5 text-xs text-gray-200">
+          <p className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950/60 dark:text-gray-200">
             {comparable.number ?? String(index + 1)}
           </p>
         </div>
       </div>
 
       {photosExpanded && comparable.images && (
-        <div className="mt-4 border-t border-gray-800 pt-3">
+        <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-800">
           <h4 className="mb-2 text-[10px] font-bold text-gray-500 uppercase">
             Photos
           </h4>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {comparable.images.map((image) => (
               <div key={image.id} className="flex flex-col space-y-1">
-                <div className="relative aspect-square overflow-hidden rounded-md border border-gray-700 bg-gray-800">
+                <div className="relative aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={
@@ -273,7 +273,7 @@ function ComparableListCard({
                 </div>
                 <div className="flex flex-col px-0.5">
                   <span
-                    className="truncate text-[10px] font-medium text-gray-400"
+                    className="truncate text-[10px] font-medium text-gray-500 dark:text-gray-400"
                     title={image.name}
                   >
                     {image.name}
@@ -282,7 +282,7 @@ function ComparableListCard({
                     href={image.webViewLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-blue-400 hover:underline"
+                    className="text-[10px] text-blue-500 hover:underline dark:text-blue-400"
                   >
                     Open ↗
                   </a>
@@ -323,7 +323,7 @@ export function ComparablesList({
   return (
     <div className="space-y-6">
       {comparables.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-600 bg-gray-900/40 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-400 dark:border-gray-600 dark:bg-gray-900/40 dark:text-gray-400">
           No {type.toLowerCase()} comparables yet.
         </div>
       ) : (

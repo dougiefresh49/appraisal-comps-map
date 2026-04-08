@@ -5,6 +5,7 @@ import {
   fetchProjectPhotos,
   fetchArchivedPhotos,
   updatePhotoLabel as updateLabelDb,
+  updatePhotoCategory as updatePhotoCategoryDb,
   updatePhotoSortOrder,
   archivePhoto as archivePhotoDb,
   restorePhoto as restorePhotoDb,
@@ -20,6 +21,7 @@ interface UseProjectPhotosReturn {
   showArchived: boolean;
   setShowArchived: (show: boolean) => void;
   updateLabel: (photoId: string, label: string) => void;
+  updateCategory: (photoId: string, category: string) => void;
   reorder: (activeId: string, overId: string) => void;
   archivePhoto: (photoId: string) => void;
   restorePhoto: (photoId: string) => void;
@@ -122,7 +124,23 @@ export function useProjectPhotos(projectId: string): UseProjectPhotosReturn {
       setPhotos((prev) =>
         prev.map((p) => (p.id === photoId ? { ...p, label } : p)),
       );
+      setArchivedPhotos((prev) =>
+        prev.map((p) => (p.id === photoId ? { ...p, label } : p)),
+      );
       void updateLabelDb(photoId, label);
+    },
+    [],
+  );
+
+  const updateCategory = useCallback(
+    (photoId: string, category: string) => {
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === photoId ? { ...p, category } : p)),
+      );
+      setArchivedPhotos((prev) =>
+        prev.map((p) => (p.id === photoId ? { ...p, category } : p)),
+      );
+      void updatePhotoCategoryDb(photoId, category);
     },
     [],
   );
@@ -196,6 +214,7 @@ export function useProjectPhotos(projectId: string): UseProjectPhotosReturn {
     showArchived,
     setShowArchived,
     updateLabel,
+    updateCategory,
     reorder,
     archivePhoto,
     restorePhoto,

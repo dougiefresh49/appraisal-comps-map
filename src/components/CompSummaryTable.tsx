@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { PlusIcon, MinusIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
+import {
+  PlusIcon,
+  ChevronUpDownIcon,
+  ArrowPathIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useProject } from "~/hooks/useProject";
 import { getComparablesByType, type ComparableType, type Comparable } from "~/utils/projectStore";
 import { createClient } from "~/utils/supabase/client";
@@ -13,7 +18,10 @@ import {
   formatAcres,
 } from "~/lib/calculated-fields";
 import type { CompParsedDataRow } from "~/types/comp-data";
-import { PushToSheetButton } from "~/components/PushToSheetButton";
+import {
+  PushToSheetButton,
+  type PushToSheetButtonHandle,
+} from "~/components/PushToSheetButton";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -289,7 +297,7 @@ function RowLabelSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none rounded border border-gray-700 bg-gray-800 py-1 pl-2 pr-7 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-full appearance-none rounded border border-gray-300 bg-white py-1 pl-2 pr-7 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>
@@ -297,9 +305,36 @@ function RowLabelSelect({
           </option>
         ))}
       </select>
-      <ChevronUpDownIcon className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+      <ChevronUpDownIcon className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Hover hint tooltip class (same pattern as SubjectDataEditor)
+// ---------------------------------------------------------------------------
+
+const TOOLBAR_HOVER_HINT_CLASS =
+  "pointer-events-none absolute -bottom-8 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 opacity-0 shadow transition-opacity group-hover:opacity-100";
+
+// ---------------------------------------------------------------------------
+// Page title / description per comp type
+// ---------------------------------------------------------------------------
+
+function getPageTitle(compType: ComparableType): string {
+  switch (compType) {
+    case "Land": return "Land Sales Summary";
+    case "Sales": return "Sales Summary";
+    case "Rentals": return "Rentals Summary";
+  }
+}
+
+function getPageDescription(compType: ComparableType): string {
+  switch (compType) {
+    case "Land": return "Cross-comp comparison of key land sale metrics.";
+    case "Sales": return "Cross-comp comparison of key sales metrics.";
+    case "Rentals": return "Cross-comp comparison of key rental metrics.";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -400,23 +435,44 @@ export function CompSummaryTable({ projectId, compType }: CompSummaryTableProps)
     const supabase = createClient();
     const handle = window.setTimeout(() => {
       void (async () => {
-        const { error } = await supabase.from("comp_ui_templates").upsert(
-          {
+        // Use select-then-update/insert because the unique constraint is a
+        // partial index (WHERE project_id IS NOT NULL) which PostgREST cannot
+        // resolve for upsert conflict detection.
+        const { data: existing, error: selectError } = await supabase
+          .from("comp_ui_templates")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("comp_type", compType)
+          .eq("template_type", "SUMMARY")
+          .maybeSingle();
+
+        if (selectError) {
+          console.error("Failed to persist summary table config", selectError);
+          return;
+        }
+
+        if (existing?.id) {
+          const { error } = await supabase
+            .from("comp_ui_templates")
+            .update({ content: rows })
+            .eq("id", existing.id);
+          if (error) console.error("Failed to persist summary table config", error);
+        } else {
+          const { error } = await supabase.from("comp_ui_templates").insert({
             project_id: projectId,
             comp_type: compType,
             template_type: "SUMMARY",
             content: rows,
-          },
-          { onConflict: "project_id,comp_type,template_type" },
-        );
-        if (error) {
-          console.error("Failed to persist summary table config", error);
+          });
+          if (error) console.error("Failed to persist summary table config", error);
         }
       })();
     }, SUMMARY_PERSIST_DEBOUNCE_MS);
 
     return () => window.clearTimeout(handle);
   }, [rows, rowsReady, projectId, compType]);
+
+  const pushToSheetRef = useRef<PushToSheetButtonHandle | null>(null);
 
   const updateRowLabel = useCallback((rowId: string, newLabel: string) => {
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, label: newLabel } : r)));
@@ -438,161 +494,210 @@ export function CompSummaryTable({ projectId, compType }: CompSummaryTableProps)
 
   const isLoading = projectLoading || dataLoading || !rowsReady;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-blue-500" />
-        <span className="ml-3 text-sm text-gray-400">Loading summary data…</span>
-      </div>
-    );
-  }
-
-  if (comps.length === 0) {
-    return (
-      <div className="rounded-lg border border-gray-800 bg-gray-900 p-12 text-center">
-        <p className="text-sm text-gray-400">
-          No {compType.toLowerCase()} comparables found for this project.
-        </p>
-        <p className="mt-1 text-xs text-gray-500">
-          Add comps from the Comps page, then return here to see the summary.
-        </p>
-      </div>
-    );
-  }
-
   const hasAnyData = Object.keys(dataMap).length > 0;
 
   return (
-    <div className="space-y-3">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={addRow}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-700 bg-gray-800 px-2.5 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-600 hover:text-blue-400"
-          >
-            <PlusIcon className="h-3.5 w-3.5" />
-            Add Row
-          </button>
-          <button
-            onClick={resetToDefaults}
-            className="rounded-md px-2.5 py-1.5 text-xs text-gray-500 transition hover:text-gray-300"
-          >
-            Reset Defaults
-          </button>
-          <PushToSheetButton
-            confirmDescription={`${rows.length} summary row label(s) to the ${compType.toLowerCase()} summary chart sheet`}
-            confirmDetail="Column A (rows 2+) of the summary chart sheet will be overwritten with the current row labels."
-            onPush={async () => {
-              const res = await fetch("/api/spreadsheet/push-summary", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  projectId,
-                  type: compType,
-                  labels: rows.map((r) => r.label),
-                }),
-              });
-              if (!res.ok) {
-                const data = (await res.json()) as { error?: string };
-                throw new Error(data.error ?? "Push failed");
-              }
-            }}
-            disabled={rows.length === 0}
-          />
+    <div className="space-y-6">
+      {/* Page header */}
+      <header className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        {/* Left: title + description + comp/row count */}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {getPageTitle(compType)}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {getPageDescription(compType)}
+          </p>
+          {!isLoading && comps.length > 0 && (
+            <p className="mt-1 text-xs text-gray-500">
+              {comps.length} comp{comps.length !== 1 ? "s" : ""} · {rows.length} row{rows.length !== 1 ? "s" : ""}
+            </p>
+          )}
         </div>
-        <span className="text-xs text-gray-500">
-          {comps.length} comp{comps.length !== 1 ? "s" : ""} · {rows.length} row{rows.length !== 1 ? "s" : ""}
-        </span>
-      </div>
+
+        {/* Right: action icon buttons */}
+        <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:items-end">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {/* Add Row */}
+            <div className="group relative inline-flex items-center gap-2">
+              <button
+                type="button"
+                onClick={addRow}
+                disabled={isLoading}
+                aria-label="Add a new summary row"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-blue-700 hover:bg-blue-950/30 hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700"
+              >
+                <PlusIcon className="h-4 w-4" aria-hidden />
+              </button>
+              <span className={TOOLBAR_HOVER_HINT_CLASS}>Add a new row</span>
+            </div>
+
+            {/* Reset Defaults */}
+            <div className="group relative inline-flex items-center gap-2">
+              <button
+                type="button"
+                onClick={resetToDefaults}
+                disabled={isLoading}
+                aria-label="Reset rows to defaults"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700"
+              >
+                <ArrowPathIcon className="h-4 w-4" aria-hidden />
+              </button>
+              <span className={TOOLBAR_HOVER_HINT_CLASS}>Reset to defaults</span>
+            </div>
+
+            {/* Push to Sheet */}
+            <div className="group relative inline-flex items-center gap-2">
+              <PushToSheetButton
+                ref={pushToSheetRef}
+                iconOnly
+                omitNativeTitle
+                showInlineFeedback
+                confirmDescription={`${rows.length} summary row label(s) to the ${compType.toLowerCase()} summary chart sheet`}
+                confirmDetail="Column A (rows 2+) of the summary chart sheet will be overwritten with the current row labels."
+                disabled={isLoading || rows.length === 0}
+                onPush={async () => {
+                  const res = await fetch("/api/spreadsheet/push-summary", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      projectId,
+                      type: compType,
+                      labels: rows.map((r) => r.label),
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = (await res.json()) as { error?: string };
+                    throw new Error(data.error ?? "Push failed");
+                  }
+                }}
+              />
+              <span className={TOOLBAR_HOVER_HINT_CLASS}>Push row labels to Google Sheet</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-blue-500" />
+          <span className="ml-3 text-sm text-gray-400">Loading summary data…</span>
+        </div>
+      )}
+
+      {/* Empty comps state */}
+      {!isLoading && comps.length === 0 && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-12 text-center dark:border-gray-800 dark:bg-gray-900">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No {compType.toLowerCase()} comparables found for this project.
+          </p>
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            Add comps from the Comps page, then return here to see the summary.
+          </p>
+        </div>
+      )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="w-full min-w-[600px] border-collapse text-sm">
-          {/* Header: comp numbers */}
-          <thead>
-            <tr className="bg-gray-900">
-              <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-gray-800 bg-gray-900 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Field
-              </th>
-              {comps.map((comp, i) => (
-                <th
-                  key={comp.id}
-                  className="min-w-[130px] border-b border-gray-800 px-3 py-2 text-center text-xs font-semibold text-gray-300"
-                >
-                  <span className="text-blue-400">#{comp.number ?? i + 1}</span>
-                </th>
-              ))}
-              <th className="w-8 border-b border-gray-800 bg-gray-900" />
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.map((row, rowIdx) => (
-              <tr
-                key={row.id}
-                className={rowIdx % 2 === 0 ? "bg-gray-950" : "bg-gray-900/50"}
-              >
-                {/* Label cell with dropdown */}
-                <td className="sticky left-0 z-10 border-r border-gray-800 px-2 py-1.5"
-                  style={{ backgroundColor: rowIdx % 2 === 0 ? "rgb(3 7 18)" : "rgb(17 24 39 / 0.5)" }}
-                >
-                  <RowLabelSelect
-                    value={row.label}
-                    options={availableFields}
-                    onChange={(v) => updateRowLabel(row.id, v)}
-                  />
-                </td>
-
-                {/* Value cells */}
-                {comps.map((comp) => {
-                  const compData = dataMap[comp.id];
-                  const rawValue = compData?.[row.label];
-                  const display = hasAnyData && compData
-                    ? formatValue(row.label, rawValue)
-                    : "--";
-
-                  return (
-                    <td
+      {!isLoading && comps.length > 0 && (
+        <>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
+            <table className="w-full min-w-[600px] border-collapse text-sm">
+              {/* Header: comp numbers */}
+              <thead>
+                <tr className="bg-gray-100 dark:bg-gray-900">
+                  <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-gray-200 bg-gray-100 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+                    Field
+                  </th>
+                  {comps.map((comp, i) => (
+                    <th
                       key={comp.id}
-                      className="whitespace-nowrap border-gray-800 px-3 py-1.5 text-center text-xs text-gray-300"
+                      className="min-w-[130px] border-b border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:border-gray-800 dark:text-gray-300"
                     >
-                      {display}
-                    </td>
+                      <span className="text-blue-500 dark:text-blue-400">#{comp.number ?? i + 1}</span>
+                    </th>
+                  ))}
+                  <th className="w-10 border-b border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-900" />
+                </tr>
+              </thead>
+
+              <tbody>
+                {rows.map((row, rowIdx) => {
+                  const isEven = rowIdx % 2 === 0;
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`group/row ${isEven ? "bg-white dark:bg-gray-950" : "bg-gray-50 dark:bg-gray-900"}`}
+                    >
+                      {/* Label cell — sticky; must match row bg exactly to mask scrolling content */}
+                      <td
+                        className={`sticky left-0 z-10 border-r border-gray-200 px-2 py-1.5 dark:border-gray-800 ${isEven ? "bg-white dark:bg-gray-950" : "bg-gray-50 dark:bg-gray-900"}`}
+                      >
+                        <RowLabelSelect
+                          value={row.label}
+                          options={availableFields}
+                          onChange={(v) => updateRowLabel(row.id, v)}
+                        />
+                      </td>
+
+                      {/* Value cells */}
+                      {comps.map((comp) => {
+                        const compData = dataMap[comp.id];
+                        const rawValue = compData?.[row.label];
+                        const display = hasAnyData && compData
+                          ? formatValue(row.label, rawValue)
+                          : "--";
+
+                        return (
+                          <td
+                            key={comp.id}
+                            className="whitespace-nowrap border-gray-200 px-3 py-1.5 text-center text-xs text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                          >
+                            {display}
+                          </td>
+                        );
+                      })}
+
+                      {/* Remove button */}
+                      <td className="px-1.5 py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeRow(row.id)}
+                          aria-label={`Remove row: ${row.label}`}
+                          title="Remove row"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-red-100 hover:text-red-500 group-hover/row:opacity-100 focus-visible:opacity-100 dark:text-gray-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                        >
+                          <XMarkIcon className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
 
-                {/* Remove button */}
-                <td className="px-1 py-1.5 text-center">
-                  <button
-                    onClick={() => removeRow(row.id)}
-                    className="rounded p-0.5 text-gray-600 transition hover:bg-red-900/30 hover:text-red-400"
-                    title="Remove row"
-                  >
-                    <MinusIcon className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={comps.length + 2}
+                      className="px-4 py-8 text-center text-xs text-gray-400 dark:text-gray-500"
+                    >
+                      No rows configured. Use the{" "}
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-gray-300 align-middle dark:border-gray-700">
+                        <PlusIcon className="h-2.5 w-2.5" aria-hidden />
+                      </span>{" "}
+                      button above to add a row.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={comps.length + 2}
-                  className="px-4 py-8 text-center text-xs text-gray-500"
-                >
-                  No rows configured. Click &ldquo;Add Row&rdquo; to get started.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {!hasAnyData && comps.length > 0 && (
-        <p className="text-center text-xs text-gray-500">
-          No parsed data available yet. Parse comp documents to populate this table.
-        </p>
+          {!hasAnyData && (
+            <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+              No parsed data available yet. Parse comp documents to populate this table.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
