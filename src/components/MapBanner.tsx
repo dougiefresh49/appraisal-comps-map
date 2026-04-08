@@ -9,6 +9,7 @@ import {
   MapIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
+import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 import { useProject } from "~/hooks/useProject";
 import type { MapType, ProjectData } from "~/utils/projectStore";
 
@@ -222,15 +223,6 @@ export function MapBanner(props: MapBannerProps) {
     "flex items-center gap-1.5 rounded-lg bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg ring-1 ring-gray-700 backdrop-blur-sm transition hover:bg-gray-800 hover:ring-gray-600";
 
   useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightboxOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxOpen]);
-
-  useEffect(() => {
     if (!pickerOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPickerOpen(false);
@@ -419,34 +411,13 @@ export function MapBanner(props: MapBannerProps) {
         )}
       </div>
 
-      {lightboxOpen && fullImageUrl && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${label} full size`}
-        >
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(false)}
-            className="absolute inset-0 cursor-default"
-            aria-label="Close lightbox"
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={fullImageUrl}
-            alt={label}
-            className="relative z-[1] max-h-[min(92vh,1200px)] max-w-full object-contain shadow-2xl"
-          />
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(false)}
-            className="absolute top-4 right-4 z-[2] rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-200 ring-1 ring-gray-600 hover:bg-gray-700"
-          >
-            Close
-          </button>
-        </div>
-      )}
+      {lightboxOpen && fullImageUrl ? (
+        <ImageZoomLightbox
+          imageSrc={fullImageUrl}
+          title={label}
+          onClose={() => setLightboxOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
