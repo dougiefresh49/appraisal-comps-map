@@ -46,15 +46,10 @@ A comprehensive Next.js application for managing commercial appraisal reports, v
 
 ### 1. Environment Variables
 
-Create a `.env.local` file in the root directory with the following variables:
+Create a `.env` file by copying the provided `.env.example` file:
 
 ```bash
-# Google Maps (Required for Map Features)
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=your_google_maps_map_id
-
-# Google Drive API (Required for Photo Features)
-GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
+cp .env.example .env
 ```
 
 ### 2. Google Maps Setup
