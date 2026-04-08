@@ -1,12 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { XMarkIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  XMarkIcon,
+  PlusIcon,
+  QueueListIcon,
+  ArchiveBoxArrowDownIcon,
+  PencilSquareIcon,
+  CheckIcon,
+} from "@heroicons/react/24/outline";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
 import "@uiw/react-markdown-preview/markdown.css";
 import { createClient } from "~/utils/supabase/client";
 import { useProject } from "~/hooks/useProject";
+import { useChatThreads } from "~/hooks/useChatThreads";
 import {
   MentionComposer,
   stripMentionTokens,
@@ -14,6 +22,7 @@ import {
   type ResolvedMention,
 } from "~/components/MentionComposer";
 import type { ChatMention, ChatMessage } from "~/lib/chat-context";
+import type { ChatThread, PersistedMessage } from "~/types/chat";
 
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
@@ -48,16 +57,14 @@ interface ChatPanelProps {
 }
 
 const CHAT_PANEL_WIDTH_KEY = "ai-chat-panel-width";
-const CHAT_PANEL_DEFAULT_WIDTH = 420;
-const CHAT_PANEL_MIN_WIDTH = 280;
-const CHAT_PANEL_MAX_WIDTH = 900;
+const CHAT_PANEL_DEFAULT_WIDTH = 480;
+const CHAT_PANEL_MIN_WIDTH = 300;
+const CHAT_PANEL_MAX_WIDTH = 960;
+const THREAD_SIDEBAR_WIDTH = 196;
 
 function clampChatPanelWidth(px: number): number {
   if (typeof window === "undefined") {
-    return Math.min(
-      CHAT_PANEL_MAX_WIDTH,
-      Math.max(CHAT_PANEL_MIN_WIDTH, px),
-    );
+    return Math.min(CHAT_PANEL_MAX_WIDTH, Math.max(CHAT_PANEL_MIN_WIDTH, px));
   }
   const maxByViewport = Math.max(
     CHAT_PANEL_MIN_WIDTH,
@@ -67,53 +74,85 @@ function clampChatPanelWidth(px: number): number {
   return Math.min(max, Math.max(CHAT_PANEL_MIN_WIDTH, px));
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString();
+}
+
+function persistedToUIMessage(pm: PersistedMessage): UIMessage {
+  return {
+    id: pm.id,
+    role: pm.role,
+    content: pm.content,
+    mentions: pm.mentions as ResolvedMention[] | undefined,
+    toolResult: pm.toolResult as ToolResult | undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
-// ChatPanel component
+// ChatPanel
 // ---------------------------------------------------------------------------
 
 export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const { project } = useProject(projectId);
+  const {
+    threads,
+    activeThreadId,
+    isLoadingThreads,
+    setActiveThreadId,
+    archiveThread,
+    renameThread,
+    refreshThreads,
+    optimisticUpdateTitle,
+  } = useChatThreads(projectId);
+
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [entities, setEntities] = useState<MentionEntity[]>([]);
   const [panelWidth, setPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizingChat, setIsResizingChat] = useState(false);
-  const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(
-    null,
-  );
+  const [showThreadsSidebar, setShowThreadsSidebar] = useState(true);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const panelWidthDuringResizeRef = useRef(panelWidth);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Restore saved panel width
   useEffect(() => {
     try {
       const raw = localStorage.getItem(CHAT_PANEL_WIDTH_KEY);
       if (raw == null) return;
       const n = Number.parseInt(raw, 10);
-      if (Number.isNaN(n)) return;
-      setPanelWidth(clampChatPanelWidth(n));
+      if (!Number.isNaN(n)) setPanelWidth(clampChatPanelWidth(n));
     } catch {
       /* ignore */
     }
   }, []);
 
+  // Pointer-drag resize
   useEffect(() => {
     if (!isResizingChat) return;
 
     const onMove = (e: PointerEvent) => {
       const drag = chatResizeDragRef.current;
       if (!drag) return;
-      const next = clampChatPanelWidth(
-        drag.startWidth + (drag.startX - e.clientX),
-      );
+      const next = clampChatPanelWidth(drag.startWidth + (drag.startX - e.clientX));
       panelWidthDuringResizeRef.current = next;
       setPanelWidth(next);
     };
@@ -150,29 +189,30 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     panelWidthDuringResizeRef.current = panelWidth;
   }, [panelWidth]);
 
-  // Load mention entities (documents + comps + other projects) for this project
+  // Load mention entities when panel opens
   useEffect(() => {
     if (!isOpen) return;
     const supabase = createClient();
 
     async function load() {
-      const [{ data: docs }, { data: comps }, { data: projects }] = await Promise.all([
-        supabase
-          .from("project_documents")
-          .select("id, file_name, document_type, document_label")
-          .eq("project_id", projectId)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("comparables")
-          .select("id, address, address_for_display, type, number")
-          .eq("project_id", projectId)
-          .order("number", { ascending: true }),
-        supabase
-          .from("projects")
-          .select("id, name, is_reference, subject_data(core)")
-          .is("archived_at", null)
-          .order("updated_at", { ascending: false }),
-      ]);
+      const [{ data: docs }, { data: comps }, { data: projects }] =
+        await Promise.all([
+          supabase
+            .from("project_documents")
+            .select("id, file_name, document_type, document_label")
+            .eq("project_id", projectId)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("comparables")
+            .select("id, address, address_for_display, type, number")
+            .eq("project_id", projectId)
+            .order("number", { ascending: true }),
+          supabase
+            .from("projects")
+            .select("id, name, is_reference, subject_data(core)")
+            .is("archived_at", null)
+            .order("updated_at", { ascending: false }),
+        ]);
 
       const docEntities: MentionEntity[] = (docs ?? []).map((d) => ({
         type: "doc" as const,
@@ -185,8 +225,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       }));
 
       const compEntities: MentionEntity[] = (comps ?? []).map((c) => {
-        const addr =
-          (c.address_for_display as string) || (c.address as string);
+        const addr = (c.address_for_display as string) || (c.address as string);
         const num = c.number as string | null;
         return {
           type: "comp" as const,
@@ -206,14 +245,20 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           | null;
       };
 
-      const projectEntities: MentionEntity[] = ((projects ?? []) as ProjectRow[])
-        .filter((p) => p.id !== projectId) // exclude active project — already in context
+      const projectEntities: MentionEntity[] = (
+        (projects ?? []) as ProjectRow[]
+      )
+        .filter((p) => p.id !== projectId)
         .map((p) => {
           const sd = p.subject_data;
-          const core: Record<string, unknown> | null = sd == null
-            ? null
-            : Array.isArray(sd) ? (sd[0]?.core ?? null) : sd.core ?? null;
-          const address = typeof core?.Address === "string" ? core.Address : null;
+          const core: Record<string, unknown> | null =
+            sd == null
+              ? null
+              : Array.isArray(sd)
+                ? (sd[0]?.core ?? null)
+                : (sd.core ?? null);
+          const address =
+            typeof core?.Address === "string" ? core.Address : null;
           const city = typeof core?.City === "string" ? core.City : null;
           const isRef = p.is_reference === true;
           return {
@@ -230,20 +275,91 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     void load();
   }, [isOpen, projectId]);
 
-  // Auto-scroll to bottom
+  // Load messages when active thread changes
+  useEffect(() => {
+    if (!activeThreadId) {
+      setMessages([]);
+      return;
+    }
+
+    setIsLoadingMessages(true);
+    fetch(`/api/chat/threads/${activeThreadId}/messages`)
+      .then((res) => (res.ok ? (res.json() as Promise<{ messages: PersistedMessage[] }>) : null))
+      .then((data) => {
+        if (data) setMessages(data.messages.map(persistedToUIMessage));
+      })
+      .catch(() => {
+        /* ignore */
+      })
+      .finally(() => setIsLoadingMessages(false));
+  }, [activeThreadId]);
+
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (editingTitle) {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }
+  }, [editingTitle]);
+
+  const activeThread = useMemo(
+    () => threads.find((t) => t.id === activeThreadId) ?? null,
+    [threads, activeThreadId],
+  );
 
   const historyForApi = useMemo((): ChatMessage[] => {
     return messages
       .filter((m) => m.role !== "tool" && m.content.trim())
       .map((m) => ({
         role: m.role as "user" | "assistant",
-        content: m.role === "user" ? stripMentionTokens(m.content) : m.content,
+        content:
+          m.role === "user" ? stripMentionTokens(m.content) : m.content,
       }));
   }, [messages]);
+
+  // -------------------------------------------------------------------------
+  // Handlers
+  // -------------------------------------------------------------------------
+
+  const handleNewThread = useCallback(async () => {
+    setActiveThreadId(null);
+    setMessages([]);
+  }, [setActiveThreadId]);
+
+  const handleSwitchThread = useCallback(
+    (threadId: string) => {
+      if (threadId === activeThreadId) return;
+      setActiveThreadId(threadId);
+      // Messages load via the effect above
+    },
+    [activeThreadId, setActiveThreadId],
+  );
+
+  const handleArchiveThread = useCallback(
+    async (threadId: string) => {
+      await archiveThread(threadId);
+      if (threadId === activeThreadId) setMessages([]);
+    },
+    [archiveThread, activeThreadId],
+  );
+
+  const handleStartEditTitle = useCallback(() => {
+    setTitleDraft(activeThread?.title ?? "");
+    setEditingTitle(true);
+  }, [activeThread]);
+
+  const handleSaveTitle = useCallback(async () => {
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (!trimmed || !activeThreadId || trimmed === activeThread?.title) return;
+    await renameThread(activeThreadId, trimmed);
+  }, [titleDraft, activeThreadId, activeThread, renameThread]);
 
   const handleSend = useCallback(
     async (text: string, mentions: ResolvedMention[]) => {
@@ -267,6 +383,9 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // The thread that will receive this message
+      let currentThreadId = activeThreadId;
+
       try {
         const apiMentions: ChatMention[] = mentions.map((m) => ({
           type: m.type,
@@ -281,6 +400,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
             message: stripMentionTokens(text),
             mentions: apiMentions,
             history: historyForApi,
+            threadId: currentThreadId,
           }),
           signal: controller.signal,
         });
@@ -303,7 +423,6 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
 
@@ -316,6 +435,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
             try {
               const parsed: unknown = JSON.parse(payload);
+
               if (typeof parsed === "string") {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -324,6 +444,17 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                       : m,
                   ),
                 );
+              } else if (
+                typeof parsed === "object" &&
+                parsed !== null &&
+                "threadId" in parsed
+              ) {
+                // Server created a new thread for this conversation
+                const newId = (parsed as { threadId: string }).threadId;
+                currentThreadId = newId;
+                setActiveThreadId(newId);
+                // Refresh thread list so the new thread appears in the sidebar
+                void refreshThreads();
               } else if (
                 typeof parsed === "object" &&
                 parsed !== null &&
@@ -339,9 +470,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                 setMessages((prev) => {
                   const idx = prev.findIndex((m) => m.id === assistantMsg.id);
                   if (idx === -1) return [...prev, toolMsg];
-                  const before = prev.slice(0, idx);
-                  const after = prev.slice(idx);
-                  return [...before, toolMsg, ...after];
+                  return [
+                    ...prev.slice(0, idx),
+                    toolMsg,
+                    ...prev.slice(idx),
+                  ];
                 });
               } else if (
                 typeof parsed === "object" &&
@@ -360,6 +493,30 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
             }
           }
         }
+
+        // Refresh thread list after stream completes to pick up updated
+        // updated_at and auto-generated title
+        void refreshThreads().then(() => {
+          // If the thread title was just generated, it may now be in the list
+          if (currentThreadId) {
+            void fetch(
+              `/api/chat/threads?projectId=${encodeURIComponent(projectId)}`,
+            )
+              .then((r) => (r.ok ? (r.json() as Promise<{ threads: { id: string; title: string | null }[] }>) : null))
+              .then((data) => {
+                if (!data || !currentThreadId) return;
+                const updated = data.threads.find(
+                  (t) => t.id === currentThreadId,
+                );
+                if (updated?.title) {
+                  optimisticUpdateTitle(currentThreadId, updated.title);
+                }
+              })
+              .catch(() => {
+                /* ignore */
+              });
+          }
+        });
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         const errorText =
@@ -376,26 +533,34 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         abortRef.current = null;
       }
     },
-    [isStreaming, projectId, historyForApi],
+    [
+      isStreaming,
+      projectId,
+      historyForApi,
+      activeThreadId,
+      setActiveThreadId,
+      refreshThreads,
+      optimisticUpdateTitle,
+    ],
   );
 
-  const handleClear = useCallback(() => {
-    if (isStreaming && abortRef.current) {
-      abortRef.current.abort();
+  const handleClearOrArchive = useCallback(async () => {
+    if (isStreaming && abortRef.current) abortRef.current.abort();
+
+    if (activeThreadId) {
+      await handleArchiveThread(activeThreadId);
+    } else {
+      setMessages([]);
+      setIsStreaming(false);
     }
-    setMessages([]);
-    setIsStreaming(false);
-  }, [isStreaming]);
+  }, [isStreaming, activeThreadId, handleArchiveThread]);
 
   const onChatResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       e.preventDefault();
       panelWidthDuringResizeRef.current = panelWidth;
-      chatResizeDragRef.current = {
-        startX: e.clientX,
-        startWidth: panelWidth,
-      };
+      chatResizeDragRef.current = { startX: e.clientX, startWidth: panelWidth };
       setIsResizingChat(true);
     },
     [panelWidth],
@@ -408,29 +573,105 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       ? String((project as Record<string, unknown>).name)
       : "Project";
 
+  const activeTitle = activeThread?.title ?? null;
+
+  // -------------------------------------------------------------------------
+  // Panel content (shared between desktop/mobile)
+  // -------------------------------------------------------------------------
   const panelContent = (
     <div className="flex h-full flex-col border-l border-gray-800 bg-gray-950">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3 md:px-5 md:py-3.5">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-gray-800 px-3 py-2.5">
+        {/* Threads toggle */}
+        <button
+          type="button"
+          onClick={() => setShowThreadsSidebar((v) => !v)}
+          className={`rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300 ${
+            showThreadsSidebar ? "bg-gray-800 text-gray-300" : ""
+          }`}
+          title={showThreadsSidebar ? "Hide threads" : "Show threads"}
+          aria-label="Toggle thread list"
+        >
+          <QueueListIcon className="h-4 w-4" />
+        </button>
+
+        {/* Thread title (editable) */}
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-gray-100">AI Chat</h2>
-          <p className="truncate text-xs text-gray-500">{projectName}</p>
-        </div>
-        <div className="flex items-center gap-1">
-          {messages.length > 0 && (
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => void handleSaveTitle()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveTitle();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              className="w-full rounded bg-gray-800 px-2 py-0.5 text-sm font-semibold text-gray-100 outline-none ring-1 ring-blue-600"
+            />
+          ) : (
             <button
               type="button"
-              onClick={handleClear}
-              className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
-              aria-label="Clear chat"
-              title="Clear conversation"
+              onClick={handleStartEditTitle}
+              disabled={!activeThreadId}
+              title={activeThreadId ? "Click to rename thread" : undefined}
+              className="group flex w-full items-center gap-1.5 text-left"
             >
-              <TrashIcon className="h-4 w-4" />
+              <span className="truncate text-sm font-semibold text-gray-100">
+                {activeTitle ?? (activeThreadId ? "Untitled" : "AI Chat")}
+              </span>
+              {activeThreadId && (
+                <PencilSquareIcon className="h-3 w-3 shrink-0 text-gray-600 opacity-0 transition group-hover:opacity-100" />
+              )}
             </button>
           )}
+          {!editingTitle && (
+            <p className="truncate text-[11px] text-gray-500">{projectName}</p>
+          )}
+        </div>
+
+        {/* Right actions */}
+        <div className="flex shrink-0 items-center gap-1">
+          {editingTitle ? (
+            <button
+              type="button"
+              onClick={() => void handleSaveTitle()}
+              className="rounded-md p-1.5 text-emerald-400 transition hover:bg-gray-800"
+              aria-label="Save title"
+            >
+              <CheckIcon className="h-4 w-4" />
+            </button>
+          ) : (
+            <>
+              {/* New thread */}
+              <button
+                type="button"
+                onClick={() => void handleNewThread()}
+                disabled={isStreaming}
+                className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300 disabled:opacity-40"
+                aria-label="New thread"
+                title="New conversation"
+              >
+                <PlusIcon className="h-4 w-4" />
+              </button>
+              {/* Archive / clear */}
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleClearOrArchive()}
+                  className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
+                  aria-label={activeThreadId ? "Archive thread" : "Clear conversation"}
+                  title={activeThreadId ? "Archive thread" : "Clear conversation"}
+                >
+                  <ArchiveBoxArrowDownIcon className="h-4 w-4" />
+                </button>
+              )}
+            </>
+          )}
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            className="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
             aria-label="Close chat panel"
           >
             <XMarkIcon className="h-5 w-5" />
@@ -438,33 +679,62 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         </div>
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-5">
-        {messages.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className="space-y-4">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1]} />
-            ))}
-          </div>
+      {/* Body: thread sidebar + message area */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Thread sidebar */}
+        {showThreadsSidebar && (
+          <ThreadsSidebar
+            threads={threads}
+            activeThreadId={activeThreadId}
+            isLoading={isLoadingThreads}
+            onSelect={handleSwitchThread}
+            onArchive={(id) => void handleArchiveThread(id)}
+            onNewThread={() => void handleNewThread()}
+          />
         )}
-      </div>
 
-      {/* Composer */}
-      <div className="border-t border-gray-800 px-4 py-3 md:px-5">
-        <MentionComposer
-          entities={entities}
-          onSend={handleSend}
-          disabled={isStreaming}
-        />
+        {/* Messages + composer */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto px-4 py-4 md:px-5"
+          >
+            {isLoadingMessages ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+              </div>
+            ) : messages.length === 0 ? (
+              <EmptyState hasThreads={threads.length > 0} />
+            ) : (
+              <div className="space-y-4">
+                {messages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isStreaming={
+                      isStreaming && msg === messages[messages.length - 1]
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-gray-800 px-4 py-3 md:px-5">
+            <MentionComposer
+              entities={entities}
+              onSend={handleSend}
+              disabled={isStreaming}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 
   return (
     <>
-      {/* Desktop: inline panel (rendered via layout portal slot) */}
+      {/* Desktop: inline resizable panel */}
       <div
         className="relative hidden h-full shrink-0 md:block"
         style={{ width: panelWidth }}
@@ -526,19 +796,126 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Thread Sidebar
 // ---------------------------------------------------------------------------
 
-function EmptyState() {
+interface ThreadsSidebarProps {
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  isLoading: boolean;
+  onSelect: (id: string) => void;
+  onArchive: (id: string) => void;
+  onNewThread: () => void;
+}
+
+function ThreadsSidebar({
+  threads,
+  activeThreadId,
+  isLoading,
+  onSelect,
+  onArchive,
+}: ThreadsSidebarProps) {
+  return (
+    <div
+      className="flex h-full shrink-0 flex-col overflow-y-auto border-r border-gray-800"
+      style={{ width: THREAD_SIDEBAR_WIDTH }}
+    >
+      {isLoading ? (
+        <div className="flex flex-1 items-center justify-center py-8">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-700 border-t-gray-400" />
+        </div>
+      ) : threads.length === 0 ? (
+        <div className="px-3 py-4">
+          <p className="text-[11px] leading-relaxed text-gray-600">
+            Your conversations will appear here.
+          </p>
+        </div>
+      ) : (
+        <ul className="py-1">
+          {threads.map((thread) => (
+            <ThreadItem
+              key={thread.id}
+              thread={thread}
+              isActive={thread.id === activeThreadId}
+              onSelect={() => onSelect(thread.id)}
+              onArchive={() => onArchive(thread.id)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ThreadItem({
+  thread,
+  isActive,
+  onSelect,
+  onArchive,
+}: {
+  thread: ChatThread;
+  isActive: boolean;
+  onSelect: () => void;
+  onArchive: () => void;
+}) {
+  const title = thread.title ?? "New conversation";
+  const time = formatRelativeTime(thread.updatedAt);
+
+  return (
+    <li
+      className={`group relative flex cursor-pointer items-start gap-1 border-b border-gray-800/50 px-3 py-2.5 text-xs transition-colors ${
+        isActive
+          ? "bg-gray-800 text-gray-100"
+          : "text-gray-400 hover:bg-gray-900 hover:text-gray-200"
+      }`}
+      onClick={onSelect}
+    >
+      {isActive && (
+        <span className="absolute inset-y-0 left-0 w-0.5 rounded-r bg-blue-500" />
+      )}
+      <div className="min-w-0 flex-1 pl-1">
+        <p
+          className={`line-clamp-2 text-[11px] font-medium leading-snug ${
+            isActive ? "text-gray-100" : "text-gray-300"
+          }`}
+        >
+          {title}
+        </p>
+        <p className="mt-0.5 text-[10px] text-gray-600">{time}</p>
+      </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onArchive();
+        }}
+        className="mt-0.5 shrink-0 rounded p-0.5 text-gray-600 opacity-0 transition hover:text-gray-400 group-hover:opacity-100"
+        title="Archive conversation"
+        aria-label="Archive conversation"
+      >
+        <ArchiveBoxArrowDownIcon className="h-3 w-3" />
+      </button>
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+function EmptyState({ hasThreads }: { hasThreads: boolean }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-      <ChatBubbleLeftRightIcon className="mb-3 h-10 w-10 text-gray-700" />
+      <ChatBubbleLeftRightIcon className="mb-3 h-9 w-9 text-gray-700" />
       <p className="text-sm font-medium text-gray-400">
-        Ask anything about your project
+        {hasThreads ? "Start a new message" : "Ask anything about your project"}
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-gray-600">
-        Use <kbd className="rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-[10px] font-mono">@</kbd> to reference
-        specific documents, comps, or other reports.
+        Use{" "}
+        <kbd className="rounded border border-gray-700 bg-gray-800 px-1 py-0.5 font-mono text-[10px]">
+          @
+        </kbd>{" "}
+        to reference specific documents, comps, or other reports.
       </p>
       <div className="mt-4 space-y-2 text-left text-xs text-gray-600">
         <p>&ldquo;What is the county appraised value in @document?&rdquo;</p>
@@ -548,6 +925,10 @@ function EmptyState() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Message bubble
+// ---------------------------------------------------------------------------
 
 function MessageBubble({
   message,
@@ -570,10 +951,7 @@ function MessageBubble({
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/20 px-4 py-2.5">
-          <div
-            className="text-sm leading-relaxed text-gray-200"
-            data-color-mode="dark"
-          >
+          <div className="text-sm leading-relaxed text-gray-200" data-color-mode="dark">
             <MarkdownPreview
               source={displayText}
               style={{ background: "transparent", fontSize: "0.875rem" }}
@@ -658,7 +1036,7 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
 }
 
 // ---------------------------------------------------------------------------
-// Toggle button — exported separately
+// Toggle button — exported separately (used by ChatToggleFAB)
 // ---------------------------------------------------------------------------
 
 export function ChatPanelToggle({ onClick }: { onClick: () => void }) {
