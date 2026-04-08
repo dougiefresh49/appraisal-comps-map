@@ -7,7 +7,7 @@ import { createClient } from "~/utils/supabase/server";
 // ---------------------------------------------------------------------------
 
 export interface ChatMention {
-  type: "doc" | "comp";
+  type: "doc" | "comp" | "project";
   id: string;
 }
 
@@ -39,6 +39,13 @@ interface SubjectContext {
   improvements: unknown | null;
   fema: unknown | null;
   improvement_analysis: unknown | null;
+}
+
+interface TaggedProjectContext {
+  projectId: string;
+  address: string;
+  core: Record<string, unknown> | null;
+  compList: Array<{ id: string; address: string; type: string; number: string | null }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +115,37 @@ async function loadSubjectContext(
     fema: data.fema ?? null,
     improvement_analysis: data.improvement_analysis ?? null,
   };
+}
+
+async function loadTaggedProject(
+  projectId: string,
+): Promise<TaggedProjectContext | null> {
+  const supabase = await createClient();
+
+  const [subjectRes, compsRes] = await Promise.all([
+    supabase
+      .from("subject_data")
+      .select("core")
+      .eq("project_id", projectId)
+      .maybeSingle(),
+    supabase
+      .from("comparables")
+      .select("id, address, address_for_display, type, number")
+      .eq("project_id", projectId)
+      .order("number", { ascending: true }),
+  ]);
+
+  const core = (subjectRes.data?.core as Record<string, unknown>) ?? null;
+  const address = typeof core?.Address === "string" ? core.Address : projectId;
+
+  const compList = (compsRes.data ?? []).map((c) => ({
+    id: c.id as string,
+    address: (c.address_for_display as string) || (c.address as string),
+    type: c.type as string,
+    number: c.number as string | null,
+  }));
+
+  return { projectId, address, core, compList };
 }
 
 // ---------------------------------------------------------------------------
@@ -209,11 +247,15 @@ export async function buildChatPrompt(
 ): Promise<{ systemPrompt: string; contents: ChatMessage[] }> {
   const docIds = mentions.filter((m) => m.type === "doc").map((m) => m.id);
   const compIds = mentions.filter((m) => m.type === "comp").map((m) => m.id);
+  const taggedProjectIds = mentions
+    .filter((m) => m.type === "project")
+    .map((m) => m.id);
 
-  const [docs, comps, subject] = await Promise.all([
+  const [docs, comps, subject, taggedProjects] = await Promise.all([
     loadDocuments(docIds),
     loadComps(compIds),
     loadSubjectContext(projectId),
+    Promise.all(taggedProjectIds.map(loadTaggedProject)),
   ]);
 
   const systemParts: string[] = [
@@ -226,14 +268,16 @@ export async function buildChatPrompt(
     "- NEVER fabricate, estimate, or guess data values. If a value isn't in the context provided, use a query tool to look it up.",
     "- If the user asks for a specific field value and you cannot find it with certainty in the context, call query_subject_data or query_comp_data before answering.",
     "- If you cannot find data even after querying, say so explicitly — do not invent numbers.",
+    "- You have READ access to ALL projects in the database, not just the current one. If the user asks about a different property/report, use search_all_projects to find it, then use query_subject_data or list_project_comps with that project_id.",
     "",
     "## Available Tools",
     "You have tools to both READ and UPDATE project data:",
     "",
     "**Read tools (use these to look up data before answering questions):**",
-    "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, parcels, improvements, fema, improvement_analysis). Use when you need to verify or look up subject property data.",
-    "- list_project_comps: List all comparables for this project (id, address, type, number). Use before querying a specific comp.",
-    "- query_comp_data: Retrieve the full parsed data for a comparable by comp_id or address substring. Use when asked about a specific comp's data.",
+    "- search_all_projects: Search ALL reports in the database by address or project name. Use this when the user asks about a property that isn't the current active project. Returns project IDs you can then pass to other read tools.",
+    "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, parcels, improvements, fema, improvement_analysis). Pass project_id to query a different project than the current one.",
+    "- list_project_comps: List all comparables for a project (id, address, type, number). Pass project_id to query a different project.",
+    "- query_comp_data: Retrieve the full parsed data for a comparable by comp_id or address substring. Pass project_id to search in a different project.",
     "",
     "**Write tools (use ONLY when the user explicitly asks to save/update/set a value):**",
     "- update_subject_field: Update a field on the subject property (section 'core' for most fields, 'fema' for flood data).",
@@ -258,6 +302,43 @@ export async function buildChatPrompt(
   if (comps.length > 0) {
     systemParts.push(
       "\n## Referenced Comparables\n" + comps.map(formatCompBlock).join("\n\n"),
+    );
+  }
+
+  // Inject tagged projects — pre-load their subject data and comp list so
+  // the model can answer questions without needing tool calls
+  const validTaggedProjects = taggedProjects.filter(
+    (p): p is TaggedProjectContext => p !== null,
+  );
+  if (validTaggedProjects.length > 0) {
+    const projectBlocks = validTaggedProjects.map((p) => {
+      const lines = [
+        `--- REFERENCED REPORT: ${p.address} (project_id: ${p.projectId}) ---`,
+      ];
+      if (p.core && Object.keys(p.core).length > 0) {
+        const coreLines = Object.entries(p.core)
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+          .map(([k, v]) => `  ${k}: ${String(v)}`);
+        lines.push("Subject Data (core):\n" + coreLines.join("\n"));
+      }
+      if (p.compList.length > 0) {
+        const compSummary = p.compList
+          .map((c) =>
+            c.number
+              ? `  #${c.number} ${c.address} (${c.type}) [id: ${c.id}]`
+              : `  ${c.address} (${c.type}) [id: ${c.id}]`,
+          )
+          .join("\n");
+        lines.push(`Comparables (${p.compList.length} total):\n${compSummary}`);
+        lines.push(
+          `Use query_comp_data with project_id="${p.projectId}" to retrieve full parsed data for any of these comps.`,
+        );
+      }
+      lines.push("---");
+      return lines.join("\n");
+    });
+    systemParts.push(
+      "\n## Referenced Reports\n" + projectBlocks.join("\n\n"),
     );
   }
 

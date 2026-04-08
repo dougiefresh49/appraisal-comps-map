@@ -67,13 +67,13 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Load mention entities (documents + comps) for this project
+  // Load mention entities (documents + comps + other projects) for this project
   useEffect(() => {
     if (!isOpen) return;
     const supabase = createClient();
 
     async function load() {
-      const [{ data: docs }, { data: comps }] = await Promise.all([
+      const [{ data: docs }, { data: comps }, { data: projects }] = await Promise.all([
         supabase
           .from("project_documents")
           .select("id, file_name, document_type, document_label")
@@ -84,6 +84,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           .select("id, address, address_for_display, type, number")
           .eq("project_id", projectId)
           .order("number", { ascending: true }),
+        supabase
+          .from("projects")
+          .select("id, name, is_reference, subject_data(core)")
+          .is("archived_at", null)
+          .order("updated_at", { ascending: false }),
       ]);
 
       const docEntities: MentionEntity[] = (docs ?? []).map((d) => ({
@@ -108,7 +113,35 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         };
       });
 
-      setEntities([...docEntities, ...compEntities]);
+      type ProjectRow = {
+        id: string;
+        name: string | null;
+        is_reference: boolean | null;
+        subject_data:
+          | { core: Record<string, unknown> }
+          | { core: Record<string, unknown> }[]
+          | null;
+      };
+
+      const projectEntities: MentionEntity[] = ((projects ?? []) as ProjectRow[])
+        .filter((p) => p.id !== projectId) // exclude active project — already in context
+        .map((p) => {
+          const sd = p.subject_data;
+          const core: Record<string, unknown> | null = sd == null
+            ? null
+            : Array.isArray(sd) ? (sd[0]?.core ?? null) : sd.core ?? null;
+          const address = typeof core?.Address === "string" ? core.Address : null;
+          const city = typeof core?.City === "string" ? core.City : null;
+          const isRef = p.is_reference === true;
+          return {
+            type: "project" as const,
+            id: p.id,
+            label: address ?? (p.name ?? p.id),
+            badge: isRef ? "ref library" : (city ?? undefined),
+          };
+        });
+
+      setEntities([...docEntities, ...compEntities, ...projectEntities]);
     }
 
     void load();
@@ -366,12 +399,12 @@ function EmptyState() {
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-gray-600">
         Use <kbd className="rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-[10px] font-mono">@</kbd> to reference
-        specific documents or comps for targeted questions.
+        specific documents, comps, or other reports.
       </p>
       <div className="mt-4 space-y-2 text-left text-xs text-gray-600">
         <p>&ldquo;What is the county appraised value in @document?&rdquo;</p>
         <p>&ldquo;Compare the sale price per SF of @comp1 vs @comp2&rdquo;</p>
-        <p>&ldquo;Summarize the key findings from @deed&rdquo;</p>
+        <p>&ldquo;What was the land size on @6310 Tashay?&rdquo;</p>
       </div>
     </div>
   );
@@ -392,7 +425,7 @@ function MessageBubble({
 
   if (isUser) {
     const displayText = message.content.replace(
-      /@\[([^\]]+)\]\((doc|comp):[^)]+\)/g,
+      /@\[([^\]]+)\]\((doc|comp|project):[^)]+\)/g,
       (_, label: string) => `**@${label}**`,
     );
     return (

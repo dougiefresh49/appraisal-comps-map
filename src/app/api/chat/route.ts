@@ -33,7 +33,7 @@ export async function POST(request: Request) {
           (m): m is ChatMention =>
             typeof m === "object" &&
             m !== null &&
-            (m.type === "doc" || m.type === "comp") &&
+            (m.type === "doc" || m.type === "comp" || m.type === "project") &&
             typeof m.id === "string",
         )
       : [];
