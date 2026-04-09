@@ -113,63 +113,78 @@ const SALES_PROP = [
   "Zoning",
 ] as const;
 
+/** Safe display string for unknown raw values (avoids `[object Object]`). */
+function formatUnknownForDisplay(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  if (typeof v === "boolean") return String(v);
+  if (typeof v === "bigint") return String(v);
+  if (typeof v === "object") return JSON.stringify(v);
+  if (typeof v === "symbol") return v.toString();
+  if (typeof v === "function") return "[function]";
+  return "";
+}
+
 /**
  * Fields that show formatted data values in the grid (mirrors GET_ADJUSTMENT_DATA formatting).
  * If a category name is a key here, comp cells show the formatted value instead of a dropdown.
  */
 const DATA_FORMAT_FIELDS: Record<string, (v: unknown) => string> = {
   "Building Size (SF)": (v) =>
-    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+    typeof v === "number" ? v.toLocaleString() : formatUnknownForDisplay(v),
   "Rentable SF": (v) =>
-    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+    typeof v === "number" ? v.toLocaleString() : formatUnknownForDisplay(v),
   "Office %": (v) => {
     if (typeof v === "number") {
       const pct = v > 0 && v <= 1 ? v * 100 : v;
       return `${pct.toFixed(1)}%`;
     }
-    return String(v ?? "");
+    return formatUnknownForDisplay(v);
   },
   "Land / Bld Ratio": (v) =>
-    typeof v === "number" ? v.toFixed(2) : String(v ?? ""),
+    typeof v === "number" ? v.toFixed(2) : formatUnknownForDisplay(v),
   "Land / Bld Ratio (Adj)": (v) =>
-    typeof v === "number" ? v.toFixed(2) : String(v ?? ""),
+    typeof v === "number" ? v.toFixed(2) : formatUnknownForDisplay(v),
   "Sale Price / SF": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
   "Sale Price / SF (Adj)": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
   "Annual Rent / SF": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
   "Post Sale Renovation Cost": (v) =>
-    typeof v === "number" ? `$${Math.round(v).toLocaleString()}` : String(v ?? ""),
+    typeof v === "number"
+      ? `$${Math.round(v).toLocaleString()}`
+      : formatUnknownForDisplay(v),
   "Land Size (SF)": (v) =>
-    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+    typeof v === "number" ? v.toLocaleString() : formatUnknownForDisplay(v),
   "Land Size (AC)": (v) =>
-    typeof v === "number" ? v.toFixed(3) : String(v ?? ""),
+    typeof v === "number" ? v.toFixed(3) : formatUnknownForDisplay(v),
   "Parking (SF)": (v) =>
-    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+    typeof v === "number" ? v.toLocaleString() : formatUnknownForDisplay(v),
   "Effective Age": (v) =>
-    typeof v === "number" ? v.toFixed(1) : String(v ?? ""),
+    typeof v === "number" ? v.toFixed(1) : formatUnknownForDisplay(v),
   Age: (v) =>
-    typeof v === "number" ? String(Math.round(v)) : String(v ?? ""),
+    typeof v === "number" ? String(Math.round(v)) : formatUnknownForDisplay(v),
   "Occupancy %": (v) => {
     if (typeof v === "number") {
       const pct = v > 0 && v <= 1 ? v * 100 : v;
       return `${Math.round(pct)}%`;
     }
-    return String(v ?? "");
+    return formatUnknownForDisplay(v);
   },
   "Overall Cap Rate": (v) => {
     if (typeof v === "number") {
       const pct = v > 0 && v < 1 ? v * 100 : v;
       return `${pct.toFixed(2)}%`;
     }
-    return String(v ?? "");
+    return formatUnknownForDisplay(v);
   },
-  Zoning: (v) => String(v ?? ""),
-  "Conditions of Sale": (v) => String(v ?? ""),
-  Surface: (v) => String(v ?? ""),
-  Utilities: (v) => String(v ?? ""),
-  Frontage: (v) => String(v ?? ""),
+  Zoning: (v) => formatUnknownForDisplay(v),
+  "Conditions of Sale": (v) => formatUnknownForDisplay(v),
+  Surface: (v) => formatUnknownForDisplay(v),
+  Utilities: (v) => formatUnknownForDisplay(v),
+  Frontage: (v) => formatUnknownForDisplay(v),
 };
 
 /** Categories that always use qualitative dropdowns (per comp type). */
@@ -277,7 +292,7 @@ function formatFieldValue(
   if (v === undefined || v === null || v === "") return "—";
   const formatter = DATA_FORMAT_FIELDS[fieldName];
   if (formatter) return formatter(v);
-  return String(v);
+  return formatUnknownForDisplay(v);
 }
 
 function numFromRaw(

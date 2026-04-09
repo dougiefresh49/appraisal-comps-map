@@ -506,7 +506,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         normalizeLandSizeFromAc(mergedCore as CoreData),
         project?.effectiveDate,
       );
-      const mergedFema = (subjectData?.proposed_fema ?? fema) as FemaData;
+      const mergedFema = subjectData?.proposed_fema ?? fema;
       await clearProposedData(merged, mergedFema);
       dirtyRef.current = false;
       setCore(merged);
@@ -519,7 +519,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const handleMergeCancel = useCallback(async () => {
     await clearProposedData(
       (subjectData?.core ?? {}) as Record<string, unknown>,
-      (subjectData?.fema ?? {}) as FemaData,
+      subjectData?.fema ?? {},
     );
     setShowMergeReview(false);
   }, [clearProposedData, subjectData?.core, subjectData?.fema]);
@@ -1502,11 +1502,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
           isOpen
           title="Rebuild from Documents — Review Changes"
           currentData={(subjectData.core ?? {}) as Record<string, unknown>}
-<<<<<<< HEAD
-          proposedData={subjectData.proposed_core as Record<string, unknown>}
-=======
           proposedData={subjectData.proposed_core}
->>>>>>> 1452773acd119605ea36743ecdefd496af023afd
           onConfirm={handleMergeConfirm}
           onCancel={handleMergeCancel}
         />
