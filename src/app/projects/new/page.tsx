@@ -1680,7 +1680,7 @@ function toDateInputValue(value: string | undefined): string {
 function fromDateInputValue(value: string): string {
   if (!value) return "";
   const d = parse(value, "yyyy-MM-dd", DATE_PARSE_REF);
-  return isValid(d) ? format(d, "MM/dd/yyyy") : "";
+  return isValid(d) ? format(d, "yyyy-MM-dd") : "";
 }
 
 const REPORT_DUE_DAYS_AFTER_EFFECTIVE = 21;
@@ -1691,7 +1691,7 @@ function maybeFillReportDueDate(data: EngagementData): EngagementData {
   if (!reportDueDateIsUnset(data.reportDueDate)) return data;
 
   const due = addDays(effective, REPORT_DUE_DAYS_AFTER_EFFECTIVE);
-  return { ...data, reportDueDate: format(due, "MM/dd/yyyy") };
+  return { ...data, reportDueDate: format(due, "yyyy-MM-dd") };
 }
 
 function parseAddressParts(address: string): {

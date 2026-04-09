@@ -187,6 +187,8 @@ export interface ProjectData {
   insurancePricePerSf?: number;
   /** Corresponds to `vacancy_rate` on `projects`. */
   vacancyRate?: number;
+  /** Monthly market conditions rate (% increase per month) for the adjustment grid. */
+  percentIncPerMonth?: number;
   /** Report appraisal approaches (JSONB on `projects`). */
   approaches?: ProjectApproaches;
 }

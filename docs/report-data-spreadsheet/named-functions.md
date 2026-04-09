@@ -353,7 +353,7 @@ _(None)_
 
 ### Formula
 
-```excel
+```sql
 =IFERROR(
   LET(
     calling_row, ROW(),

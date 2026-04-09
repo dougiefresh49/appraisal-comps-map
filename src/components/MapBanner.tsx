@@ -22,6 +22,13 @@ type MapBannerBase = {
   imageType: string;
   /** When set, resolves `imageFileId` from `project.maps` and enables the image picker. */
   mapType?: MapType;
+  /**
+   * When provided, images are listed and auto-detected from this Drive folder
+   * instead of the project's `reportMapsFolderId`. Useful for comp detail pages
+   * where images live in the comp's own folder
+   * (`<projectFolder>/comps/<compType>/<compFolder>/`).
+   */
+  sourceFolderId?: string;
   height?: string;
   fallbackLabel?: string;
   /** Overrides the default action label ("Edit Map" or "Expand"). */
@@ -92,6 +99,7 @@ export function MapBanner(props: MapBannerProps) {
     projectId,
     imageType,
     mapType,
+    sourceFolderId,
     height = "h-56",
     fallbackLabel,
     actionLabel,
@@ -118,6 +126,10 @@ export function MapBanner(props: MapBannerProps) {
           | undefined;
 
   const reportMapsFolderId = mapsFolderId?.reportMapsFolderId;
+
+  /** The Drive folder to list/auto-detect images from. Comp detail pages supply
+   *  their own `sourceFolderId`; all other banners fall back to `reportMapsFolderId`. */
+  const activeFolderId = sourceFolderId ?? reportMapsFolderId;
 
   const mapRow =
     mapType && project
@@ -148,7 +160,7 @@ export function MapBanner(props: MapBannerProps) {
       setResolvedFileId(null);
       setFolderImages([]);
 
-      if (!reportMapsFolderId) {
+      if (!activeFolderId) {
         setImageUrl(null);
         setFullImageUrl(null);
         setIsLoading(false);
@@ -169,7 +181,7 @@ export function MapBanner(props: MapBannerProps) {
       }
 
       try {
-        const files = await fetchFolderImages(reportMapsFolderId);
+        const files = await fetchFolderImages(activeFolderId);
         if (cancelled) return;
         setFolderImages(files);
 
@@ -202,7 +214,7 @@ export function MapBanner(props: MapBannerProps) {
   }, [
     projectLoading,
     project,
-    reportMapsFolderId,
+    activeFolderId,
     mapType,
     mapRow?.imageFileId,
     imageType,
@@ -217,10 +229,10 @@ export function MapBanner(props: MapBannerProps) {
     actionLabel ?? (actionType === "expand" ? "Expand" : "Edit Map");
 
   const actionButtonClass =
-    "flex items-center gap-1.5 rounded-lg bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg ring-1 ring-gray-700 backdrop-blur-sm transition hover:bg-gray-800 hover:ring-gray-600";
+    "flex items-center gap-1.5 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-lg ring-1 ring-gray-300 backdrop-blur-sm transition hover:bg-white hover:ring-gray-400 dark:bg-gray-900/80 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:ring-gray-600";
 
   const chooseButtonClass =
-    "flex items-center gap-1.5 rounded-lg bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg ring-1 ring-gray-700 backdrop-blur-sm transition hover:bg-gray-800 hover:ring-gray-600";
+    "flex items-center gap-1.5 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-lg ring-1 ring-gray-300 backdrop-blur-sm transition hover:bg-white hover:ring-gray-400 dark:bg-gray-900/80 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:ring-gray-600";
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -245,10 +257,10 @@ export function MapBanner(props: MapBannerProps) {
     const opening = !pickerOpen;
     setPickerOpen(opening);
     if (!opening) return;
-    if (!reportMapsFolderId || folderImages.length > 0) return;
+    if (!activeFolderId || folderImages.length > 0) return;
     setListLoading(true);
     try {
-      const files = await fetchFolderImages(reportMapsFolderId);
+      const files = await fetchFolderImages(activeFolderId);
       setFolderImages(files);
     } finally {
       setListLoading(false);
@@ -279,7 +291,7 @@ export function MapBanner(props: MapBannerProps) {
 
   const highlightedId = mapRow?.imageFileId ?? resolvedFileId ?? null;
   const showChooseImage =
-    Boolean(mapType) && Boolean(reportMapsFolderId) && !projectLoading;
+    Boolean(mapType) && Boolean(activeFolderId) && !projectLoading;
 
   const showBannerSpinner = projectLoading || isLoading;
 
@@ -342,7 +354,9 @@ export function MapBanner(props: MapBannerProps) {
                 </div>
               ) : folderImages.length === 0 ? (
                 <p className="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500">
-                  No images found in reports/maps/
+                  {sourceFolderId
+                    ? "No images found in comp folder"
+                    : "No images found in reports/maps/"}
                 </p>
               ) : (
                 <ul className="max-h-64 overflow-y-auto py-1">

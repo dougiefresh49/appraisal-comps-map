@@ -5,6 +5,11 @@ import { createClient } from "~/utils/supabase/server";
 import { downloadFile, getFolderMetadata } from "~/lib/drive-api";
 import { buildCompExtractionPrompt } from "~/lib/parsing-prompts";
 import { registerCompParseSourceDocuments } from "~/server/documents/actions";
+import {
+  rollupImprovementsToParcel,
+  rollupParcelsToComp,
+  computeGeneratedFields,
+} from "~/lib/calculated-fields";
 import type { LandSaleData, SaleData, RentalData, CompType } from "~/types/comp-data";
 
 const GENERATION_MODEL = "gemini-3.1-pro-preview";
@@ -149,16 +154,38 @@ export async function parseCompFiles(
     const parcelData = (responseData.parcelData ?? []) as Record<string, unknown>[];
     const parcelImprovements = (responseData.parcelImprovements ?? []) as Record<string, unknown>[];
 
-    // Store the full response (comp + parcels + improvements) in raw_data
+    // 1. Rollup parcel improvements -> each parcel's size fields
+    //    (mirrors Parcels table SUMIFS formulas in the spreadsheet)
+    const enrichedParcels = parcelData.map((parcel) =>
+      rollupImprovementsToParcel(parcel, parcelImprovements),
+    );
+
+    // 2. Build comp-level raw_data, then rollup parcel totals into comp fields
+    //    (mirrors CompsSales FILTER/SUM formulas in the spreadsheet)
     const fullRawData: Record<string, unknown> = {
       ...(compData as unknown as Record<string, unknown>),
-      _parcelData: parcelData,
+      _parcelData: enrichedParcels,
       _parcelImprovements: parcelImprovements,
     };
+    rollupParcelsToComp(
+      fullRawData,
+      enrichedParcels,
+      parcelImprovements,
+      new Date().getFullYear(),
+    );
+
+    // 3. Compute all Generated (formula-derived) fields
+    const enrichedRawData = computeGeneratedFields(fullRawData, {
+      effectiveDateYear: new Date().getFullYear(),
+      compType: input.type === "sales" ? "sales" : input.type === "rentals" ? "rentals" : "land",
+    });
+    // Keep enriched parcels in the final raw_data
+    enrichedRawData._parcelData = enrichedParcels;
+    enrichedRawData._parcelImprovements = parcelImprovements;
 
     // Preview-only mode: return data without writing to DB
     if (input.previewOnly) {
-      return { ok: true, proposedData: fullRawData, preview: true };
+      return { ok: true, proposedData: enrichedRawData, preview: true };
     }
 
     const { error: upsertError } = await supabase
@@ -167,7 +194,7 @@ export async function parseCompFiles(
         {
           comp_id: input.compId,
           project_id: input.projectId,
-          raw_data: fullRawData,
+          raw_data: enrichedRawData,
           source: "parser",
           parsed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -179,7 +206,9 @@ export async function parseCompFiles(
       throw new Error(`Failed to save parsed data: ${upsertError.message}`);
     }
 
-    const comparablePatch = comparableRowPatchFromCompData(compData);
+    const comparablePatch = comparableRowPatchFromCompData(
+      enrichedRawData as unknown as LandSaleData | SaleData | RentalData,
+    );
     const { error: compUpdateError } = await supabase
       .from("comparables")
       .update({

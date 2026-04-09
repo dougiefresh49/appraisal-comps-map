@@ -1,0 +1,79 @@
+{
+  "landSaleData": [
+    {
+      "#": 6,
+      "Address": "15031 S Windmill Ave, Odessa, TX 79766",
+      "Use Type": "Sale",
+      "Grantor": "Cody Powers and Savannah Lynn Powers",
+      "Grantee": "Pedro Alfonso Martinez, Arias Rafael Moreno Cano, and Ofelia Cano Valderrama",
+      "Recording": "2026-00005322",
+      "Date of Sale": "3/23/2026",
+      "Market Conditions": "GENERATED",
+      "Sale Price": "115000",
+      "Financing Terms": "Conventional",
+      "Property Rights": "Fee Simple",
+      "Conditions of Sale": "Arm's Length",
+      "Sale Price / AC": "GENERATED",
+      "Sale Price / SF": "GENERATED",
+      "Land Size (AC)": 4.41,
+      "Land Size (SF)": 192099,
+      "APN": "10930.00140.00000",
+      "Legal": "GAGE ACRES BLOCK 1 LOT 14",
+      "Corner": false,
+      "Highway Frontage": false,
+      "Utils - Electricity": null,
+      "Utils - Water": "Well",
+      "Utils - Sewer": "None",
+      "Surface": "Raw",
+      "Zoning Location": "None",
+      "Zoning Description": "Country/Rural",
+      "Zoning": "ES1",
+      "Taxes": 707.8,
+      "MLS #": "LK1651795",
+      "Verification Type": "MLS/CAD/Deeds",
+      "Verified By": null,
+      "Verification": "GENERATED",
+      "Comments": "Sold for $115,000 on 3/23/2026. MLS notes a dilapidated & collapsed structure on the property that contributes no value to the sale. Property features an old water well (condition unknown) and an oil lease pad with a pump jack behind the property."
+    }
+  ],
+  "saleData": [],
+  "rentalData": [],
+  "parcelData": [
+    {
+      "instrumentNumber": "2026-00005322",
+      "APN": "10930.00140.00000",
+      "APN Link": "",
+      "Location": "15031 S Windmill Ave, Odessa, TX 79766",
+      "Legal": "GAGE ACRES BLOCK 1 LOT 14",
+      "Lot #": "14",
+      "Size (AC)": 4.41,
+      "Size (SF)": 192099,
+      "Building Size (SF)": 336,
+      "Parking (SF)": null,
+      "Storage Area (SF)": null,
+      "Buildings": 1,
+      "Total Tax Amount": "707.80",
+      "County Appraised Value": "87439"
+    }
+  ],
+  "parcelImprovements": [
+    {
+      "instrumentNumber": "2026-00005322",
+      "APN": "10930.00140.00000",
+      "Building #": 1,
+      "Section #": 1,
+      "Year Built": 1980,
+      "Gross Building Area (SF)": 336,
+      "Office Area (SF)": null,
+      "Warehouse Area (SF)": null,
+      "Parking (SF)": null,
+      "Storage Area (SF)": null,
+      "Is GLA": false,
+      "Construction": "WOOD/METAL/BLOCK FRAME",
+      "Comments": "Dilapidated & collapsed structure on property. S30M Style."
+    }
+  ],
+  "subject": [],
+  "subjectTaxes": [],
+  "taxEntities": []
+}

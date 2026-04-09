@@ -236,10 +236,6 @@ export function ComparablesPanel({
     onComparablesChange([...comparables, newComp]);
   };
 
-  const handleRemoveComparable = (id: string) => {
-    onComparablesChange(comparables.filter((c) => c.id !== id));
-  };
-
   const handleComparableChange = (
     id: string,
     updates: Partial<ComparableInfo>,
@@ -505,19 +501,6 @@ export function ComparablesPanel({
                      </span>
                    )}
                 </div>
-                {filteredComparables.length > 1 && !isCollapsed && (
-                  <button
-                    type="button"
-                    disabled={readOnly}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveComparable(comp.id);
-                    }}
-                    className="text-xs text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Remove
-                  </button>
-                )}
               </div>
 
               {!isCollapsed && (

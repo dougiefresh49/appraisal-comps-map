@@ -877,11 +877,11 @@ export function DocumentPanelToggle({
         {...(omitNativeTitle
           ? { "aria-label": shortLabel }
           : { title: docDrawerTitle, "aria-label": docDrawerTitle })}
-        className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 dark:border-gray-700"
+        className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100 dark:focus-visible:ring-gray-400/50"
       >
         <DocumentTextIcon className="h-4 w-4" aria-hidden />
         {documentCount !== undefined && documentCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-900/90 px-0.5 text-[10px] font-bold text-blue-300">
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-0.5 text-[10px] font-bold text-white dark:bg-blue-900/90 dark:text-blue-300">
             {documentCount}
           </span>
         )}
@@ -894,7 +894,7 @@ export function DocumentPanelToggle({
       type="button"
       onClick={onClick}
       title={docDrawerTitle}
-      className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-600 hover:bg-gray-800 hover:text-gray-200"
+      className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
     >
       <svg
         className="h-3.5 w-3.5"
@@ -912,7 +912,7 @@ export function DocumentPanelToggle({
       </svg>
       Docs
       {documentCount !== undefined && documentCount > 0 && (
-        <span className="rounded-full bg-blue-900/50 px-1.5 py-0.5 text-[10px] font-bold text-blue-300">
+        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
           {documentCount}
         </span>
       )}

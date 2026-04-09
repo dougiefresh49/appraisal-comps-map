@@ -3,6 +3,7 @@ import type {
   PostgrestResponse,
   PostgrestSingleResponse,
 } from "@supabase/supabase-js";
+import { format } from "date-fns";
 import { createClient } from "~/utils/supabase/client";
 import {
   normalizeProjectApproaches,
@@ -15,6 +16,14 @@ import {
   type MapDrawings,
   type LatLng,
 } from "~/utils/projectStore";
+import { parseEngagementDateToDate } from "~/utils/parse-engagement-date";
+
+/** Normalise any recognised date string to YYYY-MM-DD for a Postgres date column. */
+function normalizeDateForDb(v: string | null | undefined): string | null {
+  if (!v?.trim()) return null;
+  const d = parseEngagementDateToDate(v);
+  return d ? format(d, "yyyy-MM-dd") : null;
+}
 
 function parseFolderStructure(
   raw: Record<string, unknown> | null | undefined,
@@ -41,6 +50,7 @@ interface ProjectRow {
   highest_best_use: string | null;
   insurance_price_per_sf: number | string | null;
   vacancy_rate: number | string | null;
+  percent_inc_per_month: number | string | null;
   approaches: unknown;
   created_at: string;
   updated_at: string;
@@ -320,6 +330,7 @@ export async function fetchProject(
     highestBestUse: projectRow.highest_best_use ?? undefined,
     insurancePricePerSf: numericField(projectRow.insurance_price_per_sf),
     vacancyRate: numericField(projectRow.vacancy_rate),
+    percentIncPerMonth: numericField(projectRow.percent_inc_per_month),
     approaches: normalizeProjectApproaches(projectRow.approaches),
   };
 
@@ -444,6 +455,7 @@ export type ProjectMetadataPatch = Partial<{
   highestBestUse: string | null;
   insurancePricePerSf: number | null;
   vacancyRate: number | null;
+  percentIncPerMonth: number | null;
   approaches: ProjectApproaches | null;
 }>;
 
@@ -474,12 +486,10 @@ export async function upsertProjectMetadata(
       v != null && v.trim() !== "" ? v : null;
   }
   if ("effectiveDate" in data) {
-    const v = data.effectiveDate;
-    updates.effective_date = v != null && v.trim() !== "" ? v : null;
+    updates.effective_date = normalizeDateForDb(data.effectiveDate);
   }
   if ("reportDueDate" in data) {
-    const v = data.reportDueDate;
-    updates.report_due_date = v != null && v.trim() !== "" ? v : null;
+    updates.report_due_date = normalizeDateForDb(data.reportDueDate);
   }
   if ("exposureTime" in data) {
     const v = data.exposureTime;
@@ -492,6 +502,8 @@ export async function upsertProjectMetadata(
   if ("insurancePricePerSf" in data)
     updates.insurance_price_per_sf = data.insurancePricePerSf;
   if ("vacancyRate" in data) updates.vacancy_rate = data.vacancyRate;
+  if ("percentIncPerMonth" in data)
+    updates.percent_inc_per_month = data.percentIncPerMonth;
   if ("approaches" in data) updates.approaches = data.approaches;
 
   if (Object.keys(updates).length === 0) return;

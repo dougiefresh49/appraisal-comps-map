@@ -22,6 +22,8 @@ export interface AdjustmentSuggestion {
 export interface AdjustmentGridSuggestions {
   project_id: string;
   comp_type: "land" | "sales";
+  project_effective_date: string | null;
+  project_percent_inc_per_month: number | null;
   categories: string[];
   comps: {
     id: string;
@@ -87,7 +89,12 @@ function parseMoney(value: unknown): number | null {
 
 function numFromRaw(raw: Record<string, unknown>, key: string): number | null {
   const v = raw[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : null;
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  if (typeof v === "string") {
+    const n = Number.parseFloat(v.replace(/[$,]/g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  return null;
 }
 
 function isExtractedAdjustmentGrid(v: unknown): v is ExtractedAdjustmentGrid {
@@ -154,6 +161,8 @@ function patternPercentToDecimal(p: number): number {
 }
 
 function subjectLocation(core: Record<string, unknown>): string {
+  const overall = strVal(core["Overall Location"]);
+  if (overall) return overall;
   const parts = [
     strVal(core.Address),
     strVal(core.City),
@@ -176,6 +185,8 @@ function subjectLandSizeSf(core: Record<string, unknown>): string | null {
 }
 
 function subjectUtilities(core: Record<string, unknown>): string {
+  const overall = strVal(core.Utilities);
+  if (overall) return overall;
   const elec = strVal(core["Utils - Electricity"]);
   const water = strVal(core["Utils - Water"]);
   const sewer = strVal(core["Utils - Sewer"]);
@@ -292,14 +303,14 @@ function extractCompValue(
     return parts.length ? parts.join(", ") : strVal(raw.Address);
   }
   if (c === "land size (sf)" || c === "land size") {
-    const sf = raw["Land Size (SF)"];
-    if (typeof sf === "number" && !Number.isNaN(sf)) {
-      return `${sf} SF`;
+    const sfNum = numFromRaw(raw, "Land Size (SF)");
+    if (sfNum != null) {
+      return `${sfNum.toLocaleString()} SF`;
     }
-    const ac = raw["Land Size (AC)"];
-    if (typeof ac === "number" && !Number.isNaN(ac)) {
-      const conv = acToSf(ac);
-      return conv != null ? `${conv} SF` : `${ac} AC`;
+    const acNum = numFromRaw(raw, "Land Size (AC)");
+    if (acNum != null) {
+      const conv = acToSf(acNum);
+      return conv != null ? `${conv.toLocaleString()} SF` : `${acNum} AC`;
     }
     return null;
   }
@@ -307,6 +318,8 @@ function extractCompValue(
     return strVal(raw.Surface);
   }
   if (c === "utilities") {
+    const overall = strVal(raw.Utilities);
+    if (overall) return overall;
     const parts = [
       strVal(raw["Utils - Electricity"]) != null
         ? `Elec: ${strVal(raw["Utils - Electricity"])}`
@@ -321,13 +334,11 @@ function extractCompValue(
     return parts.length ? parts.join("; ") : "—";
   }
   if (c === "frontage") {
-    const corner = raw.Corner === true ? "Corner" : raw.Corner === false ? "Not corner" : null;
+    const frontage = strVal(raw.Frontage);
+    if (frontage) return frontage;
+    const corner = raw.Corner === true ? "Corner" : null;
     const hw =
-      raw["Highway Frontage"] === true
-        ? "Highway frontage"
-        : raw["Highway Frontage"] === false
-          ? "No highway frontage"
-          : null;
+      raw["Highway Frontage"] === true ? "Highway" : null;
     const parts = [corner, hw].filter(Boolean);
     return parts.length ? parts.join("; ") : "—";
   }
@@ -399,6 +410,26 @@ export async function generateAdjustmentSuggestions(
     compType === "land" ? LAND_TRANSACTION : SALES_TRANSACTION;
   const property = compType === "land" ? LAND_PROPERTY : SALES_PROPERTY;
   const categories = [...transaction, ...property];
+
+  const projectRes = await supabase
+    .from("projects")
+    .select("effective_date, percent_inc_per_month")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectRes.error) {
+    console.error("[adjustment-suggestions] projects:", projectRes.error.message);
+  }
+
+  const projectEffectiveDate =
+    typeof projectRes.data?.effective_date === "string"
+      ? projectRes.data.effective_date
+      : null;
+
+  const projectPercentIncPerMonth =
+    projectRes.data?.percent_inc_per_month != null
+      ? Number(projectRes.data.percent_inc_per_month)
+      : null;
 
   const subjectRes = await supabase
     .from("subject_data")
@@ -608,6 +639,8 @@ export async function generateAdjustmentSuggestions(
   return {
     project_id: projectId,
     comp_type: compType,
+    project_effective_date: projectEffectiveDate,
+    project_percent_inc_per_month: projectPercentIncPerMonth,
     categories,
     comps: compsOut,
     suggestions,
