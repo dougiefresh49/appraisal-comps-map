@@ -1,7 +1,13 @@
 import "~/styles/globals.css";
 
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "AppraisalBot Reports",
@@ -38,8 +44,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
-      <body>
+    <html lang="en" className={`${geist.variable} h-full min-h-dvh`}>
+      <body className="m-0 min-h-dvh bg-transparent">
         <SupabaseAuthProvider>
           <ThemeProvider>{children}</ThemeProvider>
         </SupabaseAuthProvider>
