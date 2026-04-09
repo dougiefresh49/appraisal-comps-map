@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# GitHub Actions sets GITHUB_OUTPUT. For local runs, use a temp file and print it on exit.
+if [ -z "${GITHUB_OUTPUT:-}" ]; then
+  _RESOLVE_BUMP_OUT="$(mktemp)"
+  export GITHUB_OUTPUT="$_RESOLVE_BUMP_OUT"
+  trap 'echo "--- GITHUB_OUTPUT (local) ---"; cat "$_RESOLVE_BUMP_OUT" 2>/dev/null || true; rm -f "$_RESOLVE_BUMP_OUT"' EXIT
+fi
+
 # Resolve semver bump type from commit messages.
 # Priority: explicit [major]/[minor]/[patch] keyword in HEAD commit → Gemini analysis → patch fallback.
 # Outputs: bump_type (major|minor|patch)
@@ -52,17 +59,20 @@ ${COMMITS}
 
 Reply with exactly one word: major, minor, or patch."
 
+  # Omit maxOutputTokens — use API default so thinking + short answer are not truncated.
   PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
     contents: [{parts: [{text: $prompt}]}],
-    generationConfig: {temperature: 0, maxOutputTokens: 10}
+    generationConfig: {temperature: 0}
   }')
 
-  RESPONSE=$(curl -sf --max-time 10 \
+  RESPONSE=$(curl -sf --max-time 120 \
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GOOGLE_GEMINI_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$PAYLOAD" 2>/dev/null || echo "")
 
-  if [ -n "$RESPONSE" ]; then
+  if [ -z "$RESPONSE" ]; then
+    echo "Gemini returned empty response (curl failed, timeout, or non-2xx)."
+  else
     BUMP=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // ""' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 
     if [[ "$BUMP" == "major" || "$BUMP" == "minor" || "$BUMP" == "patch" ]]; then
@@ -70,9 +80,19 @@ Reply with exactly one word: major, minor, or patch."
       echo "Resolved bump: ${BUMP} (Gemini)"
       exit 0
     fi
-  fi
 
-  echo "Gemini response was not usable, falling back to patch"
+    echo "Gemini response was not usable, falling back to patch"
+    echo "Parsed bump candidate (normalized): '${BUMP}'"
+    FINISH=$(echo "$RESPONSE" | jq -r '.candidates[0].finishReason // empty')
+    if [ -n "$FINISH" ]; then
+      echo "Gemini finishReason: ${FINISH}"
+    fi
+    API_ERR=$(echo "$RESPONSE" | jq -r '.error.message // empty')
+    if [ -n "$API_ERR" ]; then
+      echo "Gemini API error field: ${API_ERR}"
+    fi
+    echo "Raw response body (first 2000 chars): ${RESPONSE:0:2000}"
+  fi
 fi
 
 # 3. Fallback
