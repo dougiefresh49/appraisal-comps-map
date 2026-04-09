@@ -34,8 +34,10 @@ export interface ParseCompInput {
   }[];
   extraContext?: string;
   driveToken?: string;
-  /** When true, skips all DB writes and returns fullRawData in `proposedData`. */
+  /** @deprecated Use `reparse` instead. Kept for backward compatibility. */
   previewOnly?: boolean;
+  /** When true, writes proposed_raw_data instead of raw_data and sets status to pending_review. */
+  reparse?: boolean;
 }
 
 export interface ParseCompResult {
@@ -99,9 +101,15 @@ export async function parseCompFiles(
   input: ParseCompInput,
 ): Promise<ParseCompResult> {
   const supabase = await createClient();
+  const isReparse = input.reparse ?? false;
+  const isPreviewOnly = input.previewOnly && !isReparse;
 
-  // Only mark as processing when we intend to write to DB
-  if (!input.previewOnly) {
+  if (isReparse) {
+    await supabase
+      .from("comparables")
+      .update({ parsed_data_status: "reparsing" })
+      .eq("id", input.compId);
+  } else if (!isPreviewOnly) {
     await supabase
       .from("comparables")
       .update({ parsed_data_status: "processing" })
@@ -183,11 +191,58 @@ export async function parseCompFiles(
     enrichedRawData._parcelData = enrichedParcels;
     enrichedRawData._parcelImprovements = parcelImprovements;
 
-    // Preview-only mode: return data without writing to DB
-    if (input.previewOnly) {
+    // Legacy preview-only mode: return data without writing to DB
+    if (isPreviewOnly) {
       return { ok: true, proposedData: enrichedRawData, preview: true };
     }
 
+    // Re-parse mode: write proposed_raw_data for async merge review
+    if (isReparse) {
+      const { error: proposedErr } = await supabase
+        .from("comp_parsed_data")
+        .update({
+          proposed_raw_data: enrichedRawData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("comp_id", input.compId);
+
+      if (proposedErr) {
+        throw new Error(`Failed to save proposed data: ${proposedErr.message}`);
+      }
+
+      const { error: statusErr } = await supabase
+        .from("comparables")
+        .update({ parsed_data_status: "pending_review" })
+        .eq("id", input.compId);
+
+      if (statusErr) {
+        throw new Error(`Failed to update status: ${statusErr.message}`);
+      }
+
+      try {
+        await registerCompParseSourceDocuments({
+          projectId: input.projectId,
+          compId: input.compId,
+          compType: input.type,
+          driveToken: input.driveToken,
+          sources: input.fileBuffers.map((f) => ({
+            fileId: f.fileId,
+            fileName: f.name,
+            mimeType: f.mimeType,
+            fileBuffer: f.buffer,
+          })),
+        });
+      } catch (regErr) {
+        console.error(
+          "[parseCompFiles] registerCompParseSourceDocuments (reparse):",
+          regErr,
+        );
+      }
+
+      return { ok: true, data: compData };
+    }
+
+    // Standard parse: write raw_data directly
     const { error: upsertError } = await supabase
       .from("comp_parsed_data")
       .upsert(
@@ -248,8 +303,13 @@ export async function parseCompFiles(
     const errorMessage =
       err instanceof Error ? err.message : "Unknown parsing error";
 
-    // Only update status when we were doing a real parse
-    if (!input.previewOnly) {
+    if (isReparse) {
+      // Restore to "parsed" so existing data remains accessible
+      await supabase
+        .from("comparables")
+        .update({ parsed_data_status: "error" })
+        .eq("id", input.compId);
+    } else if (!isPreviewOnly) {
       await supabase
         .from("comparables")
         .update({ parsed_data_status: "error" })
@@ -271,6 +331,7 @@ export async function parseCompFromDrive(input: {
   driveToken: string;
   extraContext?: string;
   previewOnly?: boolean;
+  reparse?: boolean;
 }): Promise<ParseCompResult> {
   const fileBuffers: {
     buffer: Buffer;
@@ -298,5 +359,6 @@ export async function parseCompFromDrive(input: {
     extraContext: input.extraContext,
     driveToken: input.driveToken,
     previewOnly: input.previewOnly,
+    reparse: input.reparse,
   });
 }

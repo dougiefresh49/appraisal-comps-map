@@ -35,7 +35,10 @@ function parsedStatusBadgeClass(
     case "parsed":
       return "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:ring-emerald-800/80";
     case "processing":
+    case "reparsing":
       return "bg-blue-100 text-blue-700 ring-1 ring-blue-300 animate-pulse dark:bg-blue-950/80 dark:text-blue-300 dark:ring-blue-800/80";
+    case "pending_review":
+      return "bg-amber-100 text-amber-700 ring-1 ring-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:ring-amber-800/80";
     case "error":
       return "bg-red-100 text-red-700 ring-1 ring-red-300 dark:bg-red-950/80 dark:text-red-300 dark:ring-red-800/80";
     default:
@@ -43,8 +46,19 @@ function parsedStatusBadgeClass(
   }
 }
 
-function formatParsedLabel(status: ComparableParsedDataStatus | undefined) {
-  return (status ?? "none") as string;
+function formatParsedLabel(status: ComparableParsedDataStatus | undefined): string {
+  switch (status ?? "none") {
+    case "reparsing":
+      return "re-parsing";
+    case "pending_review":
+      return "review needed";
+    default:
+      return (status ?? "none") as string;
+  }
+}
+
+function isCardDisabled(status: ComparableParsedDataStatus | undefined): boolean {
+  return status === "processing" || status === "reparsing";
 }
 
 function ComparableListCard({
@@ -100,9 +114,10 @@ function ComparableListCard({
   const imageCount = comparable.images?.length ?? 0;
   const showMap = type === "Land" || type === "Sales";
   const mapIconClass = type === "Land" ? "text-green-400" : "text-purple-400";
+  const disabled = isCardDisabled(comparable.parsedDataStatus);
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm ring-1 ring-black/5 transition hover:border-gray-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-900/50 dark:ring-black/20 dark:hover:border-gray-600">
+    <div className={`group relative flex flex-col rounded-lg border p-4 shadow-sm ring-1 transition ${disabled ? "pointer-events-none border-gray-300 bg-gray-100 opacity-60 ring-black/5 dark:border-gray-700 dark:bg-gray-900/30 dark:ring-black/20" : "border-gray-200 bg-white ring-black/5 hover:border-gray-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-900/50 dark:ring-black/20 dark:hover:border-gray-600"}`}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold tracking-wide text-gray-500 uppercase dark:text-gray-400">
           {type} #{comparable.number ?? index + 1}

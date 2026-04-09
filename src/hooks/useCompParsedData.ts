@@ -52,6 +52,8 @@ export interface UseCompParsedDataReturn {
   isLoading: boolean;
   error: string | null;
   saveParsedData: (rawData: LandSaleData | SaleData | RentalData | Record<string, unknown>) => Promise<void>;
+  /** Accept a merged re-parse result: updates raw_data, clears proposed_raw_data, sets status to "parsed". */
+  clearProposedData: (mergedRawData: LandSaleData | SaleData | RentalData | Record<string, unknown>) => Promise<void>;
   refreshParsedData: () => Promise<void>;
 }
 
@@ -173,11 +175,53 @@ export function useCompParsedData(compId: string): UseCompParsedDataReturn {
     [compId],
   );
 
+  const clearProposedData = useCallback(
+    async (mergedRawData: LandSaleData | SaleData | RentalData | Record<string, unknown>) => {
+      if (!compId) return;
+
+      const supabase = createClient();
+      const updateResult = await supabase
+        .from("comp_parsed_data")
+        .update({
+          raw_data: mergedRawData as unknown as Record<string, unknown>,
+          proposed_raw_data: null,
+          source: "manual",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("comp_id", compId)
+        .select()
+        .single();
+
+      if (updateResult.error) {
+        throw new Error(updateResult.error.message);
+      }
+
+      const comparablesPatch = comparableRowPatchFromRawData(mergedRawData);
+      const statusResult = await supabase
+        .from("comparables")
+        .update({
+          parsed_data_status: "parsed",
+          ...comparablesPatch,
+        })
+        .eq("id", compId);
+
+      if (statusResult.error) {
+        throw new Error(statusResult.error.message);
+      }
+
+      if (isMountedRef.current) {
+        setParsedData(updateResult.data as CompParsedDataRow);
+      }
+    },
+    [compId],
+  );
+
   return {
     parsedData,
     isLoading,
     error,
     saveParsedData,
+    clearProposedData,
     refreshParsedData: loadParsedData,
   };
 }

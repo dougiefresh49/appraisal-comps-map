@@ -136,7 +136,9 @@ function comparableFromRow(row: ComparableRow): Comparable {
     rawStatus === "none" ||
     rawStatus === "processing" ||
     rawStatus === "parsed" ||
-    rawStatus === "error"
+    rawStatus === "error" ||
+    rawStatus === "reparsing" ||
+    rawStatus === "pending_review"
       ? rawStatus
       : undefined;
 

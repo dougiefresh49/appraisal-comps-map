@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "~/utils/supabase/client";
 import { upsertComparable } from "~/lib/supabase-queries";
 import { driveFetch } from "~/lib/drive-fetch";
+import { useTaskManagerMaybe } from "~/components/TaskManagerContext";
 import type { ComparableType, Comparable } from "~/utils/projectStore";
 import type { CompType } from "~/types/comp-data";
 
@@ -77,7 +78,13 @@ function routeSlugForCompType(compType: ComparableType): string {
   }
 }
 
-type Step = "select-folder" | "select-files" | "parsing" | "done" | "error";
+type Step =
+  | "select-folder"
+  | "select-files"
+  | "parsing"
+  | "done"
+  | "error"
+  | "queued";
 type ActiveTab = "drive" | "search";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +98,12 @@ interface SearchPanelProps {
   onCloneComplete: (compId: string, newComp: Comparable) => void;
 }
 
-function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: SearchPanelProps) {
+function SearchPanel({
+  projectId,
+  compType,
+  compsFolderId,
+  onCloneComplete,
+}: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CompSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -101,43 +113,46 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSearched = useRef(false);
 
-  const performSearch = useCallback(async (q: string) => {
-    if (q.trim().length < 2) {
-      setResults([]);
-      setSearchError(null);
-      hasSearched.current = false;
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchError(null);
-    hasSearched.current = true;
-
-    try {
-      const res = await fetch("/api/comps/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: q.trim(),
-          type: compType,
-          limit: 30,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = (await res.json()) as { error?: string };
-        throw new Error(err.error ?? "Search failed");
+  const performSearch = useCallback(
+    async (q: string) => {
+      if (q.trim().length < 2) {
+        setResults([]);
+        setSearchError(null);
+        hasSearched.current = false;
+        return;
       }
 
-      const data = (await res.json()) as { results: CompSearchResult[] };
-      setResults(data.results ?? []);
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Search failed");
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [compType]);
+      setIsSearching(true);
+      setSearchError(null);
+      hasSearched.current = true;
+
+      try {
+        const res = await fetch("/api/comps/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: q.trim(),
+            type: compType,
+            limit: 30,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = (await res.json()) as { error?: string };
+          throw new Error(err.error ?? "Search failed");
+        }
+
+        const data = (await res.json()) as { results: CompSearchResult[] };
+        setResults(data.results ?? []);
+      } catch (err) {
+        setSearchError(err instanceof Error ? err.message : "Search failed");
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [compType],
+  );
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -201,7 +216,8 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
     }
   };
 
-  const noResults = hasSearched.current && !isSearching && results.length === 0 && !searchError;
+  const noResults =
+    hasSearched.current && !isSearching && results.length === 0 && !searchError;
 
   return (
     <div className="space-y-3">
@@ -227,7 +243,7 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search by address or APN…"
-          className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
+          className="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-9 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
           autoFocus
         />
         {isSearching && (
@@ -250,7 +266,7 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
       )}
 
       {/* Results list */}
-      <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
+      <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
         {!hasSearched.current && !isSearching && (
           <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-8 text-center dark:border-gray-700 dark:bg-gray-800/50">
             <p className="text-xs text-gray-600 dark:text-gray-500">
@@ -261,13 +277,21 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
 
         {noResults && (
           <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-6 text-center dark:border-gray-700 dark:bg-gray-800/50">
-            <p className="text-xs text-gray-600 dark:text-gray-500">No comps found matching &ldquo;{query}&rdquo;</p>
+            <p className="text-xs text-gray-600 dark:text-gray-500">
+              No comps found matching &ldquo;{query}&rdquo;
+            </p>
           </div>
         )}
 
         {results.map((result) => {
-          const salePrice = result.raw_data["Sale Price"] ?? result.raw_data["Rent / Month Start"] ?? null;
-          const dateOfSale = result.raw_data["Date of Sale"] ?? result.raw_data["Lease Start"] ?? null;
+          const salePrice =
+            result.raw_data["Sale Price"] ??
+            result.raw_data["Rent / Month Start"] ??
+            null;
+          const dateOfSale =
+            result.raw_data["Date of Sale"] ??
+            result.raw_data["Lease Start"] ??
+            null;
           const isCloningThis = cloningId === result.comp_id;
 
           return (
@@ -286,14 +310,20 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400">
                     {salePrice && (
                       <span>
-                        <span className="text-gray-500 dark:text-gray-500">Price:</span>{" "}
-                        <span className="text-gray-800 dark:text-gray-300">{salePrice}</span>
+                        <span className="text-gray-500 dark:text-gray-500">
+                          Price:
+                        </span>{" "}
+                        <span className="text-gray-800 dark:text-gray-300">
+                          {salePrice}
+                        </span>
                       </span>
                     )}
                     {dateOfSale && (
                       <span>
                         <span className="text-gray-500">Date:</span>{" "}
-                        <span className="text-gray-800 dark:text-gray-300">{dateOfSale}</span>
+                        <span className="text-gray-800 dark:text-gray-300">
+                          {dateOfSale}
+                        </span>
                       </span>
                     )}
                     <span>
@@ -306,7 +336,9 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
                   {/* Used in */}
                   {result.projects_using.length > 0 && (
                     <p className="text-[11px] text-gray-600 dark:text-gray-500">
-                      <span className="text-gray-700 dark:text-gray-600">Used in:</span>{" "}
+                      <span className="text-gray-700 dark:text-gray-600">
+                        Used in:
+                      </span>{" "}
                       {result.projects_using
                         .map((p) => p.project_name)
                         .join(", ")}
@@ -498,16 +530,65 @@ export function CompAddFlow({
   };
 
   const pendingCompIdRef = useRef<string | null>(null);
+  const taskManager = useTaskManagerMaybe();
 
   const handleParse = async () => {
     if (selectedFileIds.size === 0) return;
 
-    setStep("parsing");
     setErrorMessage(null);
 
+    const isReparseMode = !!(onPreviewComplete && compId);
     let activeCompId = compId ?? pendingCompIdRef.current;
 
-    // Preview-only mode: skip DB writes, call onPreviewComplete with proposed data
+    // When the task manager is available, dispatch to background
+    if (taskManager) {
+      try {
+        if (isAddMode && !activeCompId) {
+          activeCompId = crypto.randomUUID();
+          pendingCompIdRef.current = activeCompId;
+          const newComp: Comparable = {
+            id: activeCompId,
+            type: compType,
+            address: "",
+            addressForDisplay: "",
+            folderId: selectedFolderId ?? undefined,
+            parsedDataStatus: "processing",
+          };
+          await upsertComparable(projectId, newComp);
+        }
+
+        const label = selectedFolderName ?? `${compType} comp`;
+
+        taskManager.addParseTask({
+          compId: activeCompId!,
+          projectId,
+          compType,
+          label,
+          kind: isReparseMode ? "reparse" : "parse",
+          fileIds: Array.from(selectedFileIds),
+          extraContext: extraContext.trim() || undefined,
+        });
+
+        pendingCompIdRef.current = null;
+        setResultCompId(activeCompId ?? null);
+        setStep("queued");
+      } catch (err) {
+        if (isAddMode && activeCompId) {
+          const supabase = createClient();
+          void supabase.from("comparables").delete().eq("id", activeCompId);
+          pendingCompIdRef.current = null;
+        }
+        setErrorMessage(
+          err instanceof Error ? err.message : "Failed to queue parse",
+        );
+        setStep("error");
+      }
+      return;
+    }
+
+    // Fallback: blocking parse when task manager is not available
+    setStep("parsing");
+
     const isPreviewMode = !!(onPreviewComplete && compId);
 
     try {
@@ -549,8 +630,7 @@ export function CompAddFlow({
         data?: Record<string, unknown>;
       };
 
-      // Preview mode: hand off to caller and close dialog
-      if (isPreviewMode && responseData.proposedData) {
+      if (isPreviewMode && responseData.proposedData && onPreviewComplete) {
         onPreviewComplete(responseData.proposedData);
         onClose();
         return;
@@ -566,9 +646,7 @@ export function CompAddFlow({
         void supabase.from("comparables").delete().eq("id", activeCompId);
         pendingCompIdRef.current = null;
       }
-      setErrorMessage(
-        err instanceof Error ? err.message : "Parsing failed",
-      );
+      setErrorMessage(err instanceof Error ? err.message : "Parsing failed");
       setStep("error");
     }
   };
@@ -593,8 +671,18 @@ export function CompAddFlow({
             className="rounded-md p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             aria-label="Close"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18 18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -638,7 +726,9 @@ export function CompAddFlow({
               onCloneComplete={(compId, newComp) => {
                 const typeSlug = routeSlugForCompType(compType);
                 onComplete(compId, newComp);
-                router.push(`/project/${projectId}/${typeSlug}/comps/${compId}`);
+                router.push(
+                  `/project/${projectId}/${typeSlug}/comps/${compId}`,
+                );
               }}
             />
           )}
@@ -649,8 +739,8 @@ export function CompAddFlow({
               {step === "select-folder" && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Select a Drive folder for this{" "}
-                    {compType.toLowerCase()} comp.
+                    Select a Drive folder for this {compType.toLowerCase()}{" "}
+                    comp.
                   </p>
                   {isLoading ? (
                     <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-500">
@@ -680,7 +770,9 @@ export function CompAddFlow({
                             }`}
                           >
                             <span className="text-base">📁</span>
-                            <span className="flex-1 truncate">{folder.name}</span>
+                            <span className="flex-1 truncate">
+                              {folder.name}
+                            </span>
                             {isUsed && (
                               <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-gray-600 uppercase dark:bg-gray-700 dark:text-gray-400">
                                 Added
@@ -751,7 +843,7 @@ export function CompAddFlow({
                       onChange={(e) => setExtraContext(e.target.value)}
                       placeholder="Any additional details to help with extraction…"
                       rows={2}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                     />
                   </div>
 
@@ -782,18 +874,45 @@ export function CompAddFlow({
                 </div>
               )}
 
+              {step === "queued" && (
+                <div className="space-y-4 py-8 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
+                    {onPreviewComplete
+                      ? "Re-parse queued. You\u2019ll be notified when review is ready."
+                      : "Documents queued for parsing."}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-500">
+                    This typically takes 15\u201330 seconds. You can continue
+                    working \u2014 check the task panel at the bottom of the
+                    screen for progress.
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (resultCompId) onComplete(resultCompId);
+                      onClose();
+                    }}
+                    className="rounded-md bg-blue-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+                  >
+                    OK
+                  </button>
+                </div>
+              )}
+
               {step === "parsing" && (
                 <div className="space-y-3 py-12 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
                     {isAddMode
-                      ? "Creating comp & extracting data with AI…"
+                      ? "Creating comp & extracting data with AI\u2026"
                       : onPreviewComplete
-                        ? "Extracting proposed data with AI…"
-                        : "Extracting comp data with AI…"}
+                        ? "Extracting proposed data with AI\u2026"
+                        : "Extracting comp data with AI\u2026"}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-500">
-                    This may take 15–30 seconds.
+                    This may take 15\u201330 seconds.
                   </p>
                 </div>
               )}

@@ -48,7 +48,13 @@ export type HvacOptions = "Yes" | "Office Only" | "No";
 
 export type CompType = "land" | "sales" | "rentals";
 
-export type ParsedDataStatus = "none" | "processing" | "parsed" | "error";
+export type ParsedDataStatus =
+  | "none"
+  | "processing"
+  | "parsed"
+  | "error"
+  | "reparsing"
+  | "pending_review";
 
 // ============================================================
 // Main Output Structure
@@ -390,6 +396,7 @@ export interface CompParsedDataRow {
   comp_id: string | null;
   project_id: string | null;
   raw_data: LandSaleData | SaleData | RentalData | Record<string, unknown>;
+  proposed_raw_data: Record<string, unknown> | null;
   source: string;
   parsed_at: string | null;
   created_at: string;
