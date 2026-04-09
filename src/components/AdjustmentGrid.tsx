@@ -8,8 +8,14 @@ import {
   useState,
   type MouseEvent,
 } from "react";
-import { calcMonthlyIncrease } from "~/lib/calculated-fields";
+import {
+  adjSalePrice,
+  calcMonthlyIncrease,
+  excessLandValue,
+  salePricePerSf,
+} from "~/lib/calculated-fields";
 import { useSubjectData } from "~/hooks/useSubjectData";
+import { useCompsParsedDataMulti } from "~/hooks/useCompsParsedDataMulti";
 import type { AdjustmentGridSuggestions } from "~/lib/adjustment-suggestions";
 import { CompDetailSidePanel } from "~/components/CompDetailSidePanel";
 
@@ -58,6 +64,8 @@ export interface AdjustmentGridState {
   price_unit: string;
   config: GridConfig;
   source: "ai_suggested" | "manual" | "mixed";
+  size_label?: string;
+  price_label?: string;
 }
 
 interface AdjustmentGridProps {
@@ -65,7 +73,14 @@ interface AdjustmentGridProps {
   compType: "land" | "sales";
 }
 
-const QUAL_OPTIONS = ["TODO", "Inferior", "Similar", "Superior"] as const;
+const QUAL_OPTIONS = [
+  "TODO",
+  "Inferior",
+  "Slightly Inferior",
+  "Similar",
+  "Slightly Superior",
+  "Superior",
+] as const;
 
 const LAND_TX = [
   "Property Rights",
@@ -97,6 +112,244 @@ const SALES_PROP = [
   "Land / Bld Ratio",
   "Zoning",
 ] as const;
+
+/**
+ * Fields that show formatted data values in the grid (mirrors GET_ADJUSTMENT_DATA formatting).
+ * If a category name is a key here, comp cells show the formatted value instead of a dropdown.
+ */
+const DATA_FORMAT_FIELDS: Record<string, (v: unknown) => string> = {
+  "Building Size (SF)": (v) =>
+    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+  "Rentable SF": (v) =>
+    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+  "Office %": (v) => {
+    if (typeof v === "number") {
+      const pct = v > 0 && v <= 1 ? v * 100 : v;
+      return `${pct.toFixed(1)}%`;
+    }
+    return String(v ?? "");
+  },
+  "Land / Bld Ratio": (v) =>
+    typeof v === "number" ? v.toFixed(2) : String(v ?? ""),
+  "Land / Bld Ratio (Adj)": (v) =>
+    typeof v === "number" ? v.toFixed(2) : String(v ?? ""),
+  "Sale Price / SF": (v) =>
+    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+  "Sale Price / SF (Adj)": (v) =>
+    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+  "Annual Rent / SF": (v) =>
+    typeof v === "number" ? `$${v.toFixed(2)}` : String(v ?? ""),
+  "Post Sale Renovation Cost": (v) =>
+    typeof v === "number" ? `$${Math.round(v).toLocaleString()}` : String(v ?? ""),
+  "Land Size (SF)": (v) =>
+    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+  "Land Size (AC)": (v) =>
+    typeof v === "number" ? v.toFixed(3) : String(v ?? ""),
+  "Parking (SF)": (v) =>
+    typeof v === "number" ? v.toLocaleString() : String(v ?? ""),
+  "Effective Age": (v) =>
+    typeof v === "number" ? v.toFixed(1) : String(v ?? ""),
+  Age: (v) =>
+    typeof v === "number" ? String(Math.round(v)) : String(v ?? ""),
+  "Occupancy %": (v) => {
+    if (typeof v === "number") {
+      const pct = v > 0 && v <= 1 ? v * 100 : v;
+      return `${Math.round(pct)}%`;
+    }
+    return String(v ?? "");
+  },
+  "Overall Cap Rate": (v) => {
+    if (typeof v === "number") {
+      const pct = v > 0 && v < 1 ? v * 100 : v;
+      return `${pct.toFixed(2)}%`;
+    }
+    return String(v ?? "");
+  },
+  Zoning: (v) => String(v ?? ""),
+  "Conditions of Sale": (v) => String(v ?? ""),
+  Surface: (v) => String(v ?? ""),
+  Utilities: (v) => String(v ?? ""),
+  Frontage: (v) => String(v ?? ""),
+};
+
+/** Categories that always use qualitative dropdowns (per comp type). */
+const QUALITATIVE_ONLY_SALES = new Set([
+  "Location",
+  "Age / Condition",
+  "Property Rights",
+  "Financing Terms",
+]);
+const QUALITATIVE_ONLY_LAND = new Set([
+  "Location",
+  "Property Rights",
+  "Financing Terms",
+]);
+
+/** Categories whose labels are fixed (cannot be renamed via dropdown). */
+const FIXED_LABEL_SALES = new Set(["Location", "Age / Condition"]);
+const FIXED_LABEL_LAND = new Set(["Location"]);
+
+/**
+ * Comp data header names available for row label selection
+ * (mirrors CompsSales / CompsLand [[#HEADERS]]).
+ */
+const COMP_FIELD_HEADERS_SALES = [
+  "Building Size (SF)",
+  "Rentable SF",
+  "Office %",
+  "Land / Bld Ratio",
+  "Land / Bld Ratio (Adj)",
+  "Land Size (SF)",
+  "Land Size (AC)",
+  "Parking (SF)",
+  "Sale Price / SF",
+  "Sale Price / SF (Adj)",
+  "Post Sale Renovation Cost",
+  "Effective Age",
+  "Age",
+  "Occupancy %",
+  "Overall Cap Rate",
+  "Zoning",
+  "Surface",
+  "Utilities",
+  "Frontage",
+  "Conditions of Sale",
+  "Amenities",
+] as const;
+
+const COMP_FIELD_HEADERS_LAND = [
+  "Land Size (SF)",
+  "Land Size (AC)",
+  "Sale Price / SF",
+  "Surface",
+  "Utilities",
+  "Frontage",
+  "Zoning",
+  "Conditions of Sale",
+] as const;
+
+const SIZE_LABEL_OPTIONS = [
+  "Building Size (SF)",
+  "Rentable SF",
+  "Land Size (SF)",
+  "Land Size (AC)",
+] as const;
+
+const PRICE_LABEL_OPTIONS = [
+  "Sale Price / SF (Adj)",
+  "Sale Price / SF",
+  "Annual Rent / SF",
+] as const;
+
+function isQualitativeRow(
+  name: string,
+  compType: "land" | "sales",
+): boolean {
+  const set =
+    compType === "sales" ? QUALITATIVE_ONLY_SALES : QUALITATIVE_ONLY_LAND;
+  return set.has(name);
+}
+
+function isFixedLabel(
+  name: string,
+  compType: "land" | "sales",
+): boolean {
+  const set = compType === "sales" ? FIXED_LABEL_SALES : FIXED_LABEL_LAND;
+  return set.has(name);
+}
+
+function lookupRawValue(
+  raw: Record<string, unknown> | undefined,
+  fieldName: string,
+): unknown {
+  if (!raw) return undefined;
+  const v = raw[fieldName];
+  if (v !== undefined && v !== null && v !== "") return v;
+  if (fieldName === "Zoning") return raw["Zoning Description"];
+  return undefined;
+}
+
+function formatFieldValue(
+  fieldName: string,
+  raw: Record<string, unknown> | undefined,
+): string {
+  const v = lookupRawValue(raw, fieldName);
+  if (v === undefined || v === null || v === "") return "—";
+  const formatter = DATA_FORMAT_FIELDS[fieldName];
+  if (formatter) return formatter(v);
+  return String(v);
+}
+
+function numFromRaw(
+  raw: Record<string, unknown>,
+  key: string,
+): number | null {
+  const v = raw[key];
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  if (typeof v === "string") {
+    const n = Number.parseFloat(v.replace(/[$,]/g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function parseMoney(value: unknown): number | null {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[$,]/g, "").trim();
+    const n = Number.parseFloat(cleaned);
+    return Number.isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function compBasePriceFromRaw(
+  raw: Record<string, unknown>,
+  compType: "land" | "sales",
+): number {
+  const salePrice = parseMoney(raw["Sale Price"]);
+  let landSf = numFromRaw(raw, "Land Size (SF)");
+  const landAc = numFromRaw(raw, "Land Size (AC)");
+  if (landSf == null && landAc != null) {
+    landSf = landAc * 43560;
+  }
+  const bldSf = numFromRaw(raw, "Building Size (SF)");
+  const denomSf = compType === "land" ? landSf : bldSf ?? landSf;
+  const grossPerSf = salePricePerSf(salePrice, denomSf);
+
+  if (compType === "sales") {
+    const elVal =
+      numFromRaw(raw, "Excess Land Value") ??
+      excessLandValue(
+        numFromRaw(raw, "Excess Land Size (AC)"),
+        numFromRaw(raw, "Excess Land Value / AC"),
+      );
+    const adjPrice = adjSalePrice(salePrice, elVal);
+    const adjPerSf = salePricePerSf(adjPrice, bldSf);
+    return (
+      adjPerSf ??
+      numFromRaw(raw, "Sale Price / SF (Adj)") ??
+      grossPerSf ??
+      numFromRaw(raw, "Sale Price / SF") ??
+      0
+    );
+  }
+  return grossPerSf ?? numFromRaw(raw, "Sale Price / SF") ?? 0;
+}
+
+function compSizeFromRaw(
+  raw: Record<string, unknown>,
+  compType: "land" | "sales",
+): number {
+  if (compType === "land") {
+    const sf = numFromRaw(raw, "Land Size (SF)");
+    if (sf != null) return sf;
+    const ac = numFromRaw(raw, "Land Size (AC)");
+    if (ac != null) return ac * 43560;
+    return 0;
+  }
+  return numFromRaw(raw, "Building Size (SF)") ?? 0;
+}
 
 /** Legacy category names in saved drafts / older suggestions — map to spreadsheet labels */
 const DRAFT_CATEGORY_NAME_ALIASES: Record<string, string> = {
@@ -488,6 +741,12 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
   subjectLoadingRef.current = subjectLoading;
 
   const [state, setState] = useState<AdjustmentGridState | null>(null);
+
+  const compIds = useMemo(
+    () => (state?.comps ?? []).map((c) => c.id),
+    [state?.comps],
+  );
+  const { rawDataByComp } = useCompsParsedDataMulti(projectId, compIds);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -596,6 +855,38 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     applySuggestions(pending, subjectCore);
     pendingSuggestRef.current = null;
   }, [subjectLoading, subjectCore, applySuggestions]);
+
+  // Sync comp header fields from realtime raw data updates
+  useEffect(() => {
+    if (!state || initializing || rawDataByComp.size === 0) return;
+    let changed = false;
+    const nextComps = state.comps.map((c) => {
+      const raw = rawDataByComp.get(c.id);
+      if (!raw) return c;
+      const address =
+        typeof raw.Address === "string" ? raw.Address : c.address;
+      const dateOfSale =
+        typeof raw["Date of Sale"] === "string"
+          ? raw["Date of Sale"]
+          : c.date_of_sale;
+      const base = compBasePriceFromRaw(raw, compType);
+      const size = compSizeFromRaw(raw, compType);
+      if (
+        address !== c.address ||
+        dateOfSale !== c.date_of_sale ||
+        base !== c.base_price_per_unit ||
+        size !== c.size
+      ) {
+        changed = true;
+        return { ...c, address, date_of_sale: dateOfSale, base_price_per_unit: base, size };
+      }
+      return c;
+    });
+    if (changed) {
+      skipNextSave.current = true;
+      setState((prev) => (prev ? { ...prev, comps: nextComps } : prev));
+    }
+  }, [rawDataByComp, state?.comps, compType, initializing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced save
   useEffect(() => {
@@ -752,6 +1043,65 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     }
   };
 
+  const suggestRemaining = async () => {
+    if (!state) return;
+    setInitializing(true);
+    try {
+      const sRes = await fetch(
+        `/api/adjustments/suggest?project_id=${encodeURIComponent(projectId)}&type=${compType}`,
+      );
+      if (!sRes.ok) throw new Error("Failed to fetch suggestions");
+      const sJson = (await sRes.json()) as AdjustmentGridSuggestions;
+      const map = buildSuggestionMap(sJson.suggestions);
+
+      const isUnedited = (cell: AdjustmentCellState | undefined): boolean => {
+        if (!cell) return true;
+        if (cell.from_ai) return true;
+        return cell.qualitative === "Similar" && cell.percentage === 0;
+      };
+
+      setState((prev) => {
+        if (!prev) return prev;
+
+        const mergeCats = (cats: AdjustmentCategoryState[]) =>
+          cats.map((cat) => {
+            const nextValues = { ...cat.comp_values };
+            for (const c of prev.comps) {
+              if (!isUnedited(nextValues[c.id])) continue;
+              const sug = map.get(suggestionKey(cat.name, c.id));
+              if (!sug) continue;
+              const pct = sug.suggested_percent ?? 0;
+              nextValues[c.id] = {
+                qualitative: nextValues[c.id]?.qualitative ?? "Similar",
+                percentage: pct,
+                from_ai: true,
+              };
+            }
+            return { ...cat, comp_values: nextValues };
+          });
+
+        const m = new Map<string, string>();
+        for (const s of sJson.suggestions) {
+          m.set(suggestionKey(s.category, s.comp_id), s.rationale);
+        }
+        for (const [k, v] of m) {
+          rationaleByCellRef.current.set(k, v);
+        }
+
+        return {
+          ...prev,
+          transaction_categories: mergeCats(prev.transaction_categories),
+          property_categories: mergeCats(prev.property_categories),
+          source: "mixed",
+        };
+      });
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Suggest failed");
+    } finally {
+      setInitializing(false);
+    }
+  };
+
   const copyGrid = async () => {
     if (!state) {
       return;
@@ -865,13 +1215,13 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
         ...state.comps.map((c) => adjustedPriceForComp(state, c.id).toFixed(2)),
       ].join("\t"),
     );
-    lines.push(["Adjusted Mean $ / SF", "", "", "", String(mean)].join("\t"));
+    lines.push(["Adjusted Mean $ / SF", "", "", "", mean.toFixed(2)].join("\t"));
     if (compType === "sales" && state.config.include_median) {
       lines.push(
-        ["Adjusted Median $ / SF", "", "", "", String(median)].join("\t"),
+        ["Adjusted Median $ / SF", "", "", "", median.toFixed(2)].join("\t"),
       );
     }
-    lines.push(["$ / SF", "", "", "", String(rate)].join("\t"));
+    lines.push(["$ / SF", "", "", "", rate.toFixed(2)].join("\t"));
     if (compType === "land") {
       lines.push(["$ / AC", "", "", "", String(ratePerAc)].join("\t"));
     }
@@ -944,11 +1294,21 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
   };
 
   const addableCategories = useMemo(() => {
-    const pool =
+    const defaults = compType === "land" ? LAND_PROP : SALES_PROP;
+    const headers =
       compType === "land"
-        ? [...LAND_PROP, ...SALES_PROP]
-        : [...SALES_PROP, ...LAND_PROP];
-    return [...new Set(pool)];
+        ? COMP_FIELD_HEADERS_LAND
+        : COMP_FIELD_HEADERS_SALES;
+    return [...new Set([...defaults, ...headers])];
+  }, [compType]);
+
+  const txFieldOptions = useMemo(() => {
+    const txDefaults = compType === "land" ? LAND_TX : SALES_TX;
+    const headers =
+      compType === "land"
+        ? COMP_FIELD_HEADERS_LAND
+        : COMP_FIELD_HEADERS_SALES;
+    return [...new Set([...txDefaults, ...headers])];
   }, [compType]);
 
   if (loadError) {
@@ -1018,11 +1378,13 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
           >
             Copy Grid
           </button>
-          <AddCategoryMenu
-            options={addableCategories}
-            existing={state.property_categories.map((c) => c.name)}
-            onPick={addPropertyCategory}
-          />
+          <button
+            type="button"
+            onClick={suggestRemaining}
+            className="rounded-md border border-blue-400 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+          >
+            Suggest remaining
+          </button>
         </div>
         <div className="flex items-center gap-2 text-xs">
           {saveStatus === "saving" && (
@@ -1214,13 +1576,27 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             </tr>
             <tr className="border-b border-gray-200 dark:border-gray-800/60">
               <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                {compType === "land" ? "Land Size (SF)" : "Building Size (SF)"}
+                <select
+                  className="w-full border-0 bg-transparent text-xs font-medium text-gray-600 outline-none focus:outline-none dark:text-gray-300"
+                  value={state.size_label ?? (compType === "land" ? "Land Size (SF)" : "Building Size (SF)")}
+                  onChange={(e) =>
+                    setState((prev) =>
+                      prev ? { ...prev, size_label: e.target.value } : prev,
+                    )
+                  }
+                >
+                  {SIZE_LABEL_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
               </td>
               <td className="border-r border-gray-200 px-3 py-2 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
                 <input
                   type="number"
                   className="w-full bg-transparent font-mono text-gray-700 outline-none focus:outline-none dark:text-gray-200"
-                  value={state.subject_size || ""}
+                  value={state.subject_size ?? ""}
                   onChange={(e) =>
                     setState((prev) =>
                       prev
@@ -1234,30 +1610,72 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                   }
                 />
               </td>
-              {state.comps.map((c) => (
+              {state.comps.map((c, ci) => (
                 <td
                   key={c.id}
-                  className="border-r border-gray-200 px-3 py-2 font-mono text-gray-500 dark:border-gray-800 dark:text-gray-400"
+                  className="border-r border-gray-200 px-3 py-2 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
                 >
-                  {c.size ? c.size.toLocaleString() : "—"}
+                  <input
+                    type="number"
+                    className="w-full bg-transparent font-mono text-gray-500 outline-none focus:outline-none dark:text-gray-400"
+                    value={c.size ?? ""}
+                    onChange={(e) => {
+                      const v = Number.parseFloat(e.target.value) || 0;
+                      setState((prev) => {
+                        if (!prev) return prev;
+                        const comps = [...prev.comps];
+                        comps[ci] = { ...comps[ci]!, size: v };
+                        return { ...prev, comps };
+                      });
+                    }}
+                  />
                 </td>
               ))}
             </tr>
             <tr className="border-b-2 border-gray-300 dark:border-gray-700">
               <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                {compType === "sales"
-                  ? "Sale Price / SF (Adj)"
-                  : "Sale Price / SF"}
+                <select
+                  className="w-full border-0 bg-transparent text-xs font-medium text-gray-600 outline-none focus:outline-none dark:text-gray-300"
+                  value={state.price_label ?? (compType === "sales" ? "Sale Price / SF (Adj)" : "Sale Price / SF")}
+                  onChange={(e) =>
+                    setState((prev) =>
+                      prev ? { ...prev, price_label: e.target.value } : prev,
+                    )
+                  }
+                >
+                  {PRICE_LABEL_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
               </td>
               <td className="border-r border-gray-200 bg-gray-100 px-3 py-2 text-gray-400 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-600">
                 —
               </td>
-              {state.comps.map((c) => (
+              {state.comps.map((c, ci) => (
                 <td
                   key={c.id}
-                  className="border-r border-gray-200 bg-gray-100 px-3 py-2 font-mono font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-200"
+                  className="border-r border-gray-200 bg-gray-100 px-3 py-2 hover:bg-sky-50 dark:border-gray-800 dark:bg-gray-900/60 dark:hover:bg-sky-950/20"
                 >
-                  ${c.base_price_per_unit.toFixed(2)}
+                  <div className="flex items-center font-mono font-medium text-gray-700 dark:text-gray-200">
+                    <span className="mr-0.5">$</span>
+                    <input
+                      type="number"
+                      step={0.01}
+                      className="w-full bg-transparent outline-none focus:outline-none"
+                      value={c.base_price_per_unit ?? ""}
+                      onChange={(e) => {
+                        const v = Number.parseFloat(e.target.value) || 0;
+                        setState((prev) => {
+                          if (!prev) return prev;
+                          const comps = [...prev.comps];
+                          comps[ci] = { ...comps[ci]!, base_price_per_unit: v };
+                          return { ...prev, comps };
+                        });
+                      }}
+                    />
+                  </div>
                 </td>
               ))}
             </tr>
@@ -1278,12 +1696,15 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             </tr>
             {state.transaction_categories.map((cat, ci) => (
               <FragmentCategoryRows
-                key={cat.name}
+                key={`${cat.name}-${ci}`}
                 cat={cat}
                 catIndex={ci}
                 comps={state.comps}
                 transactionCategories={state.transaction_categories}
                 config={state.config}
+                compType={compType}
+                rawDataByComp={rawDataByComp}
+                fieldHeaderOptions={txFieldOptions}
                 onQualChange={(compId, q) =>
                   updateCell("tx", ci, compId, { qualitative: q })
                 }
@@ -1291,6 +1712,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                   updateCell("tx", ci, compId, { percentage: pct })
                 }
                 onSubjectChange={(v) => updateSubjectValue("tx", ci, v)}
+                onNameChange={(newName) => {
+                  setState((prev) => {
+                    if (!prev) return prev;
+                    const list = [...prev.transaction_categories];
+                    const existing = list[ci];
+                    if (!existing) return prev;
+                    list[ci] = { ...existing, name: newName };
+                    return { ...prev, transaction_categories: list };
+                  });
+                }}
                 onSuggestClick={(compId, e) => {
                   const text =
                     rationaleByCellRef.current.get(
@@ -1328,6 +1759,10 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                 cat={cat}
                 catIndex={ci}
                 comps={state.comps}
+                compType={compType}
+                rawDataByComp={rawDataByComp}
+                subjectCore={subjectCore}
+                fieldHeaderOptions={addableCategories}
                 onQualChange={(compId, q) =>
                   updateCell("prop", ci, compId, { qualitative: q })
                 }
@@ -1335,6 +1770,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                   updateCell("prop", ci, compId, { percentage: pct })
                 }
                 onSubjectChange={(v) => updateSubjectValue("prop", ci, v)}
+                onNameChange={(newName) => {
+                  setState((prev) => {
+                    if (!prev) return prev;
+                    const list = [...prev.property_categories];
+                    const existing = list[ci];
+                    if (!existing) return prev;
+                    list[ci] = { ...existing, name: newName };
+                    return { ...prev, property_categories: list };
+                  });
+                }}
                 onRemove={() => removePropertyCategory(ci)}
                 onSuggestClick={(compId, e) => {
                   const text =
@@ -1352,11 +1797,17 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
               />
             ))}
 
-            <tr>
+            <tr className="border-b border-gray-200 dark:border-gray-800/50">
               <td
                 colSpan={colCount}
-                className="h-3 bg-gray-100 dark:bg-gray-950"
-              />
+                className="bg-gray-100 px-3 py-1 dark:bg-gray-950"
+              >
+                <AddCategoryMenu
+                  options={addableCategories}
+                  existing={state.property_categories.map((c) => c.name)}
+                  onPick={addPropertyCategory}
+                />
+              </td>
             </tr>
 
             <tr className="border-t-2 border-gray-400 bg-gray-200 dark:border-gray-700 dark:bg-gray-800/70">
@@ -1518,9 +1969,13 @@ function FragmentCategoryRows({
   comps,
   transactionCategories,
   config,
+  compType,
+  rawDataByComp,
+  fieldHeaderOptions,
   onQualChange,
   onPctChange,
   onSubjectChange,
+  onNameChange,
   onSuggestClick,
 }: {
   cat: AdjustmentCategoryState;
@@ -1528,18 +1983,40 @@ function FragmentCategoryRows({
   comps: CompColumnState[];
   transactionCategories: AdjustmentCategoryState[];
   config: GridConfig;
+  compType: "land" | "sales";
+  rawDataByComp: Map<string, Record<string, unknown>>;
+  fieldHeaderOptions: string[];
   onQualChange: (compId: string, q: string) => void;
   onPctChange: (compId: string, pct: number) => void;
   onSubjectChange: (v: string) => void;
+  onNameChange: (newName: string) => void;
   onSuggestClick: (compId: string, e: MouseEvent) => void;
 }) {
   const isMC = cat.name === "Market Conditions";
+  const isDataRow = !isQualitativeRow(cat.name, compType) && !isMC;
   return (
     <>
-      {/* Qualitative row */}
+      {/* Qualitative / data-value row */}
       <tr className="border-b border-gray-200 dark:border-gray-800/50">
         <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1.5 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
-          {cat.name}
+          {isMC ? (
+            cat.name
+          ) : (
+            <select
+              className="w-full border-0 bg-transparent text-[11px] font-medium text-gray-600 outline-none focus:outline-none dark:text-gray-200"
+              value={cat.name}
+              onChange={(e) => onNameChange(e.target.value)}
+            >
+              <option value={cat.name}>{cat.name}</option>
+              {fieldHeaderOptions
+                .filter((h) => h !== cat.name)
+                .map((h) => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+            </select>
+          )}
         </td>
         {isMC ? (
           <td className="border-r border-gray-200 px-3 py-1.5 dark:border-gray-800">
@@ -1565,6 +2042,22 @@ function FragmentCategoryRows({
               <span className="text-[11px] text-gray-500 dark:text-gray-400">
                 {formatSaleDate(c.date_of_sale)}
               </span>
+            </td>
+          ) : isDataRow ? (
+            <td
+              key={c.id}
+              className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
+            >
+              <input
+                className="w-full bg-transparent text-[11px] text-gray-500 outline-none focus:outline-none dark:text-gray-400"
+                value={
+                  cat.comp_values[c.id]?.qualitative &&
+                  cat.comp_values[c.id]?.qualitative !== "Similar"
+                    ? cat.comp_values[c.id]!.qualitative
+                    : formatFieldValue(cat.name, rawDataByComp.get(c.id))
+                }
+                onChange={(e) => onQualChange(c.id, e.target.value)}
+              />
             </td>
           ) : (
             <td
@@ -1673,29 +2166,59 @@ function FragmentPropertyRows({
   cat,
   catIndex: _ci,
   comps,
+  compType,
+  rawDataByComp,
+  subjectCore,
+  fieldHeaderOptions,
   onQualChange,
   onPctChange,
   onSubjectChange,
+  onNameChange,
   onRemove,
   onSuggestClick,
 }: {
   cat: AdjustmentCategoryState;
   catIndex: number;
   comps: CompColumnState[];
+  compType: "land" | "sales";
+  rawDataByComp: Map<string, Record<string, unknown>>;
+  subjectCore: Record<string, unknown>;
+  fieldHeaderOptions: string[];
   onQualChange: (compId: string, q: string) => void;
   onPctChange: (compId: string, pct: number) => void;
   onSubjectChange: (v: string) => void;
+  onNameChange: (newName: string) => void;
   onRemove: () => void;
   onSuggestClick: (compId: string, e: MouseEvent) => void;
 }) {
   void _ci;
+  const qualitative = isQualitativeRow(cat.name, compType);
+  const fixed = isFixedLabel(cat.name, compType);
+  const isDataRow = !qualitative;
   return (
     <>
-      {/* Qualitative row */}
+      {/* Qualitative / data-value row */}
       <tr className="border-b border-gray-200 dark:border-gray-800/50">
         <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-1.5 font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
           <span className="flex items-center justify-between gap-1">
-            {cat.name}
+            {fixed ? (
+              cat.name
+            ) : (
+              <select
+                className="w-full border-0 bg-transparent text-[11px] font-medium text-gray-600 outline-none focus:outline-none dark:text-gray-200"
+                value={cat.name}
+                onChange={(e) => onNameChange(e.target.value)}
+              >
+                <option value={cat.name}>{cat.name}</option>
+                {fieldHeaderOptions
+                  .filter((h) => h !== cat.name)
+                  .map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+              </select>
+            )}
             <button
               type="button"
               onClick={onRemove}
@@ -1706,24 +2229,43 @@ function FragmentPropertyRows({
             </button>
           </span>
         </td>
-        <td className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
-          <input
-            className="w-full bg-transparent text-[11px] text-gray-600 outline-none focus:outline-none dark:text-gray-200"
-            value={cat.subject_value}
-            onChange={(e) => onSubjectChange(e.target.value)}
-          />
-        </td>
-        {comps.map((c) => (
-          <td
-            key={c.id}
-            className="border-r border-gray-200 px-2 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
-          >
-            <QualSelect
-              value={cat.comp_values[c.id]?.qualitative ?? "Similar"}
-              onChange={(q) => onQualChange(c.id, q)}
+        {isDataRow ? (
+          <td className="border-r border-gray-200 px-3 py-1.5 dark:border-gray-800">
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">
+              {formatFieldValue(cat.name, subjectCore)}
+            </span>
+          </td>
+        ) : (
+          <td className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">
+            <input
+              className="w-full bg-transparent text-[11px] text-gray-600 outline-none focus:outline-none dark:text-gray-200"
+              value={cat.subject_value}
+              onChange={(e) => onSubjectChange(e.target.value)}
             />
           </td>
-        ))}
+        )}
+        {comps.map((c) =>
+          isDataRow ? (
+            <td
+              key={c.id}
+              className="border-r border-gray-200 px-3 py-1.5 dark:border-gray-800"
+            >
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                {formatFieldValue(cat.name, rawDataByComp.get(c.id))}
+              </span>
+            </td>
+          ) : (
+            <td
+              key={c.id}
+              className="border-r border-gray-200 px-2 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20"
+            >
+              <QualSelect
+                value={cat.comp_values[c.id]?.qualitative ?? "Similar"}
+                onChange={(q) => onQualChange(c.id, q)}
+              />
+            </td>
+          ),
+        )}
       </tr>
       {/* Percentage row — emphasis border separates each property category group */}
       <tr className="border-b-2 border-gray-300 dark:border-gray-700/60">
@@ -1777,7 +2319,9 @@ function FragmentPropertyRows({
 
 function qualColor(value: string): string {
   if (value === "Inferior") return "text-red-600 dark:text-red-400";
+  if (value === "Slightly Inferior") return "text-red-400 dark:text-red-300";
   if (value === "Superior") return "text-emerald-600 dark:text-emerald-400";
+  if (value === "Slightly Superior") return "text-emerald-400 dark:text-emerald-300";
   if (value === "TODO") return "text-amber-600 dark:text-amber-400";
   return "text-gray-600 dark:text-gray-300";
 }
@@ -1837,13 +2381,14 @@ function AddCategoryMenu({
   const filtered = options.filter((o) => !existing.includes(o));
 
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        title="Add property adjustment category"
+        className="flex h-5 w-5 items-center justify-center rounded border border-dashed border-gray-400 text-sm leading-none text-gray-400 transition-colors hover:border-blue-500 hover:bg-blue-500/10 hover:text-blue-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-400 dark:hover:text-blue-400"
       >
-        Add category
+        +
       </button>
       {open && (
         <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">

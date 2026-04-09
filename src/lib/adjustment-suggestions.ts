@@ -4,7 +4,7 @@ import { analyzeAdjustmentPatterns } from "~/lib/adjustment-patterns";
 import type { AdjustmentPatternSummary } from "~/lib/adjustment-patterns";
 import type { ExtractedAdjustmentGrid } from "~/lib/report-md-parser";
 import { findSimilarProjects } from "~/lib/similar-projects";
-import { acToSf, salePricePerSf } from "~/lib/calculated-fields";
+import { acToSf, adjSalePrice, excessLandValue, salePricePerSf } from "~/lib/calculated-fields";
 import { createClient } from "~/utils/supabase/server";
 
 export interface AdjustmentSuggestion {
@@ -393,9 +393,30 @@ function compBasePriceAndSize(
 
   const size = compType === "land" ? landSf ?? 0 : bldSf ?? landSf ?? 0;
   const denomSf = compType === "land" ? landSf : bldSf ?? landSf;
-  const baseRaw = salePricePerSf(salePrice, denomSf);
-  const spSf = numFromRaw(raw, "Sale Price / SF");
-  const base = baseRaw ?? spSf ?? 0;
+  const grossPerSf = salePricePerSf(salePrice, denomSf);
+
+  let base: number;
+  if (compType === "sales") {
+    const elVal =
+      numFromRaw(raw, "Excess Land Value") ??
+      excessLandValue(
+        numFromRaw(raw, "Excess Land Size (AC)"),
+        numFromRaw(raw, "Excess Land Value / AC"),
+      );
+    const adjPrice = adjSalePrice(salePrice, elVal);
+    const adjPerSf = salePricePerSf(adjPrice, bldSf);
+    base =
+      adjPerSf ??
+      numFromRaw(raw, "Sale Price / SF (Adj)") ??
+      grossPerSf ??
+      numFromRaw(raw, "Sale Price / SF") ??
+      0;
+  } else {
+    base =
+      grossPerSf ??
+      numFromRaw(raw, "Sale Price / SF") ??
+      0;
+  }
 
   return { base, size };
 }
