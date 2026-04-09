@@ -489,7 +489,7 @@ function CompRendered({
   return (
     <div
       id={`comp-render-${comp.id}`}
-      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-8 text-gray-900 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 print:rounded-none print:border-gray-200 print:bg-white print:text-gray-900"
+      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-8 text-gray-900 shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 dark:ring-white/5 print:rounded-none print:border-gray-200 print:bg-white print:text-gray-900 print:shadow-none print:ring-0"
     >
       <div className="mb-6 text-center">
         <h2 className="text-lg font-bold uppercase text-gray-900 dark:text-gray-100 print:text-gray-900">
@@ -642,14 +642,14 @@ function TemplateEditor({
       {sections.map((section, si) => (
         <div
           key={`section-${si}`}
-          className="rounded-lg border border-gray-700 bg-gray-800/50 p-4"
+          className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
         >
           <div className="mb-3 flex items-center gap-3">
             <input
               type="text"
               value={section.title}
               onChange={(e) => updateSectionTitle(si, e.target.value)}
-              className="flex-1 rounded border border-gray-600 bg-gray-900 px-2 py-1 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
+              className="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
               placeholder="Section title"
             />
             <select
@@ -660,7 +660,7 @@ function TemplateEditor({
                   e.target.value as CompTemplateSection["side"],
                 )
               }
-              className="rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-300"
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
             >
               <option value="left">Left</option>
               <option value="right">Right</option>
@@ -676,7 +676,7 @@ function TemplateEditor({
             <button
               type="button"
               onClick={() => removeSection(si)}
-              className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-300"
+              className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300"
             >
               Remove
             </button>
@@ -691,7 +691,7 @@ function TemplateEditor({
                 <select
                   value={row.fieldKey}
                   onChange={(e) => updateRow(si, ri, e.target.value)}
-                  className="min-w-0 flex-1 rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-sm text-gray-100"
+                  className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                 >
                   <option value="">-- Select field --</option>
                   {row.fieldKey &&
@@ -709,7 +709,7 @@ function TemplateEditor({
                 <button
                   type="button"
                   onClick={() => removeRow(si, ri)}
-                  className="flex-shrink-0 rounded px-1.5 py-1 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300"
+                  className="flex-shrink-0 rounded px-1.5 py-1 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300"
                   title="Remove row"
                 >
                   &minus;
@@ -717,7 +717,7 @@ function TemplateEditor({
               </div>
             ))}
             {section.rows.length === 0 && (
-              <p className="py-1 text-xs italic text-gray-500">
+              <p className="py-1 text-xs text-gray-600 italic dark:text-gray-500">
                 No rows. Click &ldquo;+ Row&rdquo; to add one.
               </p>
             )}
@@ -729,7 +729,7 @@ function TemplateEditor({
         <button
           type="button"
           onClick={addSection}
-          className="rounded border border-dashed border-gray-600 px-3 py-1.5 text-sm text-gray-400 hover:border-gray-500 hover:text-gray-300"
+          className="rounded border border-dashed border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-transparent dark:hover:text-gray-300"
         >
           + Add Section
         </button>
@@ -737,7 +737,7 @@ function TemplateEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-4 py-1.5 text-sm text-gray-400 hover:text-gray-200"
+          className="rounded px-4 py-1.5 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
         >
           Cancel
         </button>
@@ -878,8 +878,8 @@ export function CompUITemplate({
 
   if (projectLoading || !project) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <p className="text-gray-400">Loading project&hellip;</p>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <p className="text-gray-600 dark:text-gray-400">Loading project&hellip;</p>
       </div>
     );
   }
@@ -888,16 +888,16 @@ export function CompUITemplate({
     comparables.length > 0 ? (dataMap[comparables[0]!.id] ?? {}) : {};
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6 text-gray-100">
+    <div className="min-h-screen bg-gray-50 p-6 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
       <div className="mx-auto max-w-6xl space-y-5">
         {/* ---- Toolbar ---- */}
-        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-800 bg-gray-900 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:shadow-none">
           {/* Jump-to selector (render mode only) */}
           {!editMode && comparables.length > 1 && (
             <label className="flex items-center gap-2 text-sm">
-              <span className="text-gray-400">Jump to:</span>
+              <span className="text-gray-600 dark:text-gray-400">Jump to:</span>
               <select
-                className="rounded border border-gray-600 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-blue-500/30"
                 onChange={(e) => scrollToComp(e.target.value)}
                 defaultValue=""
               >
@@ -917,9 +917,9 @@ export function CompUITemplate({
           {/* Sales variant toggle */}
           {compType === "Sales" && (
             <label className="flex items-center gap-2 text-sm">
-              <span className="text-gray-400">Variant:</span>
+              <span className="text-gray-600 dark:text-gray-400">Variant:</span>
               <select
-                className="rounded border border-gray-600 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-blue-500/30"
                 value={salesVariant}
                 onChange={(e) => {
                   setSalesVariant(e.target.value as SalesVariant);
@@ -939,7 +939,7 @@ export function CompUITemplate({
               <button
                 type="button"
                 onClick={enterEditMode}
-                className="rounded border border-gray-600 px-4 py-1.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-gray-100"
+                className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-800/50 dark:hover:text-gray-100"
               >
                 Edit Template
               </button>
@@ -972,7 +972,7 @@ export function CompUITemplate({
                 Copy All
               </button>
               {copyFeedback && (
-                <span className="text-sm text-green-400">
+                <span className="text-sm text-green-700 dark:text-green-400">
                   {copyFeedback}
                 </span>
               )}
@@ -981,7 +981,7 @@ export function CompUITemplate({
             <button
               type="button"
               onClick={exitEditMode}
-              className="rounded border border-gray-600 px-4 py-1.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-gray-100"
+              className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-800/50 dark:hover:text-gray-100"
             >
               Done Editing
             </button>
@@ -989,14 +989,16 @@ export function CompUITemplate({
         </div>
 
         {parsedLoading && (
-          <p className="text-sm text-gray-500">Loading comp data&hellip;</p>
+          <p className="text-sm text-gray-600 dark:text-gray-500">
+            Loading comp data&hellip;
+          </p>
         )}
 
         {/* ---- Edit Mode ---- */}
         {editMode && (
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
+              <h3 className="mb-3 text-sm font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Template Configuration
               </h3>
               <TemplateEditor
@@ -1009,7 +1011,7 @@ export function CompUITemplate({
               />
             </div>
             <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
+              <h3 className="mb-3 text-sm font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Live Preview (Comp #1)
               </h3>
               {comparables[0] ? (
@@ -1021,7 +1023,7 @@ export function CompUITemplate({
                   sections={editSections}
                 />
               ) : (
-                <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-700 text-sm text-gray-500">
+                <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-500">
                   No comparables to preview.
                 </div>
               )}
@@ -1043,7 +1045,7 @@ export function CompUITemplate({
               />
             ))}
             {comparables.length === 0 && !parsedLoading && (
-              <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-700 text-sm text-gray-500">
+              <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-500">
                 No {typeSlug.replace("-", " ")} comparables found.
               </div>
             )}

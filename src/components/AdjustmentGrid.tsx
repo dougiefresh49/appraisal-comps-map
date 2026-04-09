@@ -11,6 +11,7 @@ import {
 import { calcMonthlyIncrease } from "~/lib/calculated-fields";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import type { AdjustmentGridSuggestions } from "~/lib/adjustment-suggestions";
+import { CompDetailSidePanel } from "~/components/CompDetailSidePanel";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -364,6 +365,12 @@ function suggestionsToState(
   const tx = compType === "land" ? LAND_TX : SALES_TX;
   const prop = compType === "land" ? LAND_PROP : SALES_PROP;
   const config = defaultConfig(compType);
+  if (data.project_effective_date) {
+    config.report_effective_date = data.project_effective_date.slice(0, 10);
+  }
+  if (data.project_percent_inc_per_month != null) {
+    config.percent_inc_per_month = data.project_percent_inc_per_month;
+  }
   const map = buildSuggestionMap(data.suggestions);
 
   const comps: CompColumnState[] = data.comps.map((c) => ({ ...c }));
@@ -494,6 +501,7 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     y: number;
     text: string;
   } | null>(null);
+  const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
 
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -982,8 +990,17 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
   const valueSummarySizeLabel =
     compType === "land" ? "Land Size (SF)" : "Improvement Size (SF)";
 
+  const selectedComp = selectedCompId
+    ? state.comps.find((c) => c.id === selectedCompId)
+    : null;
+  const selectedCompLabel = selectedComp
+    ? `Comp #${selectedComp.number}`
+    : "";
+
   return (
-    <div className="space-y-3">
+    <>
+    <div>
+      <div className="space-y-3">
       {/* Action bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
@@ -1131,7 +1148,21 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
               {state.comps.map((c) => (
                 <th
                   key={c.id}
-                  className="w-38 border-r border-gray-500 px-3 py-3 text-left last:border-r-0 dark:border-gray-700"
+                  onClick={() =>
+                    setSelectedCompId((prev) =>
+                      prev === c.id ? null : c.id,
+                    )
+                  }
+                  title={
+                    selectedCompId === c.id
+                      ? "Click to close comp detail"
+                      : "Click to open comp detail"
+                  }
+                  className={`w-38 cursor-pointer select-none border-r border-gray-500 px-3 py-3 text-left transition-colors last:border-r-0 dark:border-gray-700 ${
+                    selectedCompId === c.id
+                      ? "bg-blue-600 dark:bg-blue-700"
+                      : "hover:bg-gray-400 dark:hover:bg-gray-700/80"
+                  }`}
                 >
                   <div className="text-[11px] font-semibold text-white dark:text-gray-200">
                     Comp #{c.number}
@@ -1139,6 +1170,11 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                   <div className="mt-0.5 text-[10px] leading-snug font-normal break-words text-gray-200 dark:text-gray-500">
                     {c.address}
                   </div>
+                  {selectedCompId === c.id && (
+                    <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-blue-200">
+                      ← Detail open
+                    </div>
+                  )}
                 </th>
               ))}
             </tr>
@@ -1455,7 +1491,20 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
           <p className="text-gray-500 dark:text-gray-400">{popover.text}</p>
         </div>
       )}
+      </div>
     </div>
+
+    {/* Comp detail side panel — fixed to right viewport edge, full height */}
+    {selectedCompId && selectedComp && (
+      <CompDetailSidePanel
+        projectId={projectId}
+        compId={selectedCompId}
+        compType={compType}
+        compLabel={selectedCompLabel}
+        onClose={() => setSelectedCompId(null)}
+      />
+    )}
+    </>
   );
 }
 

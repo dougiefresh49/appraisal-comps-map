@@ -16,6 +16,7 @@ export const FRONTAGE_OPTIONS = [
 export type FrontageType = (typeof FRONTAGE_OPTIONS)[number];
 
 export const HAS_FENCING_OPTIONS = ["Yes", "Partial", "No"] as const;
+export type HasFencing = (typeof HAS_FENCING_OPTIONS)[number];
 
 export const FENCE_TYPE_OPTIONS = [
   "Wood",
@@ -24,6 +25,7 @@ export const FENCE_TYPE_OPTIONS = [
   "Metal",
   "Unk",
 ] as const;
+export type FenceType = (typeof FENCE_TYPE_OPTIONS)[number];
 
 export const UTILS_ELECTRICITY_OPTIONS = ["Yes", "No", "Unk"] as const;
 
@@ -36,6 +38,10 @@ export const UTILITIES_STATUS_OPTIONS = [
   "Part. Available",
   "None",
 ] as const;
+export type UtilitiesStatus = (typeof UTILITIES_STATUS_OPTIONS)[number];
+
+export const OVERALL_LOCATION_OPTIONS = ["Good", "Average", "Fair", "Poor"] as const;
+export type OverallLocation = (typeof OVERALL_LOCATION_OPTIONS)[number];
 
 export const SURFACE_OPTIONS = ["Cleared", "Caliche", "Raw"] as const;
 

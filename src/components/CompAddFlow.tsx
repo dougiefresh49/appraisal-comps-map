@@ -208,7 +208,7 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
           <svg
-            className="h-4 w-4 text-gray-400"
+            className="h-4 w-4 text-gray-400 dark:text-gray-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -226,7 +226,7 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search by address or APN…"
-          className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 pl-9 pr-3 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
           autoFocus
         />
         {isSearching && (
@@ -238,12 +238,12 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
 
       {/* Error */}
       {searchError && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-3 py-2 text-xs text-red-300">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           {searchError}
         </div>
       )}
       {cloneError && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-3 py-2 text-xs text-red-300">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           Clone failed: {cloneError}
         </div>
       )}
@@ -251,16 +251,16 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
       {/* Results list */}
       <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
         {!hasSearched.current && !isSearching && (
-          <div className="rounded-md border border-dashed border-gray-700 bg-gray-800/50 py-8 text-center">
-            <p className="text-xs text-gray-500">
+          <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-8 text-center dark:border-gray-700 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-600 dark:text-gray-500">
               Search by address or APN to find comps from past reports
             </p>
           </div>
         )}
 
         {noResults && (
-          <div className="rounded-md border border-dashed border-gray-700 bg-gray-800/50 py-6 text-center">
-            <p className="text-xs text-gray-500">No comps found matching &ldquo;{query}&rdquo;</p>
+          <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-6 text-center dark:border-gray-700 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-600 dark:text-gray-500">No comps found matching &ldquo;{query}&rdquo;</p>
           </div>
         )}
 
@@ -272,31 +272,31 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
           return (
             <div
               key={result.comp_id}
-              className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 transition hover:border-gray-600"
+              className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 transition hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   {/* Address */}
-                  <p className="truncate text-sm font-medium text-gray-100">
+                  <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                     {result.address || "—"}
                   </p>
 
                   {/* Key fields row */}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400">
                     {salePrice && (
                       <span>
-                        <span className="text-gray-500">Price:</span>{" "}
-                        <span className="text-gray-300">{salePrice}</span>
+                        <span className="text-gray-500 dark:text-gray-500">Price:</span>{" "}
+                        <span className="text-gray-800 dark:text-gray-300">{salePrice}</span>
                       </span>
                     )}
                     {dateOfSale && (
                       <span>
                         <span className="text-gray-500">Date:</span>{" "}
-                        <span className="text-gray-300">{dateOfSale}</span>
+                        <span className="text-gray-800 dark:text-gray-300">{dateOfSale}</span>
                       </span>
                     )}
                     <span>
-                      <span className="inline-flex items-center rounded-full bg-gray-700 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
+                      <span className="inline-flex items-center rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                         {result.comp_type}
                       </span>
                     </span>
@@ -304,8 +304,8 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
 
                   {/* Used in */}
                   {result.projects_using.length > 0 && (
-                    <p className="text-[11px] text-gray-500">
-                      <span className="text-gray-600">Used in:</span>{" "}
+                    <p className="text-[11px] text-gray-600 dark:text-gray-500">
+                      <span className="text-gray-700 dark:text-gray-600">Used in:</span>{" "}
                       {result.projects_using
                         .map((p) => p.project_name)
                         .join(", ")}
@@ -570,15 +570,15 @@ export function CompAddFlow({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-lg rounded-xl bg-gray-900 shadow-2xl ring-1 ring-gray-700">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-100">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
             {isAddMode ? "Add Comparable" : "Parse Comp Files"}
           </h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            className="rounded-md p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             aria-label="Close"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -589,14 +589,14 @@ export function CompAddFlow({
 
         {/* Tabs — only shown in add mode */}
         {showTabs && (
-          <div className="flex border-b border-gray-700">
+          <div className="flex border-b border-gray-200 dark:border-gray-700">
             <button
               type="button"
               onClick={() => setActiveTab("drive")}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === "drive"
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "border-b-2 border-blue-600 text-blue-700 dark:border-blue-500 dark:text-blue-400"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-500 dark:hover:text-gray-300"
               }`}
             >
               From Drive
@@ -606,8 +606,8 @@ export function CompAddFlow({
               onClick={() => setActiveTab("search")}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === "search"
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "border-b-2 border-blue-600 text-blue-700 dark:border-blue-500 dark:text-blue-400"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-500 dark:hover:text-gray-300"
               }`}
             >
               Search Past Comps
@@ -636,16 +636,16 @@ export function CompAddFlow({
             <>
               {step === "select-folder" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     Select a Drive folder for this{" "}
                     {compType.toLowerCase()} comp.
                   </p>
                   {isLoading ? (
-                    <div className="py-8 text-center text-sm text-gray-500">
+                    <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-500">
                       Loading Drive folders…
                     </div>
                   ) : folders.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-700 bg-gray-800/50 py-8 text-center text-sm text-gray-500">
+                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-8 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500">
                       {hasFolderSource
                         ? `No ${compType.toLowerCase()} comp folders found in Drive.`
                         : "Project folder not configured. Set it on the project dashboard."}
@@ -663,14 +663,14 @@ export function CompAddFlow({
                             disabled={isUsed}
                             className={`flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition ${
                               isUsed
-                                ? "cursor-not-allowed text-gray-600 opacity-50"
-                                : "text-gray-300 hover:bg-gray-800"
+                                ? "cursor-not-allowed text-gray-400 opacity-60 dark:text-gray-600"
+                                : "text-gray-800 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                             }`}
                           >
                             <span className="text-base">📁</span>
                             <span className="flex-1 truncate">{folder.name}</span>
                             {isUsed && (
-                              <span className="shrink-0 rounded-full bg-gray-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                              <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-gray-600 uppercase dark:bg-gray-700 dark:text-gray-400">
                                 Added
                               </span>
                             )}
@@ -685,7 +685,7 @@ export function CompAddFlow({
               {step === "select-files" && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       {selectedFolderName
                         ? `Files in "${selectedFolderName}"`
                         : "Select files to extract comp data from."}
@@ -694,7 +694,7 @@ export function CompAddFlow({
                       <button
                         type="button"
                         onClick={selectAllFiles}
-                        className="text-xs font-medium text-blue-400 hover:text-blue-300"
+                        className="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Select all
                       </button>
@@ -702,11 +702,11 @@ export function CompAddFlow({
                   </div>
 
                   {isLoading ? (
-                    <div className="py-8 text-center text-sm text-gray-500">
+                    <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-500">
                       Loading files…
                     </div>
                   ) : files.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-700 bg-gray-800/50 py-8 text-center text-sm text-gray-500">
+                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 py-8 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500">
                       No files found in this folder.
                     </div>
                   ) : (
@@ -714,15 +714,15 @@ export function CompAddFlow({
                       {files.map((file) => (
                         <label
                           key={file.id}
-                          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 hover:bg-gray-800"
+                          className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
                         >
                           <input
                             type="checkbox"
                             checked={selectedFileIds.has(file.id)}
                             onChange={() => toggleFileSelection(file.id)}
-                            className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600"
+                            className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 dark:border-gray-600 dark:bg-gray-700"
                           />
-                          <span className="text-sm text-gray-300">
+                          <span className="text-sm text-gray-800 dark:text-gray-300">
                             {file.name}
                           </span>
                         </label>
@@ -731,7 +731,7 @@ export function CompAddFlow({
                   )}
 
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-500">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-500">
                       Extra Context (optional)
                     </label>
                     <textarea
@@ -739,7 +739,7 @@ export function CompAddFlow({
                       onChange={(e) => setExtraContext(e.target.value)}
                       placeholder="Any additional details to help with extraction…"
                       rows={2}
-                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                     />
                   </div>
 
@@ -753,7 +753,7 @@ export function CompAddFlow({
                           setSelectedFolderId(null);
                           setSelectedFolderName(null);
                         }}
-                        className="flex-1 rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+                        className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                       >
                         Back
                       </button>
@@ -773,14 +773,14 @@ export function CompAddFlow({
               {step === "parsing" && (
                 <div className="space-y-3 py-12 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                  <p className="text-sm font-medium text-gray-300">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
                     {isAddMode
                       ? "Creating comp & extracting data with AI…"
                       : onPreviewComplete
                         ? "Extracting proposed data with AI…"
                         : "Extracting comp data with AI…"}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-600 dark:text-gray-500">
                     This may take 15–30 seconds.
                   </p>
                 </div>
@@ -788,10 +788,10 @@ export function CompAddFlow({
 
               {step === "done" && (
                 <div className="space-y-4 py-8 text-center">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-900/40 text-2xl text-green-400">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl text-green-700 dark:bg-green-900/40 dark:text-green-400">
                     ✓
                   </div>
-                  <p className="text-sm font-medium text-gray-300">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
                     Successfully parsed {parsedCount} file
                     {parsedCount !== 1 ? "s" : ""}!
                   </p>
@@ -809,7 +809,7 @@ export function CompAddFlow({
 
               {step === "error" && (
                 <div className="space-y-4 py-4">
-                  <div className="rounded-md border border-red-800 bg-red-950 px-4 py-3 text-sm text-red-300">
+                  <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
                     {errorMessage ?? "An error occurred"}
                   </div>
                   <div className="flex gap-3">
@@ -818,13 +818,13 @@ export function CompAddFlow({
                         setErrorMessage(null);
                         setStep("select-folder");
                       }}
-                      className="flex-1 rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+                      className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                     >
                       Retry
                     </button>
                     <button
                       onClick={onClose}
-                      className="flex-1 rounded-md border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+                      className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                     >
                       Close
                     </button>

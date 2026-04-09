@@ -147,7 +147,7 @@ function parseReportDueDateToDb(rawLine: string): string | null {
   for (const fmt of REPORT_DATE_PARSE_FORMATS) {
     const d = parse(trimmed, fmt, PARSE_REFERENCE_DATE);
     if (isValid(d)) {
-      return format(d, "MM/dd/yyyy");
+      return format(d, "yyyy-MM-dd");
     }
   }
   return null;

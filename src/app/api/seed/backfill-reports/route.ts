@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
+import { format } from "date-fns";
 import { createClient, createServiceClient } from "~/utils/supabase/server";
 import { generateEmbedding } from "~/lib/embeddings";
 import { GoogleGenAI } from "@google/genai";
@@ -10,6 +11,7 @@ import {
   normalizeSubjectCoreForDb,
   REPORT_MD_SECTION_KEYS,
 } from "~/lib/report-md-parser";
+import { parseEngagementDateToDate } from "~/utils/parse-engagement-date";
 
 const TAG = "[backfill-reports]";
 
@@ -289,8 +291,10 @@ async function runMarkdownBackfillFile(opts: {
         projectPatch.client_name = parsed.cover.client_name;
       if (parsed.cover.client_company)
         projectPatch.client_company = parsed.cover.client_company;
-      if (parsed.cover.effective_date)
-        projectPatch.effective_date = parsed.cover.effective_date;
+      if (parsed.cover.effective_date) {
+        const d = parseEngagementDateToDate(parsed.cover.effective_date);
+        if (d) projectPatch.effective_date = format(d, "yyyy-MM-dd");
+      }
       if (parsed.cover.property_type)
         projectPatch.property_type = parsed.cover.property_type;
 

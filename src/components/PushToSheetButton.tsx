@@ -175,8 +175,8 @@ export const PushToSheetButton = forwardRef<
             })}
         className={
           iconOnly
-            ? `inline-flex ${triggerSize} shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-emerald-700 hover:bg-emerald-950/30 hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 ${className}`
-            : `inline-flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/80 px-2.5 py-1.5 text-xs font-medium text-gray-300 transition hover:border-emerald-700 hover:bg-emerald-950/30 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 ${className}`
+            ? `inline-flex ${triggerSize} shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300 dark:focus-visible:ring-emerald-500/50 ${className}`
+            : `inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300 ${className}`
         }
       >
         {status === "pushing" ? (
@@ -192,13 +192,13 @@ export const PushToSheetButton = forwardRef<
 
       {/* Inline status feedback */}
       {showInlineFeedback && status === "success" && (
-        <span className="text-xs font-medium text-emerald-400">
+        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
           ✓ Pushed to sheet
         </span>
       )}
       {showInlineFeedback && status === "error" && errorMessage && (
         <span
-          className="max-w-xs truncate text-xs text-red-400"
+          className="max-w-xs truncate text-xs text-red-600 dark:text-red-400"
           title={errorMessage}
         >
           ✗ {errorMessage}

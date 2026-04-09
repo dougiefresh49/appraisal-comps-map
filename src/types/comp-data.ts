@@ -2,7 +2,14 @@
 // Utility Types
 // ============================================================
 
-import type { FrontageType, ZoningLocation } from "./comp-field-options";
+import type {
+  FrontageType,
+  ZoningLocation,
+  HasFencing,
+  FenceType,
+  UtilitiesStatus,
+  OverallLocation,
+} from "./comp-field-options";
 
 export type { ZoningLocation } from "./comp-field-options";
 
@@ -83,9 +90,14 @@ export interface LandSaleData {
   Legal: string | null;
   Corner: boolean;
   "Highway Frontage": boolean;
+  Frontage: FrontageType | null;
+  "Has Fencing": HasFencing | null;
+  "Fence Type": FenceType | null;
+  Fencing: string | null;
   "Utils - Electricity": YesNoUnknown;
   "Utils - Water": UtilsWater | null;
   "Utils - Sewer": UtilsSewer | null;
+  Utilities: UtilitiesStatus | null;
   Surface: LandSurface | null;
   "Zoning Location": string;
   "Zoning Description": string;
@@ -112,47 +124,61 @@ export interface SaleData {
   "Date of Sale": string;
   "Market Conditions": Generated;
   "Sale Price": string;
+  "Adj Sale Price": Generated;
   "Financing Terms": string;
   "Property Rights": string;
   "Conditions of Sale": string;
+  "Renovation Cost": number | null;
   "Sale Price / SF": Generated;
+  "Sale Price / SF (Adj)": Generated;
   "Improvements / SF": Generated;
-  "Land Size (AC)": number | null;
-  "Land Size (SF)": number | null;
-  "Land Value": number | null;
-  APN: string | null;
-  Legal: string | null;
-  "Building Size (SF)": number | null;
+  "Land Size (AC)": Generated;
+  "Land Size (SF)": Generated;
+  "Excess Land Size (AC)": number | null;
+  "Excess Land Value / AC": number | null;
+  "Excess Land Value": Generated;
+  APN: Generated;
+  Legal: Generated;
+  "Parking (SF)": Generated;
+  "Building Size (SF)": Generated;
+  "Office Area (SF)": Generated;
+  "Warehouse Area (SF)": Generated;
+  "Office %": Generated;
+  "Warehouse %": Generated;
   "Occupancy %": string | null;
-  "Land / Bld Ratio": number | null;
+  "Land / Bld Ratio": Generated;
+  "Land / Bld Ratio (Adj)": Generated;
   "Property Type": string | null;
   Construction: string | null;
-  "Other Features": string | null;
-  "Parking (SF)": number | null;
-  Buildings: number | null;
-  "Year Built": number | string | null;
-  "Effective Age": Generated;
-  Condition: Condition | null;
+  "Other Features Description": string | null;
+  "Other Features": Generated;
   HVAC: HvacOptions;
   "Overhead Doors": string | null;
   "Wash Bay": YesNoUnknown;
   Hoisting: string | null;
+  "Has Fencing": string | null;
+  Buildings: Generated;
+  "Year Built": Generated;
+  "Effective Age": Generated;
+  Age: Generated;
+  Condition: Condition | null;
   "Zoning Location": string;
   "Zoning Description": string;
-  Zoning: string | null;
+  Zoning: Generated;
+  "Rent / Month": number | null;
   "Rent / SF": Generated;
   "Potential Gross Income": Generated;
-  "Vacancy %": string;
-  Vacancy: string | null;
-  "Effective Gross Income": string | null;
-  Taxes: string | null;
-  Insurance: string | null;
-  Expenses: string | null;
-  "Net Operating Income": string | null;
-  "Overall Cap Rate": string | null;
-  GPI: string | null;
-  "Gross Income Multiplier": number | null;
-  "Potential Value": string | null;
+  "Vacancy %": Generated;
+  Vacancy: Generated;
+  "Effective Gross Income": Generated;
+  Taxes: Generated;
+  Insurance: Generated;
+  Expenses: Generated;
+  "Net Operating Income": Generated;
+  "Overall Cap Rate": Generated;
+  GPI: Generated;
+  "Gross Income Multiplier": Generated;
+  "Potential Value": Generated;
   "MLS #": string | null;
   "Verification Type": VerificationType | null;
   "Verified By": string | null;
@@ -243,11 +269,13 @@ export interface SubjectData {
   "Other Features": string | null;
   Hoisting: YesNoUnknown;
   "Wash Bay": YesNoUnknown;
+  "Overall Location": OverallLocation | null;
   Corner: boolean;
   Frontage: FrontageType | null;
   "Utils - Electricity": YesNoUnknown;
   "Utils - Water": UtilsWater | null;
   "Utils - Sewer": UtilsSewer | null;
+  Utilities: UtilitiesStatus | null;
   Surface: LandSurface | null;
   Construction: string | null;
   Condition: Condition;
@@ -275,9 +303,12 @@ export interface ParcelData {
   "Lot #": string | null;
   "Size (AC)": number | null;
   "Size (SF)": number | null;
+  "Flood Zone": string | null;
   "Building Size (SF)": number | null;
-  "Parking (SF)": number | null;
+  "Office Area (SF)": number | null;
+  "Warehouse Area (SF)": number | null;
   "Storage Area (SF)": number | null;
+  "Parking (SF)": number | null;
   Buildings: number | null;
   "Total Tax Amount": string | null;
   "County Appraised Value"?: string;
