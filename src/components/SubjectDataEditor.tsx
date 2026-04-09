@@ -12,6 +12,7 @@ import type {
 } from "~/types/comp-data";
 import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
 import { useDocumentPanel } from "~/components/DocumentPanelContext";
+import { useTaskManagerMaybe } from "~/components/TaskManagerContext";
 import {
   PushToSheetButton,
   type PushToSheetButtonHandle,
@@ -256,8 +257,15 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const { project } = useProject(projectId);
   const showIncomeLease = (project?.approaches ?? DEFAULT_APPROACHES).income;
 
-  const { subjectData, isLoading, error, saveSubjectData } =
-    useSubjectData(projectId);
+  const {
+    subjectData,
+    isLoading,
+    error,
+    saveSubjectData,
+    clearProposedData,
+    refreshSubjectData,
+  } = useSubjectData(projectId);
+  const taskManager = useTaskManagerMaybe();
 
   const [core, setCore] = useState<CoreData>({});
   const [fema, setFema] = useState<FemaData>({});
@@ -273,6 +281,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     currentFema: Record<string, unknown>;
     proposedFema: Record<string, unknown>;
   } | null>(null);
+  const [showMergeReview, setShowMergeReview] = useState(false);
 
   const actionsMenuWrapRef = useRef<HTMLDivElement>(null);
   const pushToSheetRef = useRef<PushToSheetButtonHandle | null>(null);
@@ -440,6 +449,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   }, [yearBuiltForAge, buildingSfForEffectiveAge, refYear]);
 
   const handleRebuildFromDocuments = async () => {
+    if (taskManager) {
+      taskManager.addSubjectRebuildTask({
+        projectId,
+        label: "Subject rebuild",
+      });
+      return;
+    }
+
     setIsRebuildLoading(true);
     setRebuildError(null);
     try {
@@ -476,6 +493,38 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     }
   };
 
+  const isPendingReview = subjectData?.proposed_core != null;
+
+  const handleStartReview = useCallback(async () => {
+    await refreshSubjectData();
+    setShowMergeReview(true);
+  }, [refreshSubjectData]);
+
+  const handleMergeConfirm = useCallback(
+    async (mergedCore: Record<string, unknown>) => {
+      const merged = applyComputedAgeFields(
+        normalizeLandSizeFromAc(mergedCore as CoreData),
+        project?.effectiveDate,
+      );
+      const mergedFema = subjectData?.proposed_fema ?? fema;
+      await clearProposedData(merged, mergedFema);
+      dirtyRef.current = false;
+      setCore(merged);
+      setFema(mergedFema);
+      setShowMergeReview(false);
+    },
+    [clearProposedData, subjectData?.proposed_fema, fema, project?.effectiveDate],
+  );
+
+  const handleMergeCancel = useCallback(async () => {
+    await clearProposedData(
+      (subjectData?.core ?? {}) as Record<string, unknown>,
+      subjectData?.fema ?? {},
+    );
+    setShowMergeReview(false);
+  }, [clearProposedData, subjectData?.core, subjectData?.fema]);
+
+  const rebuildDisabled = isLoading || isRebuildLoading || isPendingReview;
   const actionsDisabled = isLoading;
 
   return (
@@ -535,7 +584,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                   <button
                     type="button"
                     role="menuitem"
-                    disabled={actionsDisabled || isRebuildLoading}
+                    disabled={rebuildDisabled}
                     title="Re-apply all processed documents to propose fresh subject field values. Opens a review dialog before anything is saved."
                     className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
@@ -611,7 +660,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               <button
                 type="button"
                 onClick={() => void handleRebuildFromDocuments()}
-                disabled={actionsDisabled || isRebuildLoading}
+                disabled={rebuildDisabled}
                 aria-label="Rebuild subject data from processed documents"
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/30 dark:hover:text-blue-300 dark:focus-visible:ring-blue-500/50"
               >
@@ -671,6 +720,32 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
           </div>
         </div>
       </header>
+      {isPendingReview && !showMergeReview && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-700 bg-amber-950/50 px-4 py-3">
+          <svg className="h-5 w-5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.168-.168 2.63-1.515 2.63H3.72c-1.347 0-2.188-1.462-1.515-2.63L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-amber-200">
+              Rebuild complete &mdash; review needed
+            </p>
+            <p className="text-xs text-amber-400/80">
+              New proposed values from processed documents are ready for review.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleStartReview()}
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            Review Changes
+          </button>
+        </div>
+      )}
       {isLoading && (
         <div className="flex items-center justify-center py-16 text-gray-400">
           Loading subject data...
@@ -1397,7 +1472,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </div>
       )}
 
-      {/* Rebuild from Documents — merge dialog */}
+      {/* Rebuild from Documents — legacy blocking merge dialog */}
       {pendingRebuildData && (
         <DataMergeDialog
           isOpen
@@ -1418,6 +1493,18 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             setPendingRebuildData(null);
           }}
           onCancel={() => setPendingRebuildData(null)}
+        />
+      )}
+
+      {/* Rebuild from Documents — async (DB-stored proposed data) merge dialog */}
+      {showMergeReview && subjectData?.proposed_core && (
+        <DataMergeDialog
+          isOpen
+          title="Rebuild from Documents — Review Changes"
+          currentData={(subjectData.core ?? {}) as Record<string, unknown>}
+          proposedData={subjectData.proposed_core}
+          onConfirm={handleMergeConfirm}
+          onCancel={handleMergeCancel}
         />
       )}
     </div>

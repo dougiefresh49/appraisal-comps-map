@@ -2,13 +2,18 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "~/utils/supabase/client";
-import type { SubjectDataRow } from "~/types/comp-data";
+import type { SubjectDataRow, FemaData } from "~/types/comp-data";
 
 export interface UseSubjectDataReturn {
   subjectData: SubjectDataRow | null;
   isLoading: boolean;
   error: string | null;
   saveSubjectData: (updates: Partial<Omit<SubjectDataRow, "id" | "project_id" | "updated_at">>) => Promise<void>;
+  /** Accept merged rebuild result: updates core + fema, clears proposed columns. */
+  clearProposedData: (
+    mergedCore: Record<string, unknown>,
+    mergedFema: FemaData,
+  ) => Promise<void>;
   refreshSubjectData: () => Promise<void>;
 }
 
@@ -114,11 +119,40 @@ export function useSubjectData(projectId: string): UseSubjectDataReturn {
     [projectId],
   );
 
+  const clearProposedData = useCallback(
+    async (
+      mergedCore: Record<string, unknown>,
+      mergedFema: FemaData,
+    ) => {
+      if (!projectId) return;
+
+      const supabase = createClient();
+      const { error: updateErr } = await supabase
+        .from("subject_data")
+        .update({
+          core: mergedCore,
+          fema: mergedFema,
+          proposed_core: null,
+          proposed_fema: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("project_id", projectId);
+
+      if (updateErr) {
+        throw new Error(updateErr.message);
+      }
+
+      await loadSubjectData();
+    },
+    [projectId, loadSubjectData],
+  );
+
   return {
     subjectData,
     isLoading,
     error,
     saveSubjectData,
+    clearProposedData,
     refreshSubjectData: loadSubjectData,
   };
 }
