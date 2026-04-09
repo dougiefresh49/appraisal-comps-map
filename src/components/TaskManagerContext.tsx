@@ -137,6 +137,7 @@ export function TaskManagerProvider({ children }: { children: ReactNode }) {
         config;
 
       const isReparse = kind === "reparse";
+      const trimmedExtra = extraContext?.trim();
 
       const promise = driveFetch("/api/comps/parse", {
         method: "POST",
@@ -146,7 +147,7 @@ export function TaskManagerProvider({ children }: { children: ReactNode }) {
           projectId,
           type: compTypeToApiType(compType),
           fileIds,
-          extraContext: extraContext?.trim() || undefined,
+          ...(trimmedExtra ? { extraContext: trimmedExtra } : {}),
           ...(isReparse ? { reparse: true } : {}),
         }),
       });
