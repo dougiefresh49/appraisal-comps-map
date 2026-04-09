@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import { useProject } from "~/hooks/useProject";
+import { driveFetch } from "~/lib/drive-fetch";
 
 type ViewTab = "preview" | "code";
 type LayoutMode = "split" | "single";
@@ -191,16 +192,18 @@ export default function SubjectCostReportPage({ params }: SubjectCostReportPageP
     setListLoading(true);
     setListError(null);
     try {
-      const res = await fetch("/api/drive/list", {
+      const res = await driveFetch("/api/drive/list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folderId: costReportFolderId, filesOnly: true }),
       });
+      const data = (await res.json()) as {
+        files?: DriveListFile[];
+        error?: string;
+      };
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `Request failed (${res.status})`);
+        throw new Error(data.error ?? `Request failed (${res.status})`);
       }
-      const data = (await res.json()) as { files: DriveListFile[] };
       setFiles(data.files ?? []);
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Failed to load cost report folder");
@@ -236,12 +239,20 @@ export default function SubjectCostReportPage({ params }: SubjectCostReportPageP
     setContentError(null);
     void (async () => {
       try {
-        const res = await fetch(`/api/drive/file/${encodeURIComponent(selectedFileId)}`);
-        if (!res.ok) {
-          const err = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(err.error ?? `Request failed (${res.status})`);
-        }
+        const res = await driveFetch(
+          `/api/drive/file/${encodeURIComponent(selectedFileId)}`,
+        );
         const text = await res.text();
+        if (!res.ok) {
+          let message = `Request failed (${res.status})`;
+          try {
+            const err = JSON.parse(text) as { error?: string };
+            if (err.error) message = err.error;
+          } catch {
+            /* use default message */
+          }
+          throw new Error(message);
+        }
         if (!cancelled) {
           setEditorHtml(text);
           setSavedHtml(text);
@@ -276,11 +287,14 @@ export default function SubjectCostReportPage({ params }: SubjectCostReportPageP
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(`/api/drive/file/${encodeURIComponent(selectedFileId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editorHtml }),
-      });
+      const res = await driveFetch(
+        `/api/drive/file/${encodeURIComponent(selectedFileId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: editorHtml }),
+        },
+      );
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `Save failed (${res.status})`);

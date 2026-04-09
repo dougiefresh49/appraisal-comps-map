@@ -24,8 +24,11 @@ import {
   type ProjectDocument,
 } from "~/lib/supabase-queries";
 import {
+  DOCUMENT_TYPE_BADGE_CLASS,
   formatDocumentTypeShort,
   getDocumentPrimaryTitle,
+  getDocumentSectionTagLabel,
+  structuredEntriesForDisplay,
 } from "~/utils/document-display";
 import { DeleteDocumentConfirmDialog } from "~/components/DeleteDocumentConfirmDialog";
 
@@ -51,17 +54,6 @@ const SECTION_TAGS = [
   { value: "flood-map", label: "Flood Map" },
   { value: "engagement", label: "Engagement" },
 ] as const;
-
-const TYPE_BADGE_CLASS: Record<string, string> = {
-  deed: "border-amber-600/40 bg-amber-950/60 text-amber-200",
-  flood_map: "border-sky-600/40 bg-sky-950/60 text-sky-200",
-  cad: "border-violet-600/40 bg-violet-950/60 text-violet-200",
-  zoning_map: "border-emerald-600/40 bg-emerald-950/60 text-emerald-200",
-  neighborhood_map: "border-teal-600/40 bg-teal-950/60 text-teal-200",
-  location_map: "border-cyan-600/40 bg-cyan-950/60 text-cyan-200",
-  engagement: "border-rose-600/40 bg-rose-950/60 text-rose-200",
-  other: "border-zinc-600/40 bg-zinc-800/80 text-zinc-300",
-};
 
 const TEXT_PREVIEW_LEN = 200;
 
@@ -111,11 +103,6 @@ function getTypeLabel(type: string) {
   return DOCUMENT_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
-function getSectionTagLabel(tag: string | null) {
-  if (!tag) return null;
-  return SECTION_TAGS.find((t) => t.value === tag)?.label ?? tag;
-}
-
 function isProcessingDoc(doc: ProjectDocument, reprocessingIds: Set<string>) {
   return (
     !doc.processedAt &&
@@ -129,22 +116,6 @@ function hasProcessingError(doc: ProjectDocument) {
     doc.structuredData &&
     "processing_error" in doc.structuredData
   );
-}
-
-function structuredEntriesForDisplay(
-  data: Record<string, unknown> | undefined,
-): [string, string][] {
-  if (!data || typeof data !== "object") return [];
-  return Object.entries(data)
-    .filter(([k]) => k !== "processing_error")
-    .map(([k, v]) => [
-      k,
-      v !== null && typeof v === "object"
-        ? JSON.stringify(v, null, 2)
-        : typeof v === "string" || typeof v === "number" || typeof v === "boolean"
-          ? String(v)
-          : "",
-    ]);
 }
 
 export function DocumentManager({ projectId }: DocumentManagerProps) {
@@ -482,7 +453,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     return (
       <div className="flex items-center justify-center py-12">
         <div
-          className="h-7 w-7 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-500"
+          className="h-7 w-7 animate-spin rounded-full border-2 border-gray-300 border-t-sky-600 dark:border-zinc-600 dark:border-t-sky-500"
           aria-hidden
         />
       </div>
@@ -490,13 +461,13 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6 text-zinc-100">
+    <div className="flex flex-col gap-6 text-gray-900 dark:text-zinc-100">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-zinc-50">
+          <h2 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-zinc-50">
             Project Documents
           </h2>
-          <p className="mt-1 max-w-xl text-sm text-zinc-400">
+          <p className="mt-1 max-w-xl text-sm text-gray-600 dark:text-zinc-400">
             Upload or link Drive files to build project context for AI-assisted
             report generation.
           </p>
@@ -513,14 +484,14 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       {/* Filter chips */}
       {availableTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <TagIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+          <TagIcon className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-zinc-500" />
           <button
             type="button"
             onClick={() => setActiveTagFilter(null)}
             className={`rounded-full border px-3 py-0.5 text-xs font-medium transition ${
               activeTagFilter === null
-                ? "border-sky-600 bg-sky-950/60 text-sky-200"
-                : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                ? "border-sky-600 bg-sky-100 text-sky-900 dark:border-sky-600 dark:bg-sky-950/60 dark:text-sky-200"
+                : "border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
             }`}
           >
             All
@@ -534,27 +505,27 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               }
               className={`rounded-full border px-3 py-0.5 text-xs font-medium transition ${
                 activeTagFilter === tag
-                  ? "border-sky-600 bg-sky-950/60 text-sky-200"
-                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  ? "border-sky-600 bg-sky-100 text-sky-900 dark:border-sky-600 dark:bg-sky-950/60 dark:text-sky-200"
+                  : "border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:text-gray-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
               }`}
             >
-              {getSectionTagLabel(tag) ?? tag}
+              {getDocumentSectionTagLabel(tag) ?? tag}
             </button>
           ))}
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
           {error}
         </div>
       )}
 
       {showAddForm && (
-        <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/50 p-4 shadow-lg backdrop-blur-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900/50 dark:backdrop-blur-sm">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
                 Document type
               </label>
               <select
@@ -565,7 +536,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                     documentType: e.target.value as DocumentTypeValue,
                   }))
                 }
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               >
                 {DOCUMENT_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -575,7 +546,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
                 Label (optional)
               </label>
               <input
@@ -585,11 +556,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                   setAddForm((f) => ({ ...f, documentLabel: e.target.value }))
                 }
                 placeholder="e.g., Deed — Instrument #2024-1234"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
                 Section tag (optional)
               </label>
               <select
@@ -597,7 +568,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                 onChange={(e) =>
                   setAddForm((f) => ({ ...f, sectionTag: e.target.value }))
                 }
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               >
                 {SECTION_TAGS.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -608,7 +579,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
             </div>
           </div>
 
-          <div className="mt-4 flex gap-1 rounded-lg border border-zinc-700 bg-zinc-950/80 p-1">
+          <div className="mt-4 flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-zinc-700 dark:bg-zinc-950/80">
             <button
               type="button"
               onClick={() => {
@@ -618,8 +589,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               }}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
                 addSourceMode === "browse"
-                  ? "bg-zinc-700 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-gray-200 text-gray-900 shadow-sm dark:bg-zinc-700 dark:text-white"
+                  : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-200"
               }`}
             >
               Browse Drive
@@ -632,8 +603,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               }}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
                 addSourceMode === "manual"
-                  ? "bg-zinc-700 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-gray-200 text-gray-900 shadow-sm dark:bg-zinc-700 dark:text-white"
+                  : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-200"
               }`}
             >
               Upload / Manual
@@ -643,14 +614,14 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           {addSourceMode === "browse" && (
             <div className="mt-4 space-y-3">
               {!browseRootId ? (
-                <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200/90">
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200/90">
                   No Drive folder is configured for this document type. Set a
                   project Drive folder or complete project discovery so
                   folder_structure includes the right subfolder IDs.
                 </p>
               ) : (
                 <>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-gray-500 dark:text-zinc-500">
                     Select one or more files (checkboxes), then Add &amp; process.
                     Each file becomes its own document and processes independently.
                   </p>
@@ -674,7 +645,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                     }}
                   />
                   {selectedDriveFiles.length > 0 && (
-                    <ul className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm">
+                    <ul className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950/60">
                       {selectedDriveFiles.map((f) => {
                         const progress = driveBatchProgress.find(
                           (p) => p.fileId === f.id,
@@ -682,23 +653,25 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                         return (
                           <li
                             key={f.id}
-                            className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 py-2 last:border-0 last:pb-0 first:pt-0"
+                            className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 py-2 last:border-0 last:pb-0 first:pt-0 dark:border-zinc-800/80"
                           >
                             <div className="min-w-0 flex-1">
-                              <span className="font-medium text-zinc-200">
+                              <span className="font-medium text-gray-900 dark:text-zinc-200">
                                 {f.name}
                               </span>
-                              <span className="mt-0.5 block font-mono text-xs text-zinc-500">
+                              <span className="mt-0.5 block font-mono text-xs text-gray-500 dark:text-zinc-500">
                                 {f.id}
                               </span>
                             </div>
                             {progress && (
                               <span className="shrink-0 text-xs">
                                 {progress.status === "pending" && (
-                                  <span className="text-zinc-500">Queued</span>
+                                  <span className="text-gray-500 dark:text-zinc-500">
+                                    Queued
+                                  </span>
                                 )}
                                 {progress.status === "working" && (
-                                  <span className="inline-flex items-center gap-1.5 text-sky-300">
+                                  <span className="inline-flex items-center gap-1.5 text-sky-700 dark:text-sky-300">
                                     <span
                                       className="h-3 w-3 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"
                                       aria-hidden
@@ -707,13 +680,13 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                                   </span>
                                 )}
                                 {progress.status === "done" && (
-                                  <span className="text-emerald-400">
+                                  <span className="text-emerald-700 dark:text-emerald-400">
                                     Queued for processing
                                   </span>
                                 )}
                                 {progress.status === "error" && (
                                   <span
-                                    className="max-w-[12rem] truncate text-red-300"
+                                    className="max-w-[12rem] truncate text-red-600 dark:text-red-300"
                                     title={progress.error}
                                   >
                                     {progress.error ?? "Error"}
@@ -734,11 +707,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           {addSourceMode === "manual" && (
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
                   Upload file
                 </label>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition hover:border-gray-400 hover:bg-gray-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-900">
                     <span>Choose file</span>
                     <input
                       ref={fileInputRef}
@@ -759,7 +732,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                     />
                   </label>
                   {selectedFile && (
-                    <span className="text-sm text-zinc-400">
+                    <span className="text-sm text-gray-600 dark:text-zinc-400">
                       {selectedFile.name}
                     </span>
                   )}
@@ -767,11 +740,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
               </div>
               <div>
                 <div className="mb-2 flex items-center gap-2">
-                  <div className="h-px flex-1 bg-zinc-700" />
-                  <span className="text-xs text-zinc-500">
+                  <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-700" />
+                  <span className="text-xs text-gray-500 dark:text-zinc-500">
                     or paste Drive file ID
                   </span>
-                  <div className="h-px flex-1 bg-zinc-700" />
+                  <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-700" />
                 </div>
                 <input
                   type="text"
@@ -789,7 +762,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                     }
                   }}
                   placeholder="Google Drive file ID"
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
                 />
               </div>
             </div>
@@ -822,10 +795,10 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       )}
 
       {filteredDocuments.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 p-10 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+          <p className="text-sm text-gray-600 dark:text-zinc-500">
             {activeTagFilter
-              ? `No documents tagged "${getSectionTagLabel(activeTagFilter) ?? activeTagFilter}".`
+              ? `No documents tagged "${getDocumentSectionTagLabel(activeTagFilter) ?? activeTagFilter}".`
               : "No documents yet. Add deed records, maps, and other files to build context."}
           </p>
         </div>
@@ -874,7 +847,8 @@ function DocumentListCard({
   const err = hasProcessingError(doc);
   const done = !!doc.processedAt && !err;
   const badgeClass =
-    TYPE_BADGE_CLASS[doc.documentType] ?? TYPE_BADGE_CLASS.other;
+    DOCUMENT_TYPE_BADGE_CLASS[doc.documentType] ??
+    DOCUMENT_TYPE_BADGE_CLASS.other;
 
   const typeBadgeText = formatDocumentTypeShort(
     doc.documentType,
@@ -914,7 +888,7 @@ function DocumentListCard({
     : null;
 
   return (
-    <li className="overflow-hidden rounded-xl border border-zinc-700/80 bg-zinc-900/40 shadow-sm">
+    <li className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900/40">
       <div className="flex flex-wrap items-start justify-between gap-3 p-4">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -924,9 +898,9 @@ function DocumentListCard({
               {typeBadgeText}
             </span>
             {doc.sectionTag && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-zinc-600/50 bg-zinc-800/60 px-2 py-0.5 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:border-zinc-600/50 dark:bg-zinc-800/60 dark:text-zinc-400">
                 <TagIcon className="h-3 w-3" />
-                {getSectionTagLabel(doc.sectionTag) ?? doc.sectionTag}
+                {getDocumentSectionTagLabel(doc.sectionTag) ?? doc.sectionTag}
               </span>
             )}
             <DocumentStatusPill
@@ -938,11 +912,13 @@ function DocumentListCard({
             />
           </div>
           <div>
-            <p className="text-base font-semibold leading-snug text-zinc-50">
+            <p className="text-base font-semibold leading-snug text-gray-900 dark:text-zinc-50">
               {displayName}
             </p>
             {subtitle && (
-              <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p>
+              <p className="mt-0.5 text-sm text-gray-600 dark:text-zinc-500">
+                {subtitle}
+              </p>
             )}
           </div>
           {driveUrl && (
@@ -950,7 +926,7 @@ function DocumentListCard({
               href={driveUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex text-sm font-medium text-sky-400 underline-offset-2 hover:text-sky-300 hover:underline"
+              className="inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:text-sky-600 hover:underline dark:text-sky-400 dark:hover:text-sky-300"
             >
               View in Drive
             </a>
@@ -961,7 +937,7 @@ function DocumentListCard({
             <button
               type="button"
               onClick={() => onReprocess(doc.id)}
-              className="rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-700"
+              className="rounded-lg border border-gray-300 bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-800 transition hover:border-gray-400 hover:bg-gray-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-700"
             >
               Reprocess
             </button>
@@ -969,7 +945,7 @@ function DocumentListCard({
           <button
             type="button"
             onClick={() => onRequestDelete(doc.id, doc.fileName)}
-            className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+            className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-950/50 dark:hover:text-red-400"
             title="Delete document"
           >
             <svg
@@ -990,7 +966,7 @@ function DocumentListCard({
       </div>
 
       {(text || entries.length > 0) && (
-        <div className="space-y-0 border-t border-zinc-800 bg-zinc-950/30">
+        <div className="space-y-0 border-t border-gray-200 bg-gray-50/80 dark:border-zinc-800 dark:bg-zinc-950/30">
           {text ? (
             <ExpandableRow
               open={textOpen}
@@ -998,7 +974,7 @@ function DocumentListCard({
               title="Extracted text"
               summary={textPreview || "—"}
             >
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed text-gray-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                 {text}
               </pre>
             </ExpandableRow>
@@ -1010,14 +986,18 @@ function DocumentListCard({
               title="Structured data"
               summary={`${entries.length} field${entries.length === 1 ? "" : "s"}`}
             >
-              <dl className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs">
+              <dl className="space-y-2 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950">
                 {entries.map(([k, v]) => (
                   <div
                     key={k}
-                    className="grid gap-1 border-b border-zinc-800/80 pb-2 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,8rem)_1fr] sm:gap-3"
+                    className="grid gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,8rem)_1fr] sm:gap-3 dark:border-zinc-800/80"
                   >
-                    <dt className="font-medium text-zinc-500">{k}</dt>
-                    <dd className="break-words text-zinc-300">{v}</dd>
+                    <dt className="font-medium text-gray-600 dark:text-zinc-500">
+                      {k}
+                    </dt>
+                    <dd className="break-words text-gray-800 dark:text-zinc-300">
+                      {v}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -1043,22 +1023,22 @@ function ExpandableRow({
   children: ReactNode;
 }) {
   return (
-    <div className="border-b border-zinc-800/80 last:border-b-0">
+    <div className="border-b border-gray-200 last:border-b-0 dark:border-zinc-800/80">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-start gap-2 px-4 py-3 text-left transition hover:bg-zinc-800/40"
+        className="flex w-full items-start gap-2 px-4 py-3 text-left transition hover:bg-gray-100/80 dark:hover:bg-zinc-800/40"
       >
         {open ? (
-          <ChevronDownIcon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+          <ChevronDownIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-500" />
         ) : (
-          <ChevronRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+          <ChevronRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-500" />
         )}
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-zinc-500">
             {title}
           </span>
-          <span className="mt-1 line-clamp-2 text-sm text-zinc-400">
+          <span className="mt-1 line-clamp-2 text-sm text-gray-700 dark:text-zinc-400">
             {summary}
           </span>
         </span>
@@ -1083,9 +1063,9 @@ function DocumentStatusPill({
 }) {
   if (processing || reprocessing) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-800/60 bg-sky-950/50 px-2.5 py-0.5 text-xs font-medium text-sky-200">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200">
         <span
-          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"
+          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-600 border-t-transparent dark:border-sky-400"
           aria-hidden
         />
         Processing…
@@ -1096,7 +1076,7 @@ function DocumentStatusPill({
   if (err) {
     return (
       <span
-        className="inline-flex max-w-full items-center gap-1 rounded-full border border-red-900/60 bg-red-950/50 px-2.5 py-0.5 text-xs font-medium text-red-300"
+        className="inline-flex max-w-full items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-300"
         title={errorMessage ?? undefined}
       >
         Error
@@ -1106,15 +1086,15 @@ function DocumentStatusPill({
 
   if (done) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-900/50 bg-emerald-950/40 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-400" />
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
         Processed
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/80 px-2.5 py-0.5 text-xs font-medium text-zinc-400">
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-400">
       Pending
     </span>
   );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getGoogleToken } from "~/utils/supabase/server";
 import {
+  DriveAuthError,
   getFolderMetadata,
   listFolderChildren,
   downloadFile,
@@ -59,6 +60,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ name: metadata.name, parsedContent, files });
   } catch (error) {
+    if (error instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 401 },
+      );
+    }
     console.error("Error fetching folder details:", error);
     return NextResponse.json(
       { error: "Failed to fetch folder details" },

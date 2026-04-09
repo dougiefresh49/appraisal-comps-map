@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient, getGoogleToken } from "~/utils/supabase/server";
+import { DriveAuthError } from "~/lib/drive-api";
 import {
   discoverFolderStructure,
   findSpreadsheetCandidates,
@@ -69,6 +70,12 @@ export async function POST(request: NextRequest) {
       spreadsheetCandidates,
     });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("Project discovery error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Discovery failed" },

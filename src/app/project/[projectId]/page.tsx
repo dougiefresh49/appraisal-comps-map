@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, useMemo } from "react";
+import { use, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
@@ -9,18 +9,15 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import {
-  normalizeProjectData,
   COMPARABLE_TYPES,
   getComparablesByType,
   DEFAULT_APPROACHES,
-  type ProjectData,
   type ComparableType,
   type Comparable,
 } from "~/utils/projectStore";
 import { useProject } from "~/hooks/useProject";
 import { useSubjectData } from "~/hooks/useSubjectData";
 
-import { JsonViewer } from "~/components/JsonViewer";
 import { ToggleSwitch } from "~/components/ToggleField";
 
 interface ProjectPageProps {
@@ -49,42 +46,6 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
     return subjectData.core as Record<string, unknown>;
   }, [subjectData]);
 
-
-  const [isJsonMode, setIsJsonMode] = useState(false);
-  const [jsonValue, setJsonValue] = useState("");
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
-  // JSON Mode sync
-  useMemo(() => {
-    if (!isJsonMode) return;
-    if (!selectedProject) {
-      setJsonValue("");
-      return;
-    }
-    setJsonValue(JSON.stringify(selectedProject, null, 2));
-    setJsonError(null);
-  }, [isJsonMode, selectedProject]);
-
-  const handleJsonApply = () => {
-    if (!selectedProject) return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const parsed = JSON.parse(jsonValue);
-      const normalized = normalizeProjectData(parsed as Partial<ProjectData>);
-      
-      // We need to update the entire project state.
-      // The updateProject function expects a transformer, but we have a new state.
-      // We can just return the new state.
-      updateProject(() => normalized);
-      
-      setJsonError(null);
-    } catch (error) {
-      console.error("Failed to parse project JSON", error);
-      setJsonError(
-        error instanceof Error ? error.message : "Unknown JSON parse error",
-      );
-    }
-  };
 
   const comparablesByType = useMemo(() => {
     if (!selectedProject) {
@@ -131,67 +92,16 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
 
   return (
     <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {displayHeading}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Report Overview
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsJsonMode((prev) => !prev)}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            {isJsonMode ? "Form View" : "JSON View"}
-          </button>
-        </div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {displayHeading}
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Report Overview
+        </p>
       </div>
 
-       {isJsonMode && (
-        <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col">
-          <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex-none">
-                <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-gray-200">
-                Project JSON Data
-                </h3>
-                <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-                Edit the raw JSON data for this project. Format is standard JSON.
-                </p>
-            </div>
-            <div className="min-h-0 flex-1 w-full rounded-md border border-gray-300 bg-[#272822] dark:border-gray-700">
-                  <JsonViewer
-                      value={jsonValue}
-                      onChange={setJsonValue}
-                  />
-            </div>
-            {jsonError && (
-              <div className="mt-2 flex-none rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
-                {jsonError}
-              </div>
-            )}
-            <div className="mt-4 flex flex-none justify-end gap-3">
-              <button
-                onClick={() => setIsJsonMode(false)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleJsonApply}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-              >
-                Apply Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!isJsonMode && (
-        <div className="space-y-6">
+      <div className="space-y-6">
           <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
@@ -788,8 +698,7 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
               })}
             </div>
           </section>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

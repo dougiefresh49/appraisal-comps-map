@@ -5,7 +5,7 @@ import {
   listProjectDocuments,
   reprocessDocument,
 } from "~/server/documents/actions";
-import { shareDriveFile } from "~/lib/drive-api";
+import { DriveAuthError, shareDriveFile } from "~/lib/drive-api";
 import { getGoogleToken } from "~/utils/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -41,6 +41,12 @@ export async function POST(request: NextRequest) {
 
     return await handleJson(request);
   } catch (error) {
+    if (error instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       {
         error:

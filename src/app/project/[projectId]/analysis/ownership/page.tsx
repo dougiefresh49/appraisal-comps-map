@@ -2,10 +2,8 @@
 
 import { use, useState } from "react";
 import { ReportSectionPage } from "~/components/ReportSectionPage";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   SuggestionsPanel,
   SuggestionsPanelToggle,
@@ -86,17 +84,21 @@ function DeedFactsBlock({ projectId }: { projectId: string }) {
 }
 
 function OwnershipPageContent({ projectId }: { projectId: string }) {
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
 
   const openSuggestions = () => {
-    setIsDocPanelOpen(false);
+    docPanel.close();
     setIsSuggestionsPanelOpen(true);
   };
   const openDocs = () => {
     setIsSuggestionsPanelOpen(false);
-    setIsDocPanelOpen(true);
+    docPanel.open({
+      projectId,
+      sectionKey: "ownership",
+      onExcludedIdsChange: setExcludedDocIds,
+    });
   };
 
   return (
@@ -119,13 +121,6 @@ function OwnershipPageContent({ projectId }: { projectId: string }) {
         sectionKey="ownership"
         isOpen={isSuggestionsPanelOpen}
         onClose={() => setIsSuggestionsPanelOpen(false)}
-      />
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="ownership"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-        onExcludedIdsChange={setExcludedDocIds}
       />
     </div>
   );

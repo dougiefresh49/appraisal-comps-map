@@ -10,6 +10,7 @@ import {
 import { PhotoIcon } from "@heroicons/react/24/outline";
 import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 import { useProject } from "~/hooks/useProject";
+import { driveFetch } from "~/lib/drive-fetch";
 
 interface FolderStructure {
   subjectSketchesFolderId?: string;
@@ -113,7 +114,7 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
     setListLoading(true);
     setListError(null);
     try {
-      const res = await fetch("/api/drive/list", {
+      const res = await driveFetch("/api/drive/list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,11 +122,13 @@ export default function SubjectSketchesPage({ params }: SubjectSketchesPageProps
           filesOnly: true,
         }),
       });
+      const data = (await res.json()) as {
+        files?: DriveListFile[];
+        error?: string;
+      };
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `Request failed (${res.status})`);
+        throw new Error(data.error ?? `Request failed (${res.status})`);
       }
-      const data = (await res.json()) as { files: DriveListFile[] };
       setFiles(data.files ?? []);
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Failed to load sketches");

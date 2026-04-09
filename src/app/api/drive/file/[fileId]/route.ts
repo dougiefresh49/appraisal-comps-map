@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { updateFileContentById } from "~/lib/drive-api";
+import { DriveAuthError, updateFileContentById } from "~/lib/drive-api";
 import { getGoogleToken } from "~/utils/supabase/server";
 
 const DRIVE_MEDIA = "https://www.googleapis.com/drive/v3/files";
@@ -42,6 +42,16 @@ export async function GET(
         res.status,
         text.slice(0, 240),
       );
+      if (res.status === 401) {
+        return NextResponse.json(
+          {
+            error:
+              "Google Drive rejected the access token — please re-authenticate.",
+            code: "token_expired_mid_request",
+          },
+          { status: 401 },
+        );
+      }
       return NextResponse.json(
         { error: "Failed to load file from Drive" },
         { status: res.status === 404 ? 404 : 502 },
@@ -60,6 +70,12 @@ export async function GET(
       },
     });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("Drive file route error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to load file" },
@@ -111,6 +127,12 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("Drive file PATCH error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update file" },

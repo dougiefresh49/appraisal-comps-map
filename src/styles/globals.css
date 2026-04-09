@@ -6,3 +6,22 @@
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/**
+ * Fill the viewport (including Android gesture-nav / overscroll regions).
+ * Body defaults to white in browsers; without this, dark mode shows a white strip
+ * below `h-svh` layouts on some mobile WebViews.
+ */
+@layer base {
+  html {
+    @apply min-h-dvh bg-gray-50;
+  }
+
+  html.dark {
+    @apply bg-gray-950;
+  }
+
+  body {
+    @apply min-h-dvh bg-transparent;
+  }
+}

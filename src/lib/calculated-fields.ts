@@ -589,7 +589,7 @@ export function rollupParcelsToComp(
     const apns = parcels
       .map((p) => (typeof p.APN === "string" ? p.APN.trim() : ""))
       .filter(Boolean);
-    if (apns.length > 0) compData.APN = apns.join(" & ");
+    if (apns.length > 0) compData.APN = apns.join(", ");
   }
   if (emptyComp("Legal")) {
     const legals = parcels

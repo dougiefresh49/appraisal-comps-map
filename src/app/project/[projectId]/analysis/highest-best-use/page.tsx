@@ -2,10 +2,8 @@
 
 import { use, useState, useEffect } from "react";
 import { ReportSectionPage } from "~/components/ReportSectionPage";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   SuggestionsPanel,
   SuggestionsPanelToggle,
@@ -193,18 +191,22 @@ export default function HighestBestUsePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = use(params);
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
   const [hbuUpdatedAt, setHbuUpdatedAt] = useState<string | null>(null);
 
   const openSuggestions = () => {
-    setIsDocPanelOpen(false);
+    docPanel.close();
     setIsSuggestionsPanelOpen(true);
   };
   const openDocs = () => {
     setIsSuggestionsPanelOpen(false);
-    setIsDocPanelOpen(true);
+    docPanel.open({
+      projectId,
+      sectionKey: "highest-best-use",
+      onExcludedIdsChange: setExcludedDocIds,
+    });
   };
 
   useEffect(() => {
@@ -242,13 +244,6 @@ export default function HighestBestUsePage({
         sectionKey="highest-best-use"
         isOpen={isSuggestionsPanelOpen}
         onClose={() => setIsSuggestionsPanelOpen(false)}
-      />
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="highest-best-use"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-        onExcludedIdsChange={setExcludedDocIds}
       />
     </div>
   );

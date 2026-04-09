@@ -3,10 +3,8 @@
 import { use, useState, useCallback, useEffect } from "react";
 import { MapBanner } from "~/components/MapBanner";
 import { ReportSectionPage } from "~/components/ReportSectionPage";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   BorrowNeighborhoodPanel,
   BorrowPanelToggle,
@@ -26,7 +24,7 @@ interface NeighborhoodPageProps {
 export default function NeighborhoodPage({ params }: NeighborhoodPageProps) {
   const { projectId } = use(params);
   const decodedProjectId = decodeURIComponent(projectId);
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isBorrowPanelOpen, setIsBorrowPanelOpen] = useState(false);
   const { subjectData, saveSubjectData } = useSubjectData(decodedProjectId);
   const { updateContent } = useReportSection(decodedProjectId, "neighborhood");
@@ -148,20 +146,20 @@ export default function NeighborhoodPage({ params }: NeighborhoodPageProps) {
       </div>
 
       <div className="flex items-center justify-end">
-        <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+        <DocumentPanelToggle
+          onClick={() =>
+            docPanel.open({
+              projectId: decodedProjectId,
+              sectionKey: "neighborhood",
+            })
+          }
+        />
       </div>
 
       <ReportSectionPage
         section="neighborhood"
         title="Neighborhood Analysis"
         description="Generate, view, and edit the neighborhood analysis section."
-      />
-
-      <DocumentContextPanel
-        projectId={decodedProjectId}
-        sectionKey="neighborhood"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
       />
 
       <BorrowNeighborhoodPanel

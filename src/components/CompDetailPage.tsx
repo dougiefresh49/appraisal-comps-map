@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import { CompAddFlow } from "~/components/CompAddFlow";
 import { DataMergeDialog } from "~/components/DataMergeDialog";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
@@ -16,11 +14,11 @@ import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
 import {
   DEFAULT_APPROACHES,
   getComparablesByType,
-  mapTypeForCompType,
   type ComparableType,
   type ComparableParsedDataStatus,
 } from "~/utils/projectStore";
 import { CompDetailContent } from "~/components/CompDetailContent";
+import { driveFetch } from "~/lib/drive-fetch";
 
 export interface CompDetailPageProps {
   projectId: string;
@@ -83,7 +81,7 @@ export function CompDetailPage({
     refreshParsedData,
   } = useCompParsedData(compId);
 
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [showParseFlow, setShowParseFlow] = useState(false);
   const [showReparseFlow, setShowReparseFlow] = useState(false);
   const [pendingProposedData, setPendingProposedData] = useState<Record<
@@ -104,13 +102,13 @@ export function CompDetailPage({
     if (!compFolderId) return;
     void (async () => {
       try {
-        const res = await fetch("/api/comps-folder-details", {
+        const res = await driveFetch("/api/comps-folder-details", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ folderId: compFolderId }),
         });
-        if (!res.ok) return;
         const data = (await res.json()) as { name?: string };
+        if (!res.ok) return;
         if (data.name) setFolderName(data.name);
       } catch {
         /* ignore */
@@ -197,7 +195,16 @@ export function CompDetailPage({
           Back to Comps
         </Link>
         <div className="flex items-center gap-2">
-          <DocumentPanelToggle onClick={() => setIsDocPanelOpen(true)} />
+          <DocumentPanelToggle
+            onClick={() =>
+              docPanel.open({
+                projectId,
+                sectionKey: "comp-detail",
+                compFolderId,
+                sectionTag: compSectionTag(compType, displayNumber),
+              })
+            }
+          />
           {saveStatus === "saving" && (
             <span className="text-xs text-gray-600 dark:text-gray-500">
               Saving…
@@ -229,7 +236,7 @@ export function CompDetailPage({
               confirmDescription={`${compType.toLowerCase()} comp #${displayNumber} data to the spreadsheet`}
               confirmDetail="All non-formula fields will be written. If the comp is found by Use Type + Recording, its existing row is updated. Otherwise a new row is appended."
               onPush={async () => {
-                const res = await fetch("/api/spreadsheet/push-comp", {
+                const res = await driveFetch("/api/spreadsheet/push-comp", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -285,15 +292,6 @@ export function CompDetailPage({
       />
 
       {/* Overlays */}
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="comp-detail"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-        compFolderId={compFolderId}
-        sectionTag={compSectionTag(compType, displayNumber)}
-      />
-
       {showParseFlow && (
         <CompAddFlow
           projectId={projectId}

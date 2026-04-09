@@ -6,6 +6,7 @@ import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
 import { IMPROVEMENT_DISPLAY_LABELS } from "~/lib/improvement-constants";
 import { VALID_CATEGORIES } from "~/lib/photo-category-constants";
+import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 
 interface PhotoDetailPanelProps {
   photo: PhotoAnalysis | null;
@@ -35,9 +36,14 @@ export function PhotoDetailPanel({
   const categoryMenuRef = useRef<HTMLDivElement>(null);
   const [isRedescribing, setIsRedescribing] = useState(false);
   const [redescribeError, setRedescribeError] = useState<string | null>(null);
+  const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
 
   useEffect(() => {
     setRedescribeError(null);
+  }, [photo?.id]);
+
+  useEffect(() => {
+    setIsImageLightboxOpen(false);
   }, [photo?.id]);
 
   useEffect(() => {
@@ -68,7 +74,8 @@ export function PhotoDetailPanel({
 
   if (!photo) return null;
 
-  const thumbnailUrl = buildThumbnailUrl(photo.fileId);
+  const driveFileId = photo.fileId;
+  const thumbnailUrl = buildThumbnailUrl(driveFileId);
   const improvements = photo.improvementsObserved ?? {};
   const improvementKeys = Object.keys(improvements).filter(
     (k) => improvements[k],
@@ -150,17 +157,35 @@ export function PhotoDetailPanel({
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Image Preview */}
-        {thumbnailUrl && (
-          <div className="relative aspect-[4/3] w-full bg-gray-100 dark:bg-gray-800">
-            <Image
-              src={thumbnailUrl}
-              alt={photo.label}
-              fill
-              className="object-contain"
-              unoptimized
-            />
-          </div>
-        )}
+        {thumbnailUrl && driveFileId ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setIsImageLightboxOpen(true)}
+              className="group relative aspect-[4/3] w-full cursor-zoom-in border-0 bg-gray-100 p-0 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-gray-800 dark:focus-visible:ring-offset-gray-900"
+              aria-label={`View full size: ${photo.label}`}
+            >
+              <Image
+                src={thumbnailUrl}
+                alt={photo.label}
+                fill
+                className="object-contain transition group-hover:opacity-95"
+                unoptimized
+              />
+              <span
+                className="pointer-events-none absolute inset-0 ring-inset ring-transparent transition group-hover:ring-2 group-hover:ring-blue-500/40"
+                aria-hidden
+              />
+            </button>
+            {isImageLightboxOpen ? (
+              <ImageZoomLightbox
+                imageSrc={`/api/drive/file/${driveFileId}`}
+                title={photo.label}
+                onClose={() => setIsImageLightboxOpen(false)}
+              />
+            ) : null}
+          </>
+        ) : null}
 
         {/* Fields */}
         <div className="space-y-4 p-4">

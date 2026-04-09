@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { createClient } from "~/utils/supabase/server";
 import { getGoogleToken } from "~/utils/supabase/server";
 import {
+  DriveAuthError,
   listFolderChildren,
   findChildByName,
   downloadFile,
@@ -128,6 +129,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ subjectPhotoBase64, subjectPhotosFolderId });
   } catch (error) {
+    if (error instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 401 },
+      );
+    }
     console.error("Error in /api/cover-data:", error);
     return NextResponse.json(
       { error: "Failed to load cover data" },

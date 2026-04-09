@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient, getGoogleToken } from "~/utils/supabase/server";
-import { findOrCreateFolder, uploadOrUpdateFile } from "~/lib/drive-api";
+import {
+  DriveAuthError,
+  findOrCreateFolder,
+  uploadOrUpdateFile,
+} from "~/lib/drive-api";
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,6 +91,12 @@ export async function POST(request: NextRequest) {
       fileName: driveFile.name,
     });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("[export/output-json] Error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

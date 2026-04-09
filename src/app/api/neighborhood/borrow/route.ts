@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  DriveAuthError,
   downloadFile,
   listFolderChildren,
   uploadOrUpdateFile,
@@ -201,6 +202,7 @@ export async function GET(request: Request) {
             mapImageFileId = hit.id;
           }
         } catch (e) {
+          if (e instanceof DriveAuthError) throw e;
           console.warn("[neighborhood-borrow] drive list failed", e);
         }
       }
@@ -216,6 +218,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json(payload);
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[neighborhood-borrow]", message);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -337,6 +345,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[neighborhood-borrow POST]", message);
     return NextResponse.json({ error: message }, { status: 500 });

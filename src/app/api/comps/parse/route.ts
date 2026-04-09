@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "~/utils/supabase/server";
+import { createClient, getGoogleToken } from "~/utils/supabase/server";
+import { DriveAuthError } from "~/lib/drive-api";
 import { parseCompFromDrive, parseCompFiles } from "~/lib/comp-parser";
 import type { CompType } from "~/types/comp-data";
 
@@ -39,14 +40,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const driveToken = session.provider_token;
-
     if (fileIds && fileIds.length > 0) {
+      const { token: driveToken, error: driveError, code } =
+        await getGoogleToken();
       if (!driveToken) {
         return NextResponse.json(
           {
             error:
-              "No Drive token available. Please re-authenticate with Google.",
+              driveError ??
+              "Not authenticated — please sign in again to grant Drive access",
+            code,
           },
           { status: 401 },
         );
@@ -125,6 +128,12 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("Parse comp error:", err);
     return NextResponse.json(
       {

@@ -10,10 +10,8 @@ import type {
   SubjectTax,
   FemaData,
 } from "~/types/comp-data";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   PushToSheetButton,
   type PushToSheetButtonHandle,
@@ -223,7 +221,7 @@ function ComputedField({
       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
       </label>
-      <div className="w-full rounded-md border border-gray-700/50 bg-gray-800/50 px-3 py-1.5 text-sm text-gray-300">
+      <div className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-300">
         {value != null && value !== "" ? String(value) : "—"}
       </div>
     </div>
@@ -264,7 +262,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const [core, setCore] = useState<CoreData>({});
   const [fema, setFema] = useState<FemaData>({});
   const [taxes, setTaxes] = useState<SubjectTax[]>([]);
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [isRebuildLoading, setIsRebuildLoading] = useState(false);
@@ -505,13 +503,13 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               aria-haspopup="menu"
               title="More actions: documents, rebuild, export JSON, push to sheet"
               aria-label="Open actions menu: documents, rebuild, export, push to sheet"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-gray-600 hover:bg-gray-700/60 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/50 disabled:opacity-50 dark:border-gray-700"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700/60 dark:hover:text-gray-100 dark:focus-visible:ring-gray-400/50"
             >
               <EllipsisVerticalIcon className="h-4 w-4" aria-hidden />
             </button>
             {actionsMenuOpen && (
               <ul
-                className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl dark:bg-gray-900"
+                className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-900"
                 role="menu"
                 aria-orientation="vertical"
               >
@@ -520,14 +518,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     type="button"
                     role="menuitem"
                     title="Browse project documents for this section (deeds, CAD, engagement, etc.) and view extracted text or structured fields."
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       setActionsMenuOpen(false);
-                      setIsDocPanelOpen(true);
+                      docPanel.open({ projectId, sectionKey: "subject" });
                     }}
                   >
                     <DocumentTextIcon
-                      className="h-4 w-4 shrink-0 text-gray-400"
+                      className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
                       aria-hidden
                     />
                     Documents
@@ -539,14 +537,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     role="menuitem"
                     disabled={actionsDisabled || isRebuildLoading}
                     title="Re-apply all processed documents to propose fresh subject field values. Opens a review dialog before anything is saved."
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       setActionsMenuOpen(false);
                       void handleRebuildFromDocuments();
                     }}
                   >
                     <ArrowPathIcon
-                      className={`h-4 w-4 shrink-0 text-blue-400${isRebuildLoading ? " animate-spin" : ""}`}
+                      className={`h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400${isRebuildLoading ? " animate-spin" : ""}`}
                       aria-hidden
                     />
                     Rebuild from Documents
@@ -558,14 +556,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     role="menuitem"
                     disabled={actionsDisabled}
                     title="Download subject core, taxes, and related JSON for backup or the spreadsheet Apps Script importer."
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       setActionsMenuOpen(false);
                       setIsExportDialogOpen(true);
                     }}
                   >
                     <ArrowDownTrayIcon
-                      className="h-4 w-4 shrink-0 text-violet-400"
+                      className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400"
                       aria-hidden
                     />
                     Export JSON
@@ -577,14 +575,14 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     role="menuitem"
                     disabled={actionsDisabled}
                     title="Write the subject row to the appraisal Google Sheet (row 2 on the subject tab). Asks for confirmation first."
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-100 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       setActionsMenuOpen(false);
                       pushToSheetRef.current?.openConfirm();
                     }}
                   >
                     <ArrowUpTrayIcon
-                      className="h-4 w-4 shrink-0 text-emerald-400"
+                      className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
                       aria-hidden
                     />
                     Push to Sheet
@@ -600,7 +598,9 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               <DocumentPanelToggle
                 variant="icon"
                 omitNativeTitle
-                onClick={() => setIsDocPanelOpen(true)}
+                onClick={() =>
+                  docPanel.open({ projectId, sectionKey: "subject" })
+                }
               />
               <span className={TOOLBAR_HOVER_HINT_CLASS}>
                 Browse project documents (deeds, CAD, engagement) and extracted
@@ -613,7 +613,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                 onClick={() => void handleRebuildFromDocuments()}
                 disabled={actionsDisabled || isRebuildLoading}
                 aria-label="Rebuild subject data from processed documents"
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800/80 px-3 text-xs font-medium text-gray-300 transition hover:border-blue-700 hover:bg-blue-950/30 hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/30 dark:hover:text-blue-300 dark:focus-visible:ring-blue-500/50"
               >
                 {isRebuildLoading ? (
                   <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -633,7 +633,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                 onClick={() => setIsExportDialogOpen(true)}
                 disabled={actionsDisabled}
                 aria-label="Export subject data as JSON"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/80 text-gray-300 transition hover:border-violet-700 hover:bg-violet-950/30 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition hover:border-violet-500 hover:bg-violet-50 hover:text-violet-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300 dark:focus-visible:ring-violet-500/50"
               >
                 <ArrowDownTrayIcon className="h-4 w-4" aria-hidden />
               </button>
@@ -1373,12 +1373,6 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </>
       ) : null}
 
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="subject"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-      />
       <ExportJsonDialog
         projectId={projectId}
         context="subject"

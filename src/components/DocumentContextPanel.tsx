@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   XMarkIcon,
   ArrowPathIcon,
@@ -10,6 +17,8 @@ import {
   ArrowLeftIcon,
   TrashIcon,
   DocumentTextIcon,
+  CheckCircleIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "~/utils/supabase/client";
 import { useProject } from "~/hooks/useProject";
@@ -18,9 +27,14 @@ import { DeleteDocumentConfirmDialog } from "~/components/DeleteDocumentConfirmD
 import { deleteProjectDocument } from "~/lib/supabase-queries";
 import type { ProjectFolderStructure } from "~/utils/projectStore";
 import {
+  DOCUMENT_TYPE_BADGE_CLASS,
   formatDocumentTypeShort,
   getDocumentPrimaryTitle,
+  getDocumentSectionTagLabel,
+  structuredEntriesForDisplay,
 } from "~/utils/document-display";
+import { driveFetch } from "~/lib/drive-fetch";
+import { onDriveAuthRestored } from "~/lib/drive-auth-event";
 
 interface ProjectDocument {
   id: string;
@@ -54,6 +68,147 @@ function getDocStatus(doc: ProjectDocument): DocStatus {
     return "stale";
   }
   return "processed";
+}
+
+function panelDocHasProcessingError(doc: ProjectDocument): boolean {
+  return (
+    !doc.processed_at &&
+    !!doc.structured_data &&
+    typeof doc.structured_data === "object" &&
+    "processing_error" in doc.structured_data
+  );
+}
+
+function panelIsProcessingDoc(
+  doc: ProjectDocument,
+  reprocessingIds: Set<string>,
+): boolean {
+  return (
+    !doc.processed_at && (!!doc.file_id || reprocessingIds.has(doc.id))
+  );
+}
+
+function DocumentPreviewStatusPill({
+  doc,
+  reprocessingIds,
+}: {
+  doc: ProjectDocument;
+  reprocessingIds: Set<string>;
+}) {
+  const processing = panelIsProcessingDoc(doc, reprocessingIds);
+  const reprocessing = reprocessingIds.has(doc.id);
+  const err = panelDocHasProcessingError(doc);
+  const done = !!doc.processed_at && !err;
+  const errorMessage = err
+    ? String(
+        (doc.structured_data as { processing_error?: string })
+          .processing_error ?? "Unknown error",
+      )
+    : null;
+
+  if (processing || reprocessing) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200">
+        <span
+          className="h-3 w-3 animate-spin rounded-full border-2 border-sky-600 border-t-transparent dark:border-sky-400"
+          aria-hidden
+        />
+        Processing…
+      </span>
+    );
+  }
+
+  if (err) {
+    return (
+      <span
+        className="inline-flex max-w-full items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-800 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-300"
+        title={errorMessage ?? undefined}
+      >
+        Error
+      </span>
+    );
+  }
+
+  if (done) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <CheckCircleIcon className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+        Processed
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-400">
+      Pending
+    </span>
+  );
+}
+
+const DOCUMENT_PANEL_WIDTH_KEY = "document-context-panel-width";
+const DOCUMENT_PANEL_DEFAULT_WIDTH = 448;
+const DOCUMENT_PANEL_MIN_WIDTH = 280;
+const DOCUMENT_PANEL_MAX_WIDTH = 960;
+
+function clampDocPanelWidth(px: number): number {
+  if (typeof window === "undefined") {
+    return Math.min(
+      DOCUMENT_PANEL_MAX_WIDTH,
+      Math.max(DOCUMENT_PANEL_MIN_WIDTH, px),
+    );
+  }
+  const maxByViewport = Math.max(
+    DOCUMENT_PANEL_MIN_WIDTH,
+    Math.floor(window.innerWidth * 0.88),
+  );
+  const max = Math.min(DOCUMENT_PANEL_MAX_WIDTH, maxByViewport);
+  return Math.min(max, Math.max(DOCUMENT_PANEL_MIN_WIDTH, px));
+}
+
+function inlinePreviewKind(
+  fileName: string | null | undefined,
+): "image" | "pdf" | "embed" {
+  const n = fileName?.toLowerCase() ?? "";
+  if (n.endsWith(".pdf")) return "pdf";
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.exec(n)) return "image";
+  return "embed";
+}
+
+/** Google Drive triangle logo (opens file in Drive). */
+function DriveFileOpenIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 87.3 78"
+      className={className}
+      aria-hidden
+    >
+      <path
+        d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
+        fill="#0066da"
+      />
+      <path
+        d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"
+        fill="#00ac47"
+      />
+      <path
+        d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
+        fill="#ea4335"
+      />
+      <path
+        d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"
+        fill="#00832d"
+      />
+      <path
+        d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"
+        fill="#2684fc"
+      />
+      <path
+        d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
+        fill="#ffba00"
+      />
+    </svg>
+  );
 }
 
 const SECTION_DOCUMENT_MAP: Record<string, string[]> = {
@@ -198,6 +353,21 @@ export function DocumentContextPanel({
     fileName: string | null;
   } | null>(null);
   const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+  const [previewDriveFile, setPreviewDriveFile] = useState<{
+    documentId: string;
+    fileId: string;
+    fileName: string | null;
+  } | null>(null);
+  const [previewMetaExpanded, setPreviewMetaExpanded] = useState(false);
+
+  const [panelWidth, setPanelWidth] = useState(DOCUMENT_PANEL_DEFAULT_WIDTH);
+  const [isResizingDocPanel, setIsResizingDocPanel] = useState(false);
+  const docResizeDragRef = useRef<{
+    startX: number;
+    startWidth: number;
+    edge: "left" | "right";
+  } | null>(null);
+  const panelWidthDuringResizeRef = useRef(panelWidth);
 
   const showDocExcludeToggle = sectionKey !== "comp-detail";
 
@@ -224,6 +394,90 @@ export function DocumentContextPanel({
   const headerSubtitle = useMemo(
     () => documentPanelSubtitle(sectionKey, sectionTagProp),
     [sectionKey, sectionTagProp],
+  );
+
+  const previewDoc = useMemo(() => {
+    if (!previewDriveFile) return null;
+    return (
+      documents.find((d) => d.id === previewDriveFile.documentId) ?? null
+    );
+  }, [documents, previewDriveFile]);
+
+  useEffect(() => {
+    setPreviewMetaExpanded(false);
+  }, [previewDriveFile?.documentId]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DOCUMENT_PANEL_WIDTH_KEY);
+      if (raw == null) return;
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isNaN(n)) setPanelWidth(clampDocPanelWidth(n));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingDocPanel) return;
+
+    const onMove = (e: PointerEvent) => {
+      const drag = docResizeDragRef.current;
+      if (!drag) return;
+      const delta =
+        drag.edge === "left"
+          ? drag.startX - e.clientX
+          : e.clientX - drag.startX;
+      const next = clampDocPanelWidth(drag.startWidth + delta);
+      panelWidthDuringResizeRef.current = next;
+      setPanelWidth(next);
+    };
+
+    const onUp = () => {
+      docResizeDragRef.current = null;
+      setIsResizingDocPanel(false);
+      try {
+        localStorage.setItem(
+          DOCUMENT_PANEL_WIDTH_KEY,
+          String(panelWidthDuringResizeRef.current),
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [isResizingDocPanel]);
+
+  useEffect(() => {
+    panelWidthDuringResizeRef.current = panelWidth;
+  }, [panelWidth]);
+
+  const onDocResizePointerDown = useCallback(
+    (edge: "left" | "right") => (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      panelWidthDuringResizeRef.current = panelWidth;
+      docResizeDragRef.current = {
+        startX: e.clientX,
+        startWidth: panelWidth,
+        edge,
+      };
+      setIsResizingDocPanel(true);
+    },
+    [panelWidth],
   );
 
   const fetchDocuments = useCallback(async () => {
@@ -292,10 +546,14 @@ export function DocumentContextPanel({
 
   const handleConfirmDeleteDoc = useCallback(async () => {
     if (!deleteConfirm) return;
+    const deletedId = deleteConfirm.id;
     setIsDeletingDoc(true);
     try {
-      await deleteProjectDocument(deleteConfirm.id);
+      await deleteProjectDocument(deletedId);
       setDeleteConfirm(null);
+      setPreviewDriveFile((prev) =>
+        prev?.documentId === deletedId ? null : prev,
+      );
       await fetchDocuments();
     } catch (err) {
       console.error("[DocumentContextPanel] delete document:", err);
@@ -304,26 +562,28 @@ export function DocumentContextPanel({
     }
   }, [deleteConfirm, fetchDocuments]);
 
-  const handleReprocess = useCallback(    async (docId: string) => {
-      setReprocessingIds((prev) => new Set(prev).add(docId));
-      try {
-        await fetch("/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "reprocess", documentId: docId }),
-        });
-      } catch (err) {
-        console.error("Reprocess error:", err);
-      } finally {
-        setReprocessingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(docId);
-          return next;
-        });
+  const handleReprocess = useCallback(async (docId: string) => {
+    setReprocessingIds((prev) => new Set(prev).add(docId));
+    try {
+      const res = await driveFetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reprocess", documentId: docId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        console.error("Reprocess error:", data.error ?? res.status);
       }
-    },
-    [],
-  );
+    } catch (err) {
+      console.error("Reprocess error:", err);
+    } finally {
+      setReprocessingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(docId);
+        return next;
+      });
+    }
+  }, []);
 
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -353,7 +613,7 @@ export function DocumentContextPanel({
       setIsAdding(true);
       setAddError(null);
       try {
-        const res = await fetch("/api/documents", {
+        const res = await driveFetch("/api/documents", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -364,8 +624,8 @@ export function DocumentContextPanel({
             sectionTag: effectiveSectionTag ?? undefined,
           }),
         });
+        const data = (await res.json()) as { error?: string };
         if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? "Failed to add document");
         }
         setShowAddBrowser(false);
@@ -408,52 +668,241 @@ export function DocumentContextPanel({
     isStrictTagScope,
   ]);
 
-  if (!isOpen) return null;
+  const previewFileId = previewDoc?.file_id ?? previewDriveFile?.fileId ?? null;
+  const previewFileName =
+    previewDoc?.file_name ?? previewDriveFile?.fileName ?? null;
+  const previewIsReprocessing = previewDoc
+    ? reprocessingIds.has(previewDoc.id)
+    : false;
+  const previewStatus = previewIsReprocessing
+    ? "processing"
+    : previewDoc
+      ? getDocStatus(previewDoc)
+      : "unprocessed";
+  const previewIsRowProcessing = previewStatus === "processing";
+  const previewCanReprocess =
+    !!previewDoc?.file_id &&
+    !previewIsRowProcessing &&
+    !previewIsReprocessing;
+  const previewMetaEntries = previewDoc
+    ? structuredEntriesForDisplay(previewDoc.structured_data)
+    : [];
 
-  return (
-    <div className="fixed inset-0 z-50">
-      <DeleteDocumentConfirmDialog
-        isOpen={deleteConfirm !== null}
-        fileName={deleteConfirm?.fileName}
-        isDeleting={isDeletingDoc}
-        onCancel={() => {
-          if (!isDeletingDoc) setDeleteConfirm(null);
-        }}
-        onConfirm={() => void handleConfirmDeleteDoc()}
-      />
+  if (!isOpen && deleteConfirm === null) return null;
 
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Panel — full-screen on mobile, right-side drawer on md+ */}
-      <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-800 bg-gray-950 shadow-2xl md:inset-x-auto md:inset-y-0 md:right-0 md:top-0 md:w-full md:max-w-md md:border-l md:border-t-0">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3 md:px-6 md:py-4">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-100">
-              Document Context
-            </h2>
-            <p className="text-xs text-gray-500">{headerSubtitle}</p>
+  const renderPanelViews = () => (
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-white dark:bg-gray-950">
+      {previewDriveFile && previewFileId ? (
+        <>
+          <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-gray-200 px-3 py-3 dark:border-gray-800 md:px-5 md:py-4">
+            <button
+              type="button"
+              onClick={() => setPreviewDriveFile(null)}
+              className="shrink-0 rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              title="Back to document list"
+              aria-label="Back to document list"
+            >
+              <ArrowLeftIcon className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 max-w-[11rem] sm:max-w-[13rem] md:max-w-[15rem]">
+              <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {getDocumentPrimaryTitle(
+                  previewDoc?.document_label,
+                  previewDoc?.file_name,
+                ) ||
+                  (() => {
+                    const t = previewDriveFile.fileName?.trim();
+                    return t !== undefined && t !== "" ? t : "Document";
+                  })()}
+              </h2>
+              <p className="text-xs text-gray-600 dark:text-gray-500">
+                Preview — compare while you edit
+              </p>
+            </div>
+            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-3 md:gap-4">
+              <div className="flex items-center gap-1">
+                {previewDoc && previewIsRowProcessing ? (
+                  <ArrowPathIcon
+                    className="h-4 w-4 shrink-0 animate-spin text-blue-400"
+                    aria-label="Processing"
+                  />
+                ) : null}
+                {previewDoc && previewCanReprocess ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleReprocess(previewDoc.id)}
+                    className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-blue-700 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+                    title="Reprocess document from Drive"
+                  >
+                    <ArrowPathIcon className="h-3.5 w-3.5" />
+                    <span className="sr-only">Reprocess</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDeleteConfirm({
+                      id: previewDriveFile.documentId,
+                      fileName:
+                        previewDoc?.file_name ?? previewDriveFile.fileName,
+                    })
+                  }
+                  className="rounded p-1.5 text-gray-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+                  title="Delete document"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                  <span className="sr-only">Delete document</span>
+                </button>
+                <a
+                  href={`https://drive.google.com/file/d/${previewFileId}/view`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 rounded-lg p-1.5 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                  title="Open in Google Drive"
+                  aria-label="Open in Google Drive"
+                >
+                  <DriveFileOpenIcon className="h-[18px] w-auto" />
+                </a>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                aria-label="Close document panel"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
-            aria-label="Close document panel"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
+          {previewDoc ? (
+            <div className="shrink-0 border-b border-gray-200 bg-gray-50/90 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/40 md:px-5">
+              <p
+                className={`text-xs leading-relaxed text-gray-600 dark:text-gray-400 ${
+                  previewMetaExpanded ? "" : "line-clamp-2"
+                }`}
+              >
+                {(() => {
+                  const t = previewDoc.extracted_text?.trim();
+                  return t !== undefined && t !== ""
+                    ? t
+                    : "No extracted summary yet.";
+                })()}
+              </p>
+              <button
+                type="button"
+                className="mx-auto mt-1 flex w-full items-center justify-center rounded py-0.5 text-gray-500 transition hover:bg-gray-200/90 dark:hover:bg-gray-800/50"
+                aria-expanded={previewMetaExpanded}
+                aria-label={
+                  previewMetaExpanded ? "Collapse details" : "Expand details"
+                }
+                onClick={() => setPreviewMetaExpanded((v) => !v)}
+              >
+                <ChevronDownIcon
+                  className={`h-4 w-4 transition ${previewMetaExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+              {previewMetaExpanded ? (
+                <div className="mt-2 space-y-3 border-t border-gray-200 pt-3 dark:border-gray-800">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
+                        DOCUMENT_TYPE_BADGE_CLASS[previewDoc.document_type] ??
+                        DOCUMENT_TYPE_BADGE_CLASS.other
+                      }`}
+                    >
+                      {formatDocumentTypeShort(
+                        previewDoc.document_type,
+                        previewDoc.structured_data,
+                      )}
+                    </span>
+                    {previewDoc.section_tag ? (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] text-gray-700 dark:border-zinc-600/50 dark:bg-zinc-800/60 dark:text-zinc-400">
+                        <TagIcon className="h-3 w-3 shrink-0" />
+                        {getDocumentSectionTagLabel(previewDoc.section_tag) ??
+                          previewDoc.section_tag}
+                      </span>
+                    ) : null}
+                    <DocumentPreviewStatusPill
+                      doc={previewDoc}
+                      reprocessingIds={reprocessingIds}
+                    />
+                  </div>
+                  {previewDoc.extracted_text?.trim() ? (
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+                        Extracted text
+                      </p>
+                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white p-2 text-[11px] leading-relaxed text-gray-800 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                        {previewDoc.extracted_text}
+                      </pre>
+                    </div>
+                  ) : null}
+                  {previewMetaEntries.length > 0 ? (
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+                        Structured data
+                        <span className="ml-1 font-normal normal-case text-gray-600 dark:text-gray-400">
+                          ({previewMetaEntries.length} field
+                          {previewMetaEntries.length === 1 ? "" : "s"})
+                        </span>
+                      </p>
+                      <dl className="space-y-2 rounded-lg border border-gray-200 bg-white p-2 text-[11px] dark:border-zinc-800 dark:bg-zinc-950">
+                        {previewMetaEntries.map(([k, v]) => (
+                          <div
+                            key={k}
+                            className="grid gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0 dark:border-zinc-800/80"
+                          >
+                            <dt className="font-medium text-gray-600 dark:text-zinc-500">
+                              {k}
+                            </dt>
+                            <dd className="break-words text-gray-800 dark:text-zinc-300">
+                              {v}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <DocumentPanelInlinePreview
+              fileId={previewFileId}
+              fileName={previewFileName}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800 md:px-6 md:py-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Document Context
+          </h2>
+          <p className="text-xs text-gray-600 dark:text-gray-500">
+            {headerSubtitle}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          aria-label="Close document panel"
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
+      {/* Body */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
           {/* Inline Add Browser */}
           {showAddBrowser && (
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                   Select a file to add
                 </h3>
                 <button
@@ -462,21 +911,21 @@ export function DocumentContextPanel({
                     setShowAddBrowser(false);
                     setAddError(null);
                   }}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                 >
                   <ArrowLeftIcon className="h-3 w-3" />
                   Cancel
                 </button>
               </div>
               {addError && (
-                <p className="mb-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+                <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
                   {addError}
                 </p>
               )}
               {isAdding ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-blue-500" />
-                  <span className="ml-2 text-xs text-gray-400">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-600 dark:border-t-blue-500" />
+                  <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">
                     Adding document…
                   </span>
                 </div>
@@ -488,11 +937,11 @@ export function DocumentContextPanel({
                   onSelect={handleFileSelect}
                 />
               ) : (
-                <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200/90">
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200/90">
                   No Drive folder configured for this section. Go to the{" "}
                   <a
                     href={`/project/${projectId}/documents`}
-                    className="underline hover:text-amber-100"
+                    className="underline hover:text-amber-950 dark:hover:text-amber-100"
                     onClick={onClose}
                   >
                     Documents page
@@ -507,14 +956,14 @@ export function DocumentContextPanel({
             <>
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
                 </div>
               ) : (
                 <>
                   {scopedDocs.length > 0 && (
                     <div className="mb-6">
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-500">
                           {effectiveSectionTag
                             ? `${sectionKey.replace(/-/g, " ")} documents`
                             : "Relevant Documents"}
@@ -543,6 +992,9 @@ export function DocumentContextPanel({
                                 fileName: doc.file_name,
                               })
                             }
+                            onPreviewDriveFile={(payload) =>
+                              setPreviewDriveFile(payload)
+                            }
                           />
                         ))}
                       </div>
@@ -551,7 +1003,7 @@ export function DocumentContextPanel({
 
                   {otherDocs.length > 0 && (
                     <div className="mb-6">
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-500">
                         Other Project Documents
                       </h3>
                       <div className="space-y-2">
@@ -571,6 +1023,9 @@ export function DocumentContextPanel({
                                 id: doc.id,
                                 fileName: doc.file_name,
                               })
+                            }
+                            onPreviewDriveFile={(payload) =>
+                              setPreviewDriveFile(payload)
                             }
                           />
                         ))}
@@ -600,7 +1055,7 @@ export function DocumentContextPanel({
                   {showPhotoContext && (
                     <div className="mb-6">
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-500">
                           Photo Context
                         </h3>
                         {/* Global include/exclude toggle */}
@@ -609,14 +1064,16 @@ export function DocumentContextPanel({
                           onClick={handleToggleIncludePhotos}
                           className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
                             includePhotos
-                              ? "bg-blue-900/40 text-blue-300 hover:bg-blue-900/60"
-                              : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                              ? "bg-blue-100 text-blue-800 hover:bg-blue-200/80 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                           }`}
                           title={includePhotos ? "Exclude photos from AI context" : "Include photos in AI context"}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              includePhotos ? "bg-blue-400" : "bg-gray-600"
+                              includePhotos
+                                ? "bg-blue-600 dark:bg-blue-400"
+                                : "bg-gray-400 dark:bg-gray-600"
                             }`}
                           />
                           {includePhotos ? "Photos included" : "Photos excluded"}
@@ -625,11 +1082,11 @@ export function DocumentContextPanel({
 
                       {isLoadingPhotos ? (
                         <div className="flex items-center gap-2 py-3">
-                          <div className="h-3 w-3 animate-spin rounded-full border border-gray-600 border-t-blue-500" />
-                          <span className="text-xs text-gray-500">Loading photos…</span>
+                          <div className="h-3 w-3 animate-spin rounded-full border border-gray-300 border-t-blue-600 dark:border-gray-600 dark:border-t-blue-500" />
+                          <span className="text-xs text-gray-600 dark:text-gray-500">Loading photos…</span>
                         </div>
                       ) : photos.length === 0 ? (
-                        <p className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-3 text-xs text-gray-500">
+                        <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-500">
                           No analyzed photos found. Run photo analysis from the Subject Photos page first.
                         </p>
                       ) : (
@@ -641,13 +1098,13 @@ export function DocumentContextPanel({
                           {photos.map((photo) => (
                             <div
                               key={photo.id}
-                              className="rounded-lg border border-gray-800 bg-gray-900/50 px-3 py-2"
+                              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/50"
                             >
-                              <p className="truncate text-xs font-medium text-gray-200">
+                              <p className="truncate text-xs font-medium text-gray-900 dark:text-gray-200">
                                 {photo.label}
                               </p>
                               {photo.description && (
-                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-gray-500">
+                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-gray-600 dark:text-gray-500">
                                   {photo.description}
                                 </p>
                               )}
@@ -664,12 +1121,12 @@ export function DocumentContextPanel({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 px-4 py-3 space-y-2 md:px-6">
+        <div className="shrink-0 space-y-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800 md:px-6">
           {!showAddBrowser && (
             <button
               type="button"
               onClick={() => setShowAddBrowser(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-xs font-medium text-gray-300 transition hover:bg-gray-800 hover:text-gray-100"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-blue-700 dark:bg-gray-900 dark:hover:bg-gray-800"
             >
               <PlusIcon className="h-3.5 w-3.5" />
               Add Document
@@ -678,12 +1135,269 @@ export function DocumentContextPanel({
           <a
             href={`/project/${projectId}/documents`}
             onClick={onClose}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs text-gray-600 transition hover:text-gray-400"
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-1.5 text-xs text-gray-500 transition hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-400"
           >
             Manage all documents →
           </a>
         </div>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <DeleteDocumentConfirmDialog
+        isOpen={deleteConfirm !== null}
+        fileName={deleteConfirm?.fileName}
+        isDeleting={isDeletingDoc}
+        onCancel={() => {
+          if (!isDeletingDoc) setDeleteConfirm(null);
+        }}
+        onConfirm={() => void handleConfirmDeleteDoc()}
+      />
+
+      {isOpen ? (
+        <>
+      <div
+        className="relative hidden h-full shrink-0 border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 md:flex"
+        style={{ width: panelWidth }}
+      >
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize document panel — drag left edge"
+          aria-valuenow={panelWidth}
+          aria-valuemin={DOCUMENT_PANEL_MIN_WIDTH}
+          aria-valuemax={DOCUMENT_PANEL_MAX_WIDTH}
+          tabIndex={0}
+          className={`absolute left-0 top-0 z-10 h-full w-3 -translate-x-1/2 touch-none select-none md:cursor-col-resize ${
+            isResizingDocPanel
+              ? "bg-blue-500/30"
+              : "hover:bg-gray-200/90 dark:hover:bg-gray-800/80"
+          }`}
+          onPointerDown={onDocResizePointerDown("left")}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 32 : 16;
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampDocPanelWidth(w + step);
+                try {
+                  localStorage.setItem(DOCUMENT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampDocPanelWidth(w - step);
+                try {
+                  localStorage.setItem(DOCUMENT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }
+          }}
+        />
+        <div className="relative z-0 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {renderPanelViews()}
+        </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize document panel — drag right edge"
+          aria-valuenow={panelWidth}
+          aria-valuemin={DOCUMENT_PANEL_MIN_WIDTH}
+          aria-valuemax={DOCUMENT_PANEL_MAX_WIDTH}
+          tabIndex={0}
+          className={`absolute right-0 top-0 z-10 h-full w-3 translate-x-1/2 touch-none select-none md:cursor-col-resize ${
+            isResizingDocPanel
+              ? "bg-blue-500/30"
+              : "hover:bg-gray-200/90 dark:hover:bg-gray-800/80"
+          }`}
+          onPointerDown={onDocResizePointerDown("right")}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 32 : 16;
+            if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampDocPanelWidth(w + step);
+                try {
+                  localStorage.setItem(DOCUMENT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            } else if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setPanelWidth((w) => {
+                const next = clampDocPanelWidth(w - step);
+                try {
+                  localStorage.setItem(DOCUMENT_PANEL_WIDTH_KEY, String(next));
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }
+          }}
+        />
       </div>
+
+      <div className="fixed inset-0 z-50 md:hidden">
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          role="presentation"
+          onClick={onClose}
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-14 flex min-h-0 flex-col border-t border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
+          <div className="pointer-events-auto flex h-full min-h-0 flex-col">
+            {renderPanelViews()}
+          </div>
+        </div>
+      </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function DocumentPanelInlinePreview({
+  fileId,
+  fileName,
+}: {
+  fileId: string;
+  fileName: string | null;
+}) {
+  const apiUrl = `/api/drive/file/${fileId}`;
+  const kind = inlinePreviewKind(fileName);
+  const title =
+    fileName != null && fileName.trim() !== "" ? fileName.trim() : "Document";
+
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    return onDriveAuthRestored(() => setReloadToken((n) => n + 1));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setBlobUrl(null);
+
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+
+    void (async () => {
+      try {
+        const res = await driveFetch(apiUrl);
+        if (cancelled) return;
+        if (!res.ok) {
+          let message = `Could not load preview (${res.status})`;
+          try {
+            const j = (await res.json()) as { error?: string };
+            if (j.error) message = j.error;
+          } catch {
+            /* use default */
+          }
+          setError(message);
+          setLoading(false);
+          return;
+        }
+        const blob = await res.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+        setBlobUrl(url);
+      } catch {
+        if (!cancelled) setError("Failed to load preview");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, reloadToken]);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-gray-100 text-sm text-gray-500 dark:bg-gray-950/50 dark:text-gray-400">
+        Loading preview…
+      </div>
+    );
+  }
+
+  if (error ?? !blobUrl) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-2 bg-gray-100 px-6 text-center dark:bg-gray-950/50">
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {error ?? "Preview unavailable"}
+        </p>
+        <a
+          href={`https://drive.google.com/file/d/${fileId}/view`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium text-blue-600 dark:text-blue-400"
+        >
+          Open in Drive instead
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-gray-100 dark:bg-gray-950/50">
+      {kind === "image" ? (
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={blobUrl}
+            alt={title}
+            className="mx-auto block max-h-full max-w-full object-contain"
+          />
+        </div>
+      ) : kind === "pdf" ? (
+        <iframe
+          title={title}
+          src={blobUrl}
+          className="min-h-0 w-full flex-1 border-0 bg-white dark:bg-gray-900"
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <iframe
+            title={title}
+            src={blobUrl}
+            className="h-full min-h-[320px] w-full flex-1 border-0 bg-white dark:bg-gray-900"
+          />
+          <p className="shrink-0 px-2 py-1.5 text-center text-[10px] text-gray-600 dark:text-gray-400">
+            If the file does not display, use Open in Drive above.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -698,6 +1412,7 @@ function DocumentRow({
   onReprocess,
   onToggleExclude,
   onRequestDelete,
+  onPreviewDriveFile,
 }: {
   doc: ProjectDocument;
   isExpanded: boolean;
@@ -708,6 +1423,11 @@ function DocumentRow({
   onReprocess: () => void;
   onToggleExclude: () => void;
   onRequestDelete: () => void;
+  onPreviewDriveFile: (payload: {
+    documentId: string;
+    fileId: string;
+    fileName: string | null;
+  }) => void;
 }) {
   const status = isReprocessing ? "processing" : getDocStatus(doc);
   const isRowProcessing = status === "processing";
@@ -720,10 +1440,10 @@ function DocumentRow({
 
   return (
     <div
-      className={`rounded-lg border bg-gray-900/50 transition-opacity ${
+      className={`rounded-lg border bg-gray-50 transition-opacity dark:bg-gray-900/50 ${
         isExcluded
-          ? "border-gray-800/40 opacity-40"
-          : "border-gray-800"
+          ? "border-gray-200/80 opacity-40 dark:border-gray-800/40"
+          : "border-gray-200 dark:border-gray-800"
       }`}
     >
       <div className="flex items-start gap-2 px-3 py-2.5">
@@ -733,8 +1453,8 @@ function DocumentRow({
             onClick={onToggleExclude}
             className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
               isExcluded
-                ? "border-gray-600 bg-transparent text-transparent"
-                : "border-blue-500 bg-blue-500/20 text-blue-400"
+                ? "border-gray-300 bg-transparent text-transparent dark:border-gray-600"
+                : "border-blue-600 bg-blue-100 text-blue-700 dark:border-blue-500 dark:bg-blue-500/20 dark:text-blue-400"
             }`}
             title={
               isExcluded
@@ -773,11 +1493,11 @@ function DocumentRow({
         >
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-gray-200">
+              <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-200">
                 {getDocumentPrimaryTitle(doc.document_label, doc.file_name) ||
                   doc.document_type}
               </p>
-              <p className="text-xs text-gray-500">{shortType}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-500">{shortType}</p>
             </div>
             {hasExtractPreview ? (
               <ChevronDownIcon
@@ -803,22 +1523,30 @@ function DocumentRow({
             />
           ) : null}
           {doc.file_id ? (
-            <a
-              href={`https://drive.google.com/file/d/${doc.file_id}/view`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
-              title="View in Google Drive"
+            <button
+              type="button"
+              onClick={() => {
+                const id = doc.file_id;
+                if (id) {
+                  onPreviewDriveFile({
+                    documentId: doc.id,
+                    fileId: id,
+                    fileName: doc.file_name,
+                  });
+                }
+              }}
+              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-blue-700 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+              title="View in panel"
             >
               <EyeIcon className="h-3.5 w-3.5" />
-              <span className="sr-only">View in Google Drive</span>
-            </a>
+              <span className="sr-only">View document in panel</span>
+            </button>
           ) : null}
           {canReprocess ? (
             <button
               type="button"
               onClick={onReprocess}
-              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-blue-400"
+              className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-blue-700 dark:hover:bg-gray-800 dark:hover:text-blue-400"
               title="Reprocess document from Drive"
             >
               <ArrowPathIcon className="h-3.5 w-3.5" />
@@ -828,7 +1556,7 @@ function DocumentRow({
           <button
             type="button"
             onClick={onRequestDelete}
-            className="rounded p-1.5 text-gray-500 transition hover:bg-red-950/50 hover:text-red-400"
+            className="rounded p-1.5 text-gray-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
             title="Delete document"
           >
             <TrashIcon className="h-3.5 w-3.5" />
@@ -838,8 +1566,8 @@ function DocumentRow({
       </div>
 
       {isExpanded && doc.extracted_text ? (
-        <div className="border-t border-gray-800 px-3 py-2">
-          <p className="max-h-32 overflow-y-auto text-xs leading-relaxed text-gray-400 whitespace-pre-wrap">
+        <div className="border-t border-gray-200 px-3 py-2 dark:border-gray-800">
+          <p className="max-h-32 overflow-y-auto text-xs leading-relaxed text-gray-600 whitespace-pre-wrap dark:text-gray-400">
             {doc.extracted_text.substring(0, 1000)}
             {doc.extracted_text.length > 1000 && "..."}
           </p>

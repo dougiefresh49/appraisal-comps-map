@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
     const tokenResult = await getGoogleToken();
     if (!tokenResult.token) {
       return NextResponse.json(
-        { error: tokenResult.error ?? "No Google token available" },
+        {
+          error: tokenResult.error ?? "No Google token available",
+          code: tokenResult.code,
+        },
         { status: 401 },
       );
     }
