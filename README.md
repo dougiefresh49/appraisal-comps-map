@@ -11,6 +11,7 @@ A comprehensive Next.js application for managing commercial appraisal reports, v
 - **Drawing Tools**: Draw polygons, circles, and polylines to highlight areas or features.
 - **Geocoding**: Integrated address search for quick property location.
 - **Visual Customization**: Toggle UI elements, adjust bubble sizes, and use overlay guides for report screenshots.
+- **Auto-Placement**: Automatically place comparables on the map based on their address.
 
 ### 📁 Project Management
 
