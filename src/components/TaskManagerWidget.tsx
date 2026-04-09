@@ -14,7 +14,7 @@ import {
 import {
   useTaskManager,
   type ParseTask,
-  type ParseTaskStatus,
+  type TaskStatus,
 } from "~/components/TaskManagerContext";
 
 function routeSlugForCompType(compType: string): string {
@@ -38,7 +38,7 @@ function elapsed(startedAt: number): string {
   return `${min}m ${rem}s`;
 }
 
-function statusIcon(status: ParseTaskStatus) {
+function statusIcon(status: TaskStatus) {
   switch (status) {
     case "running":
       return (
@@ -55,9 +55,10 @@ function statusIcon(status: ParseTaskStatus) {
   }
 }
 
-function statusLabel(status: ParseTaskStatus, kind: string): string {
+function statusLabel(status: TaskStatus, kind: string): string {
   switch (status) {
     case "running":
+      if (kind === "subject-rebuild") return "Rebuilding...";
       return kind === "reparse" ? "Re-parsing..." : "Parsing...";
     case "success":
       return "Done";
@@ -66,6 +67,18 @@ function statusLabel(status: ParseTaskStatus, kind: string): string {
     case "error":
       return "Failed";
   }
+}
+
+function taskDetailHref(task: ParseTask): string {
+  if (task.kind === "subject-rebuild") {
+    return `/project/${task.projectId}/subject`;
+  }
+  const slug = routeSlugForCompType(task.compType);
+  return `/project/${task.projectId}/${slug}/comps/${task.id}`;
+}
+
+function reviewLinkLabel(task: ParseTask): string {
+  return task.kind === "subject-rebuild" ? "Review rebuild" : "Review merge";
 }
 
 function TaskRow({ task }: { task: ParseTask }) {
@@ -78,7 +91,7 @@ function TaskRow({ task }: { task: ParseTask }) {
     return () => clearInterval(id);
   }, [task.status, task.startedAt]);
 
-  const detailHref = `/project/${task.projectId}/${routeSlugForCompType(task.compType)}/comps/${task.id}`;
+  const detailHref = taskDetailHref(task);
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
@@ -105,7 +118,7 @@ function TaskRow({ task }: { task: ParseTask }) {
               href={detailHref}
               className="text-amber-400 underline underline-offset-2 hover:text-amber-300"
             >
-              Review merge
+              {reviewLinkLabel(task)}
             </Link>
           )}
         </p>

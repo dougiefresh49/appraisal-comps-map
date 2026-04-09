@@ -27,8 +27,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as { projectId?: string };
-    const { projectId } = body;
+    const body = (await request.json()) as {
+      projectId?: string;
+      writeProposed?: boolean;
+    };
+    const { projectId, writeProposed } = body;
 
     if (!projectId) {
       return NextResponse.json(
@@ -81,6 +84,33 @@ export async function POST(request: NextRequest) {
     // 3. Compute proposed values by re-applying MERGE_MAP (no fill-empty-only)
     const proposedCore = computeProposedCoreFromDocuments(subjectDocs);
     const proposedFema = computeProposedFemaFromDocuments(subjectDocs);
+
+    const hasChanges =
+      JSON.stringify(proposedCore) !== JSON.stringify(currentCore) ||
+      JSON.stringify(proposedFema) !== JSON.stringify(currentFema);
+
+    if (writeProposed) {
+      const { error: updateError } = await supabase
+        .from("subject_data")
+        .update({
+          proposed_core: hasChanges ? proposedCore : null,
+          proposed_fema: hasChanges ? proposedFema : null,
+        })
+        .eq("project_id", projectId);
+
+      if (updateError) {
+        return NextResponse.json(
+          { error: `Failed to write proposed data: ${updateError.message}` },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        hasChanges,
+        documentCount: subjectDocs.length,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

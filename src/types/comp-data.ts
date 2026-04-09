@@ -413,5 +413,7 @@ export interface SubjectDataRow {
   parcels: ParcelData[];
   improvements: ParcelImprovement[];
   improvement_analysis?: ImprovementAnalysisRow[] | null;
+  proposed_core: Record<string, unknown> | null;
+  proposed_fema: FemaData | null;
   updated_at: string;
 }
