@@ -5,6 +5,27 @@
  * they have in Google Drive — no service account required.
  */
 
+/** Thrown when Google returns HTTP 401 so API routes can return a structured re-auth response. */
+export class DriveAuthError extends Error {
+  readonly code = "token_expired_mid_request" as const;
+
+  constructor(message = "Google Drive rejected the access token") {
+    super(message);
+    this.name = "DriveAuthError";
+  }
+}
+
+function throwForFailedDriveResponse(
+  res: Response,
+  label: string,
+  bodySnippet: string,
+): never {
+  if (res.status === 401) {
+    throw new DriveAuthError();
+  }
+  throw new Error(`${label} (${res.status}): ${bodySnippet}`);
+}
+
 const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3";
 
@@ -47,14 +68,16 @@ export async function listFolderChildren(
   const url = `${DRIVE_API_BASE}/files?q=${q}&fields=${fields}&pageSize=${pageSize}`;
   const res = await fetch(url, { headers: authHeaders(token) });
 
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Drive listFolderChildren failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive listFolderChildren failed",
+      text.slice(0, 300),
     );
   }
 
-  const data = (await res.json()) as { files?: DriveFile[] };
+  const data = JSON.parse(text) as { files?: DriveFile[] };
   return data.files ?? [];
 }
 
@@ -68,15 +91,16 @@ export async function getFolderMetadata(
   const fields = encodeURIComponent("id,name,mimeType");
   const url = `${DRIVE_API_BASE}/files/${encodeURIComponent(folderId)}?fields=${fields}`;
   const res = await fetch(url, { headers: authHeaders(token) });
-
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Drive getFolderMetadata failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive getFolderMetadata failed",
+      text.slice(0, 300),
     );
   }
 
-  return (await res.json()) as DriveFile;
+  return JSON.parse(text) as DriveFile;
 }
 
 /**
@@ -104,15 +128,16 @@ export async function findChildByName(
   const url = `${DRIVE_API_BASE}/files?q=${q}&fields=${fields}&pageSize=1`;
 
   const res = await fetch(url, { headers: authHeaders(token) });
-
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Drive findChildByName failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive findChildByName failed",
+      text.slice(0, 300),
     );
   }
 
-  const data = (await res.json()) as { files?: DriveFile[] };
+  const data = JSON.parse(text) as { files?: DriveFile[] };
   return data.files?.[0] ?? null;
 }
 
@@ -129,8 +154,10 @@ export async function downloadFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Drive downloadFile failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive downloadFile failed",
+      text.slice(0, 300),
     );
   }
 
@@ -160,8 +187,10 @@ export async function shareDriveFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Drive shareDriveFile failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive shareDriveFile failed",
+      text.slice(0, 300),
     );
   }
 }
@@ -196,8 +225,10 @@ export async function findOrCreateFolder(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Drive createFolder failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive createFolder failed",
+      text.slice(0, 300),
     );
   }
 
@@ -227,7 +258,11 @@ export async function copyFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Drive copyFile failed (${res.status}): ${text.slice(0, 300)}`);
+    throwForFailedDriveResponse(
+      res,
+      "Drive copyFile failed",
+      text.slice(0, 300),
+    );
   }
 
   return (await res.json()) as DriveFile;
@@ -308,8 +343,10 @@ export async function uploadOrUpdateFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Drive uploadFile failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive uploadFile failed",
+      text.slice(0, 300),
     );
   }
 
@@ -337,8 +374,10 @@ export async function updateFileContentById(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Drive updateFile failed (${res.status}): ${text.slice(0, 300)}`,
+    throwForFailedDriveResponse(
+      res,
+      "Drive updateFile failed",
+      text.slice(0, 300),
     );
   }
 

@@ -989,9 +989,10 @@ export function CompDetailContent({
   // Form layout
   // ---------------------------------------------------------------------------
 
+  /* Container queries: 2-up only when the main column is wide (not viewport `lg`). */
   const columnsClass =
     layout === "page"
-      ? "columns-1 gap-x-4 [column-fill:balance] lg:columns-2"
+      ? "columns-1 gap-x-4 [column-fill:balance] @min-[900px]:columns-2"
       : "columns-1 gap-x-4";
 
   const controlClass =
@@ -1033,13 +1034,14 @@ export function CompDetailContent({
           </div>
         )}
 
-        {/* Sections */}
-        <div className={columnsClass}>
-          {sections.map((section) => (
-            <div
-              key={section.title}
-              className="mb-4 w-full break-inside-avoid rounded-xl border border-gray-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-900/40 dark:shadow-none dark:ring-white/5"
-            >
+        {/* Sections — @container so field rows respond to card width, not the viewport */}
+        <div className="@container">
+          <div className={columnsClass}>
+            {sections.map((section) => (
+              <div
+                key={section.title}
+                className="mb-4 w-full break-inside-avoid @container rounded-xl border border-gray-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-900/40 dark:shadow-none dark:ring-white/5"
+              >
               <h2 className="mb-4 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-500">
                 {section.title}
               </h2>
@@ -1058,12 +1060,12 @@ export function CompDetailContent({
                     isLandSfGeneratedFromAc(draft);
                   const rowAlignClass =
                     variant === "textarea"
-                      ? "sm:items-start sm:pt-0.5"
-                      : "sm:items-center";
+                      ? "@min-[520px]:items-start @min-[520px]:pt-0.5"
+                      : "@min-[520px]:items-center";
                   return (
                     <div
                       key={key}
-                      className={`grid grid-cols-1 gap-1 sm:grid-cols-[1fr_3fr] sm:gap-4 ${rowAlignClass}`}
+                      className={`grid grid-cols-1 gap-1 @min-[520px]:grid-cols-[1fr_3fr] @min-[520px]:gap-4 ${rowAlignClass}`}
                     >
                       <label className="text-xs font-medium text-gray-600 dark:text-gray-500">
                         {label}
@@ -1129,7 +1131,8 @@ export function CompDetailContent({
                 })}
               </div>
             </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Comments */}

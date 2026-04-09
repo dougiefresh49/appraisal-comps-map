@@ -10,10 +10,8 @@ import type {
   SubjectTax,
   FemaData,
 } from "~/types/comp-data";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   PushToSheetButton,
   type PushToSheetButtonHandle,
@@ -264,7 +262,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   const [core, setCore] = useState<CoreData>({});
   const [fema, setFema] = useState<FemaData>({});
   const [taxes, setTaxes] = useState<SubjectTax[]>([]);
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [isRebuildLoading, setIsRebuildLoading] = useState(false);
@@ -523,7 +521,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     onClick={() => {
                       setActionsMenuOpen(false);
-                      setIsDocPanelOpen(true);
+                      docPanel.open({ projectId, sectionKey: "subject" });
                     }}
                   >
                     <DocumentTextIcon
@@ -600,7 +598,9 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
               <DocumentPanelToggle
                 variant="icon"
                 omitNativeTitle
-                onClick={() => setIsDocPanelOpen(true)}
+                onClick={() =>
+                  docPanel.open({ projectId, sectionKey: "subject" })
+                }
               />
               <span className={TOOLBAR_HOVER_HINT_CLASS}>
                 Browse project documents (deeds, CAD, engagement) and extracted
@@ -1373,12 +1373,6 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         </>
       ) : null}
 
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="subject"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-      />
       <ExportJsonDialog
         projectId={projectId}
         context="subject"

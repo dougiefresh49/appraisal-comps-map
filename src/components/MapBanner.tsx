@@ -11,6 +11,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 import { useProject } from "~/hooks/useProject";
+import { driveFetch } from "~/lib/drive-fetch";
+import { onDriveAuthRestored } from "~/lib/drive-auth-event";
 import type { MapType, ProjectData } from "~/utils/projectStore";
 
 export type MapBannerActionType = "edit" | "expand";
@@ -115,6 +117,7 @@ export function MapBanner(props: MapBannerProps) {
   const [resolvedFileId, setResolvedFileId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [listLoading, setListLoading] = useState(false);
+  const [driveReloadToken, setDriveReloadToken] = useState(0);
   const chooseWrapRef = useRef<HTMLDivElement | null>(null);
 
   const mapsFolderId =
@@ -138,7 +141,7 @@ export function MapBanner(props: MapBannerProps) {
 
   const fetchFolderImages = useCallback(
     async (folderId: string): Promise<DriveListFile[]> => {
-      const res = await fetch("/api/drive/list", {
+      const res = await driveFetch("/api/drive/list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folderId, filesOnly: true }),
@@ -149,6 +152,12 @@ export function MapBanner(props: MapBannerProps) {
     },
     [],
   );
+
+  useEffect(() => {
+    return onDriveAuthRestored(() => {
+      setDriveReloadToken((t) => t + 1);
+    });
+  }, []);
 
   useEffect(() => {
     if (projectLoading || !project) return;
@@ -219,6 +228,7 @@ export function MapBanner(props: MapBannerProps) {
     mapRow?.imageFileId,
     imageType,
     fetchFolderImages,
+    driveReloadToken,
   ]);
 
   const label =

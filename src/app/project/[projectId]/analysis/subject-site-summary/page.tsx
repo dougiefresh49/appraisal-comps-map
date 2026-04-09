@@ -2,10 +2,8 @@
 
 import { use, useState } from "react";
 import { ReportSectionPage } from "~/components/ReportSectionPage";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import {
   SuggestionsPanel,
   SuggestionsPanelToggle,
@@ -92,18 +90,24 @@ function SiteSummaryKeyFacts({ projectId }: { projectId: string }) {
 }
 
 function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
-  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
+  const docPanel = useDocumentPanel();
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [excludedDocIds, setExcludedDocIds] = useState<Set<string>>(new Set());
   const [includePhotoContext, setIncludePhotoContext] = useState(true);
 
   const openSuggestions = () => {
-    setIsDocPanelOpen(false);
+    docPanel.close();
     setIsSuggestionsPanelOpen(true);
   };
   const openDocs = () => {
     setIsSuggestionsPanelOpen(false);
-    setIsDocPanelOpen(true);
+    docPanel.open({
+      projectId,
+      sectionKey: "subject-site-summary",
+      onExcludedIdsChange: setExcludedDocIds,
+      showPhotoContext: true,
+      onPhotoContextChange: setIncludePhotoContext,
+    });
   };
 
   return (
@@ -127,15 +131,6 @@ function SubjectSiteSummaryContent({ projectId }: { projectId: string }) {
         sectionKey="subject-site-summary"
         isOpen={isSuggestionsPanelOpen}
         onClose={() => setIsSuggestionsPanelOpen(false)}
-      />
-      <DocumentContextPanel
-        projectId={projectId}
-        sectionKey="subject-site-summary"
-        isOpen={isDocPanelOpen}
-        onClose={() => setIsDocPanelOpen(false)}
-        onExcludedIdsChange={setExcludedDocIds}
-        showPhotoContext
-        onPhotoContextChange={setIncludePhotoContext}
       />
     </div>
   );

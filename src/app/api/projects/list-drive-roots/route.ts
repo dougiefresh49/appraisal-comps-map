@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "~/env";
-import { listFolderChildren } from "~/lib/drive-api";
+import { DriveAuthError, listFolderChildren } from "~/lib/drive-api";
 import { getGoogleToken } from "~/utils/supabase/server";
 
 /**
@@ -43,6 +43,12 @@ export async function GET() {
       .map((f) => ({ id: f.id, name: f.name }));
     return NextResponse.json({ projects });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("list-drive-roots:", err);
     return NextResponse.json(
       {

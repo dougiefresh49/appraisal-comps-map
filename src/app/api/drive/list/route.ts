@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getGoogleToken } from "~/utils/supabase/server";
-import { listFolderChildren, type DriveListOptions } from "~/lib/drive-api";
+import {
+  DriveAuthError,
+  listFolderChildren,
+  type DriveListOptions,
+} from "~/lib/drive-api";
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,6 +41,12 @@ export async function POST(request: NextRequest) {
     const files = await listFolderChildren(token, body.folderId, options);
     return NextResponse.json({ files });
   } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 401 },
+      );
+    }
     console.error("Drive list error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list folder" },

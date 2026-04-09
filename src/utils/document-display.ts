@@ -118,3 +118,62 @@ export function formatDocumentTypeShort(
 
   return truncateWords(full.replace(/_/g, " "), 3, 28) || documentType;
 }
+
+/** Tailwind classes for document type badges (matches Documents page cards). */
+export const DOCUMENT_TYPE_BADGE_CLASS: Record<string, string> = {
+  deed:
+    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-600/40 dark:bg-amber-950/60 dark:text-amber-200",
+  flood_map:
+    "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-600/40 dark:bg-sky-950/60 dark:text-sky-200",
+  cad:
+    "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-600/40 dark:bg-violet-950/60 dark:text-violet-200",
+  zoning_map:
+    "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-600/40 dark:bg-emerald-950/60 dark:text-emerald-200",
+  neighborhood_map:
+    "border-teal-200 bg-teal-50 text-teal-900 dark:border-teal-600/40 dark:bg-teal-950/60 dark:text-teal-200",
+  location_map:
+    "border-cyan-200 bg-cyan-50 text-cyan-900 dark:border-cyan-600/40 dark:bg-cyan-950/60 dark:text-cyan-200",
+  engagement:
+    "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-600/40 dark:bg-rose-950/60 dark:text-rose-200",
+  other:
+    "border-gray-300 bg-gray-100 text-gray-800 dark:border-zinc-600/40 dark:bg-zinc-800/80 dark:text-zinc-300",
+};
+
+const DOCUMENT_SECTION_TAG_LABELS: { value: string; label: string }[] = [
+  { value: "subject", label: "Subject" },
+  { value: "neighborhood", label: "Neighborhood" },
+  { value: "ownership", label: "Ownership" },
+  { value: "zoning", label: "Zoning" },
+  { value: "flood-map", label: "Flood Map" },
+  { value: "engagement", label: "Engagement" },
+];
+
+/**
+ * Human label for `project_documents.section_tag` when it matches known tags;
+ * returns null for unknown values (caller may show the raw tag, e.g. sales-comp-1).
+ */
+export function getDocumentSectionTagLabel(
+  tag: string | null | undefined,
+): string | null {
+  if (!tag) return null;
+  return DOCUMENT_SECTION_TAG_LABELS.find((t) => t.value === tag)?.label ?? null;
+}
+
+/** Key/value rows for structured_data display (excludes processing_error). */
+export function structuredEntriesForDisplay(
+  data: Record<string, unknown> | undefined | null,
+): [string, string][] {
+  if (!data || typeof data !== "object") return [];
+  return Object.entries(data)
+    .filter(([k]) => k !== "processing_error")
+    .map(([k, v]) => [
+      k,
+      v !== null && typeof v === "object"
+        ? JSON.stringify(v, null, 2)
+        : typeof v === "string" ||
+            typeof v === "number" ||
+            typeof v === "boolean"
+          ? String(v)
+          : "",
+    ]);
+}

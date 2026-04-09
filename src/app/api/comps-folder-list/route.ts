@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGoogleToken } from "~/utils/supabase/server";
-import { listFolderChildren } from "~/lib/drive-api";
+import { DriveAuthError, listFolderChildren } from "~/lib/drive-api";
 
 interface FolderListRequest {
   type: string;
@@ -80,6 +80,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ folders });
   } catch (error) {
+    if (error instanceof DriveAuthError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 401 },
+      );
+    }
     console.error("Error fetching folder list:", error);
     return NextResponse.json(
       { error: "Failed to fetch folder list" },

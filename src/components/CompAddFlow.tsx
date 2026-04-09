@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "~/utils/supabase/client";
 import { upsertComparable } from "~/lib/supabase-queries";
+import { driveFetch } from "~/lib/drive-fetch";
 import type { ComparableType, Comparable } from "~/utils/projectStore";
 import type { CompType } from "~/types/comp-data";
 
@@ -157,7 +158,7 @@ function SearchPanel({ projectId, compType, compsFolderId, onCloneComplete }: Se
     setCloneError(null);
 
     try {
-      const res = await fetch("/api/comps/clone", {
+      const res = await driveFetch("/api/comps/clone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -391,20 +392,23 @@ export function CompAddFlow({
 
     try {
       if (compsFolderId) {
-        const res = await fetch("/api/drive/list", {
+        const res = await driveFetch("/api/drive/list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ folderId: compsFolderId, foldersOnly: true }),
         });
-        if (!res.ok) throw new Error("Failed to load Drive folders");
         const data = (await res.json()) as {
-          files: { id: string; name: string; mimeType: string }[];
+          files?: { id: string; name: string; mimeType: string }[];
+          error?: string;
         };
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to load Drive folders");
+        }
         setFolders(
           (data.files ?? []).map((f) => ({ folderId: f.id, name: f.name })),
         );
       } else if (projectFolderId) {
-        const res = await fetch("/api/comps-folder-list", {
+        const res = await driveFetch("/api/comps-folder-list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -412,8 +416,13 @@ export function CompAddFlow({
             type: typeToApiType(compType),
           }),
         });
-        if (!res.ok) throw new Error("Failed to load Drive folders");
-        const data = (await res.json()) as { folders: FolderEntry[] };
+        const data = (await res.json()) as {
+          folders?: FolderEntry[];
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to load Drive folders");
+        }
         setFolders(data.folders ?? []);
       }
     } catch (err) {
@@ -435,16 +444,19 @@ export function CompAddFlow({
   const loadFiles = useCallback(async (folderId: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/comps-folder-details", {
+      const res = await driveFetch("/api/comps-folder-details", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folderId }),
       });
-      if (!res.ok) throw new Error("Failed to load folder contents");
       const data = (await res.json()) as {
-        name: string;
-        files: DriveFile[];
+        name?: string;
+        files?: DriveFile[];
+        error?: string;
       };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to load folder contents");
+      }
       setFiles(data.files ?? []);
       setSelectedFolderName(data.name ?? null);
       setStep("select-files");
@@ -513,7 +525,7 @@ export function CompAddFlow({
         await upsertComparable(projectId, newComp);
       }
 
-      const res = await fetch("/api/comps/parse", {
+      const res = await driveFetch("/api/comps/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

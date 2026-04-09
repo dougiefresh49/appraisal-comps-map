@@ -26,26 +26,58 @@ export function SupabaseAuthProvider({
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  const signIn = useCallback(async (nextPath?: string) => {
-    const next = nextPath?.startsWith("/") ? nextPath : "/projects";
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
+  const oauthOptions = useCallback(
+    (nextPath?: string) => {
+      const next = nextPath?.startsWith("/") ? nextPath : "/projects";
+      return {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: { access_type: "offline" },
+        queryParams: { access_type: "offline" as const },
         scopes:
-          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
-      },
-    });
-  }, [supabase]);
+          "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets" as const,
+      };
+    },
+    [],
+  );
+
+  const signIn = useCallback(
+    async (nextPath?: string) => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: oauthOptions(nextPath),
+      });
+    },
+    [supabase, oauthOptions],
+  );
+
+  const signInGooglePopup = useCallback(
+    async (nextPath?: string): Promise<boolean> => {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          ...oauthOptions(nextPath),
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error ?? !data.url) {
+        return false;
+      }
+      const popup = window.open(
+        data.url,
+        "google-drive-reauth",
+        "width=520,height=720,scrollbars=yes",
+      );
+      return popup !== null;
+    },
+    [supabase, oauthOptions],
+  );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, [supabase]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isLoading, signIn, signOut }),
-    [user, isLoading, signIn, signOut],
+    () => ({ user, isLoading, signIn, signInGooglePopup, signOut }),
+    [user, isLoading, signIn, signInGooglePopup, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

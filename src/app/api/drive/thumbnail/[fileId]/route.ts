@@ -41,6 +41,16 @@ export async function GET(
     if (!metaRes.ok) {
       const text = await metaRes.text();
       console.error("Drive thumbnail meta error:", metaRes.status, text.slice(0, 240));
+      if (metaRes.status === 401) {
+        return NextResponse.json(
+          {
+            error:
+              "Google Drive rejected the access token — please re-authenticate.",
+            code: "token_expired_mid_request",
+          },
+          { status: 401 },
+        );
+      }
       return NextResponse.json(
         { error: "File not found or inaccessible" },
         { status: metaRes.status === 404 ? 404 : 502 },
@@ -60,6 +70,16 @@ export async function GET(
 
     if (!imgRes.ok) {
       console.error("Drive thumbnail fetch error:", imgRes.status);
+      if (imgRes.status === 401) {
+        return NextResponse.json(
+          {
+            error:
+              "Google Drive rejected the access token — please re-authenticate.",
+            code: "token_expired_mid_request",
+          },
+          { status: 401 },
+        );
+      }
       return NextResponse.json(
         { error: "Failed to fetch thumbnail" },
         { status: 502 },

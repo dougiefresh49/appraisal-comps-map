@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   XMarkIcon,
-  PlusIcon,
-  QueueListIcon,
   ArchiveBoxArrowDownIcon,
   PencilSquareIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
@@ -23,11 +23,12 @@ import {
 } from "~/components/MentionComposer";
 import type { ChatMention, ChatMessage } from "~/lib/chat-context";
 import type { ChatThread, PersistedMessage } from "~/types/chat";
+import { useTheme } from "~/components/ThemeProvider";
 
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
   loading: () => (
-    <div className="h-4 w-24 animate-pulse rounded bg-gray-800" />
+    <div className="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
   ),
 });
 
@@ -61,6 +62,7 @@ const CHAT_PANEL_DEFAULT_WIDTH = 480;
 const CHAT_PANEL_MIN_WIDTH = 300;
 const CHAT_PANEL_MAX_WIDTH = 960;
 const THREAD_SIDEBAR_WIDTH = 196;
+const THREAD_RAIL_COLLAPSED_WIDTH = 52;
 
 function clampChatPanelWidth(px: number): number {
   if (typeof window === "undefined") {
@@ -123,9 +125,14 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const [entities, setEntities] = useState<MentionEntity[]>([]);
   const [panelWidth, setPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizingChat, setIsResizingChat] = useState(false);
-  const [showThreadsSidebar, setShowThreadsSidebar] = useState(true);
+  const [threadRailExpanded, setThreadRailExpanded] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [archiveThreadConfirm, setArchiveThreadConfirm] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [isArchivingThread, setIsArchivingThread] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -349,6 +356,17 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     [archiveThread, activeThreadId],
   );
 
+  const confirmArchiveThread = useCallback(async () => {
+    if (!archiveThreadConfirm) return;
+    setIsArchivingThread(true);
+    try {
+      await handleArchiveThread(archiveThreadConfirm.id);
+      setArchiveThreadConfirm(null);
+    } finally {
+      setIsArchivingThread(false);
+    }
+  }, [archiveThreadConfirm, handleArchiveThread]);
+
   const handleStartEditTitle = useCallback(() => {
     setTitleDraft(activeThread?.title ?? "");
     setEditingTitle(true);
@@ -544,17 +562,6 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     ],
   );
 
-  const handleClearOrArchive = useCallback(async () => {
-    if (isStreaming && abortRef.current) abortRef.current.abort();
-
-    if (activeThreadId) {
-      await handleArchiveThread(activeThreadId);
-    } else {
-      setMessages([]);
-      setIsStreaming(false);
-    }
-  }, [isStreaming, activeThreadId, handleArchiveThread]);
-
   const onChatResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
@@ -579,154 +586,115 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   // Panel content (shared between desktop/mobile)
   // -------------------------------------------------------------------------
   const panelContent = (
-    <div className="flex h-full flex-col border-l border-gray-800 bg-gray-950">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-gray-800 px-3 py-2.5">
-        {/* Threads toggle */}
-        <button
-          type="button"
-          onClick={() => setShowThreadsSidebar((v) => !v)}
-          className={`rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300 ${
-            showThreadsSidebar ? "bg-gray-800 text-gray-300" : ""
-          }`}
-          title={showThreadsSidebar ? "Hide threads" : "Show threads"}
-          aria-label="Toggle thread list"
-        >
-          <QueueListIcon className="h-4 w-4" />
-        </button>
+    <div className="flex h-full min-h-0 flex-row border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+      {/* Full-height thread rail (Gemini-style: sidebar spans entire panel height) */}
+      <ThreadsRail
+        expanded={threadRailExpanded}
+        onExpand={() => setThreadRailExpanded(true)}
+        onCollapse={() => setThreadRailExpanded(false)}
+        threads={threads}
+        activeThreadId={activeThreadId}
+        isLoading={isLoadingThreads}
+        onSelect={handleSwitchThread}
+        onRequestArchive={(id, title) =>
+          setArchiveThreadConfirm({ id, title })
+        }
+        onNewThread={() => void handleNewThread()}
+        isStreaming={isStreaming}
+      />
 
-        {/* Thread title (editable) */}
-        <div className="min-w-0 flex-1">
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={() => void handleSaveTitle()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleSaveTitle();
-                if (e.key === "Escape") setEditingTitle(false);
-              }}
-              className="w-full rounded bg-gray-800 px-2 py-0.5 text-sm font-semibold text-gray-100 outline-none ring-1 ring-blue-600"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={handleStartEditTitle}
-              disabled={!activeThreadId}
-              title={activeThreadId ? "Click to rename thread" : undefined}
-              className="group flex w-full items-center gap-1.5 text-left"
-            >
-              <span className="truncate text-sm font-semibold text-gray-100">
-                {activeTitle ?? (activeThreadId ? "Untitled" : "AI Chat")}
-              </span>
-              {activeThreadId && (
-                <PencilSquareIcon className="h-3 w-3 shrink-0 text-gray-600 opacity-0 transition group-hover:opacity-100" />
-              )}
-            </button>
-          )}
-          {!editingTitle && (
-            <p className="truncate text-[11px] text-gray-500">{projectName}</p>
-          )}
-        </div>
-
-        {/* Right actions */}
-        <div className="flex shrink-0 items-center gap-1">
-          {editingTitle ? (
-            <button
-              type="button"
-              onClick={() => void handleSaveTitle()}
-              className="rounded-md p-1.5 text-emerald-400 transition hover:bg-gray-800"
-              aria-label="Save title"
-            >
-              <CheckIcon className="h-4 w-4" />
-            </button>
-          ) : (
-            <>
-              {/* New thread */}
+      {/* Chat column: title bar aligns to the right of the rail only */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2.5 dark:border-gray-800">
+          <div className="min-w-0 flex-1">
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => void handleSaveTitle()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSaveTitle();
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                className="w-full rounded border border-gray-200 bg-white px-2 py-0.5 text-sm font-semibold text-gray-900 outline-none ring-1 ring-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+            ) : (
               <button
                 type="button"
-                onClick={() => void handleNewThread()}
-                disabled={isStreaming}
-                className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300 disabled:opacity-40"
-                aria-label="New thread"
-                title="New conversation"
+                onClick={handleStartEditTitle}
+                disabled={!activeThreadId}
+                title={activeThreadId ? "Click to rename thread" : undefined}
+                className="group flex w-full items-center gap-1.5 text-left"
               >
-                <PlusIcon className="h-4 w-4" />
+                <span className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {activeTitle ?? (activeThreadId ? "Untitled" : "AI Chat")}
+                </span>
+                {activeThreadId && (
+                  <PencilSquareIcon className="h-3 w-3 shrink-0 text-gray-500 opacity-0 transition group-hover:opacity-100 dark:text-gray-600" />
+                )}
               </button>
-              {/* Archive / clear */}
-              {messages.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void handleClearOrArchive()}
-                  className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300"
-                  aria-label={activeThreadId ? "Archive thread" : "Clear conversation"}
-                  title={activeThreadId ? "Archive thread" : "Clear conversation"}
-                >
-                  <ArchiveBoxArrowDownIcon className="h-4 w-4" />
-                </button>
-              )}
-            </>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
-            aria-label="Close chat panel"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Body: thread sidebar + message area */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Thread sidebar */}
-        {showThreadsSidebar && (
-          <ThreadsSidebar
-            threads={threads}
-            activeThreadId={activeThreadId}
-            isLoading={isLoadingThreads}
-            onSelect={handleSwitchThread}
-            onArchive={(id) => void handleArchiveThread(id)}
-            onNewThread={() => void handleNewThread()}
-          />
-        )}
-
-        {/* Messages + composer */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto px-4 py-4 md:px-5"
-          >
-            {isLoadingMessages ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-700 border-t-blue-500" />
-              </div>
-            ) : messages.length === 0 ? (
-              <EmptyState hasThreads={threads.length > 0} />
-            ) : (
-              <div className="space-y-4">
-                {messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    isStreaming={
-                      isStreaming && msg === messages[messages.length - 1]
-                    }
-                  />
-                ))}
-              </div>
+            )}
+            {!editingTitle && (
+              <p className="truncate text-[11px] text-gray-600 dark:text-gray-500">
+                {projectName}
+              </p>
             )}
           </div>
 
-          <div className="shrink-0 border-t border-gray-800 px-4 py-3 md:px-5">
-            <MentionComposer
-              entities={entities}
-              onSend={handleSend}
-              disabled={isStreaming}
-            />
+          <div className="flex shrink-0 items-center gap-1">
+            {editingTitle ? (
+              <button
+                type="button"
+                onClick={() => void handleSaveTitle()}
+                className="rounded-md p-1.5 text-emerald-600 transition hover:bg-gray-100 dark:text-emerald-400 dark:hover:bg-gray-800"
+                aria-label="Save title"
+              >
+                <CheckIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              aria-label="Close chat panel"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
           </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-5"
+        >
+          {isLoadingMessages ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+            </div>
+          ) : messages.length === 0 ? (
+            <EmptyState hasThreads={threads.length > 0} />
+          ) : (
+            <div className="space-y-4">
+              {messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={
+                    isStreaming && msg === messages[messages.length - 1]
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-gray-200 px-4 py-3 dark:border-gray-800 md:px-5">
+          <MentionComposer
+            entities={entities}
+            onSend={handleSend}
+            disabled={isStreaming}
+          />
         </div>
       </div>
     </div>
@@ -734,6 +702,16 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
   return (
     <>
+      <ArchiveThreadConfirmDialog
+        isOpen={archiveThreadConfirm !== null}
+        threadTitle={archiveThreadConfirm?.title ?? ""}
+        isArchiving={isArchivingThread}
+        onCancel={() => {
+          if (!isArchivingThread) setArchiveThreadConfirm(null);
+        }}
+        onConfirm={() => void confirmArchiveThread()}
+      />
+
       {/* Desktop: inline resizable panel */}
       <div
         className="relative hidden h-full shrink-0 md:block"
@@ -748,7 +726,9 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           aria-valuemax={CHAT_PANEL_MAX_WIDTH}
           tabIndex={0}
           className={`absolute left-0 top-0 z-10 h-full w-3 -translate-x-1/2 touch-none select-none md:cursor-col-resize ${
-            isResizingChat ? "bg-blue-500/30" : "hover:bg-gray-800/80"
+            isResizingChat
+              ? "bg-blue-500/30"
+              : "hover:bg-gray-200/90 dark:hover:bg-gray-800/80"
           }`}
           onPointerDown={onChatResizePointerDown}
           onKeyDown={(e) => {
@@ -787,7 +767,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
         />
-        <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-800 bg-gray-950 shadow-2xl">
+        <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
           {panelContent}
         </div>
       </div>
@@ -796,53 +776,179 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Thread Sidebar
+// Archive thread confirmation
 // ---------------------------------------------------------------------------
 
-interface ThreadsSidebarProps {
-  threads: ChatThread[];
-  activeThreadId: string | null;
-  isLoading: boolean;
-  onSelect: (id: string) => void;
-  onArchive: (id: string) => void;
-  onNewThread: () => void;
+function ArchiveThreadConfirmDialog({
+  isOpen,
+  threadTitle,
+  isArchiving,
+  onCancel,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  threadTitle: string;
+  isArchiving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Dismiss"
+        onClick={isArchiving ? undefined : onCancel}
+      />
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Archive this conversation?
+        </h3>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          It will be removed from your thread list. You can start a new
+          conversation anytime.
+        </p>
+        {threadTitle.trim() ? (
+          <p className="mt-3 truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 dark:border-gray-800 dark:bg-gray-950/80 dark:text-gray-300">
+            {threadTitle.trim()}
+          </p>
+        ) : null}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isArchiving}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isArchiving}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+          >
+            {isArchiving ? "Archiving…" : "Archive"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function ThreadsSidebar({
+// ---------------------------------------------------------------------------
+// Thread rail (expanded list or Gemini-style skinny bar)
+// ---------------------------------------------------------------------------
+
+function ThreadsRail({
+  expanded,
+  onExpand,
+  onCollapse,
   threads,
   activeThreadId,
   isLoading,
   onSelect,
-  onArchive,
-}: ThreadsSidebarProps) {
+  onRequestArchive,
+  onNewThread,
+  isStreaming,
+}: {
+  expanded: boolean;
+  onExpand: () => void;
+  onCollapse: () => void;
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  isLoading: boolean;
+  onSelect: (id: string) => void;
+  onRequestArchive: (id: string, title: string) => void;
+  onNewThread: () => void;
+  isStreaming: boolean;
+}) {
+  if (!expanded) {
+    return (
+      <div
+        className="flex h-full shrink-0 flex-col items-center gap-2 border-r border-gray-200 bg-white py-2 dark:border-gray-800 dark:bg-gray-950"
+        style={{ width: THREAD_RAIL_COLLAPSED_WIDTH }}
+      >
+        <button
+          type="button"
+          onClick={onExpand}
+          className="rounded-md p-2 text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          title="Show thread list"
+          aria-label="Expand thread list"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onNewThread}
+          disabled={isStreaming}
+          className="rounded-md p-2 text-gray-600 transition hover:bg-gray-100 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800"
+          title="New conversation"
+          aria-label="New conversation"
+        >
+          <PencilSquareIcon className="h-5 w-5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="flex h-full shrink-0 flex-col overflow-y-auto border-r border-gray-800"
+      className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
       style={{ width: THREAD_SIDEBAR_WIDTH }}
     >
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center py-8">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-700 border-t-gray-400" />
-        </div>
-      ) : threads.length === 0 ? (
-        <div className="px-3 py-4">
-          <p className="text-[11px] leading-relaxed text-gray-600">
-            Your conversations will appear here.
-          </p>
-        </div>
-      ) : (
-        <ul className="py-1">
-          {threads.map((thread) => (
-            <ThreadItem
-              key={thread.id}
-              thread={thread}
-              isActive={thread.id === activeThreadId}
-              onSelect={() => onSelect(thread.id)}
-              onArchive={() => onArchive(thread.id)}
-            />
-          ))}
-        </ul>
-      )}
+      <div className="flex shrink-0 items-center px-2 py-2">
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="rounded-md p-1.5 text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          title="Collapse thread list"
+          aria-label="Collapse thread list"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <button
+          type="button"
+          onClick={onNewThread}
+          disabled={isStreaming}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-gray-800 transition hover:bg-gray-50 disabled:opacity-40 dark:text-gray-200 dark:hover:bg-gray-900/80"
+        >
+          <PencilSquareIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+          <span>New conversation</span>
+        </button>
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center py-8">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-gray-400" />
+          </div>
+        ) : threads.length === 0 ? (
+          <div className="px-3 py-4">
+            <p className="text-[11px] leading-relaxed text-gray-600 dark:text-gray-500">
+              Your conversations will appear here.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-0.5 px-1 py-1">
+            {threads.map((thread) => (
+              <ThreadItem
+                key={thread.id}
+                thread={thread}
+                isActive={thread.id === activeThreadId}
+                onSelect={() => onSelect(thread.id)}
+                onRequestArchive={() =>
+                  onRequestArchive(
+                    thread.id,
+                    thread.title ?? "New conversation",
+                  )
+                }
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -851,22 +957,22 @@ function ThreadItem({
   thread,
   isActive,
   onSelect,
-  onArchive,
+  onRequestArchive,
 }: {
   thread: ChatThread;
   isActive: boolean;
   onSelect: () => void;
-  onArchive: () => void;
+  onRequestArchive: () => void;
 }) {
   const title = thread.title ?? "New conversation";
   const time = formatRelativeTime(thread.updatedAt);
 
   return (
     <li
-      className={`group relative flex cursor-pointer items-start gap-1 border-b border-gray-800/50 px-3 py-2.5 text-xs transition-colors ${
+      className={`group relative flex cursor-pointer items-start gap-1 rounded-md px-3 py-2.5 text-xs transition-colors ${
         isActive
-          ? "bg-gray-800 text-gray-100"
-          : "text-gray-400 hover:bg-gray-900 hover:text-gray-200"
+          ? "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-200"
       }`}
       onClick={onSelect}
     >
@@ -876,20 +982,24 @@ function ThreadItem({
       <div className="min-w-0 flex-1 pl-1">
         <p
           className={`line-clamp-2 text-[11px] font-medium leading-snug ${
-            isActive ? "text-gray-100" : "text-gray-300"
+            isActive
+              ? "text-gray-900 dark:text-gray-100"
+              : "text-gray-800 dark:text-gray-300"
           }`}
         >
           {title}
         </p>
-        <p className="mt-0.5 text-[10px] text-gray-600">{time}</p>
+        <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-600">
+          {time}
+        </p>
       </div>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          onArchive();
+          onRequestArchive();
         }}
-        className="mt-0.5 shrink-0 rounded p-0.5 text-gray-600 opacity-0 transition hover:text-gray-400 group-hover:opacity-100"
+        className="mt-0.5 shrink-0 rounded p-0.5 text-gray-500 opacity-0 transition hover:text-gray-800 group-hover:opacity-100 dark:text-gray-600 dark:hover:text-gray-400"
         title="Archive conversation"
         aria-label="Archive conversation"
       >
@@ -906,18 +1016,18 @@ function ThreadItem({
 function EmptyState({ hasThreads }: { hasThreads: boolean }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-      <ChatBubbleLeftRightIcon className="mb-3 h-9 w-9 text-gray-700" />
-      <p className="text-sm font-medium text-gray-400">
+      <ChatBubbleLeftRightIcon className="mb-3 h-9 w-9 text-gray-400 dark:text-gray-700" />
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-400">
         {hasThreads ? "Start a new message" : "Ask anything about your project"}
       </p>
-      <p className="mt-1.5 text-xs leading-relaxed text-gray-600">
+      <p className="mt-1.5 text-xs leading-relaxed text-gray-600 dark:text-gray-600">
         Use{" "}
-        <kbd className="rounded border border-gray-700 bg-gray-800 px-1 py-0.5 font-mono text-[10px]">
+        <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:border-gray-700 dark:bg-gray-800">
           @
         </kbd>{" "}
         to reference specific documents, comps, or other reports.
       </p>
-      <div className="mt-4 space-y-2 text-left text-xs text-gray-600">
+      <div className="mt-4 space-y-2 text-left text-xs text-gray-600 dark:text-gray-600">
         <p>&ldquo;What is the county appraised value in @document?&rdquo;</p>
         <p>&ldquo;Compare the sale price per SF of @comp1 vs @comp2&rdquo;</p>
         <p>&ldquo;What was the land size on @6310 Tashay?&rdquo;</p>
@@ -937,6 +1047,8 @@ function MessageBubble({
   message: UIMessage;
   isStreaming: boolean;
 }) {
+  const { theme } = useTheme();
+
   if (message.role === "tool") {
     return <ToolResultBubble result={message.toolResult!} />;
   }
@@ -950,8 +1062,11 @@ function MessageBubble({
     );
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/20 px-4 py-2.5">
-          <div className="text-sm leading-relaxed text-gray-200" data-color-mode="dark">
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
+          <div
+            className="text-sm leading-relaxed text-gray-900 dark:text-gray-200"
+            data-color-mode={theme}
+          >
             <MarkdownPreview
               source={displayText}
               style={{ background: "transparent", fontSize: "0.875rem" }}
@@ -965,24 +1080,24 @@ function MessageBubble({
   const isEmpty = !message.content.trim();
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-gray-900 px-4 py-2.5">
+      <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-transparent dark:bg-gray-900">
         {isEmpty && isStreaming ? (
           <div className="flex items-center gap-1.5 py-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:150ms]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400 [animation-delay:300ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms] dark:bg-blue-400" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms] dark:bg-blue-400" />
           </div>
         ) : (
           <div
-            className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed text-gray-200"
-            data-color-mode="dark"
+            className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200"
+            data-color-mode={theme}
           >
             <MarkdownPreview
               source={message.content}
               style={{ background: "transparent", fontSize: "0.875rem" }}
             />
             {isStreaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-400/70" />
+              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-600/70 dark:bg-blue-400/70" />
             )}
           </div>
         )}
@@ -1004,8 +1119,8 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
       <div
         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
           result.success
-            ? "bg-emerald-900/30 text-emerald-300 ring-1 ring-emerald-800/50"
-            : "bg-red-900/30 text-red-300 ring-1 ring-red-800/50"
+            ? "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800/50"
+            : "bg-red-100 text-red-800 ring-1 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800/50"
         }`}
       >
         {result.success ? (
@@ -1043,7 +1158,7 @@ export function ChatPanelToggle({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-600 hover:bg-gray-800 hover:text-gray-200"
+      className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
       title="Open AI Chat"
     >
       <ChatBubbleLeftRightIcon className="h-3.5 w-3.5" />

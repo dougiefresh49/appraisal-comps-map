@@ -39,6 +39,7 @@ const geist = Geist({
 
 import { ThemeProvider } from "~/components/ThemeProvider";
 import { SupabaseAuthProvider } from "~/components/SupabaseAuthProvider";
+import { DriveReauthProvider } from "~/components/DriveReauthProvider";
 
 export default function RootLayout({
   children,
@@ -47,7 +48,9 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable} h-full min-h-dvh`}>
       <body className="m-0 min-h-dvh bg-transparent">
         <SupabaseAuthProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <DriveReauthProvider>
+            <ThemeProvider>{children}</ThemeProvider>
+          </DriveReauthProvider>
         </SupabaseAuthProvider>
       </body>
     </html>

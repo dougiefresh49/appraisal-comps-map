@@ -2,10 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import { MapBanner } from "~/components/MapBanner";
-import {
-  DocumentContextPanel,
-  DocumentPanelToggle,
-} from "~/components/DocumentContextPanel";
+import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
+import { useDocumentPanel } from "~/components/DocumentPanelContext";
 import { useSubjectData } from "~/hooks/useSubjectData";
 interface SubjectFloodMapPageProps {
   params: Promise<{ projectId: string }>;
@@ -25,7 +23,7 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
+  const docPanel = useDocumentPanel();
 
   useEffect(() => {
     if (!subjectData) return;
@@ -92,13 +90,6 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
 
   return (
     <div className="min-h-full bg-gray-950 p-6 text-gray-100 md:p-8">
-      <DocumentContextPanel
-        projectId={decodedProjectId}
-        sectionKey="flood_map"
-        isOpen={docsOpen}
-        onClose={() => setDocsOpen(false)}
-      />
-
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -107,7 +98,14 @@ export default function SubjectFloodMapPage({ params }: SubjectFloodMapPageProps
               FEMA map preview and certificate fields.
             </p>
           </div>
-          <DocumentPanelToggle onClick={() => setDocsOpen(true)} />
+          <DocumentPanelToggle
+            onClick={() =>
+              docPanel.open({
+                projectId: decodedProjectId,
+                sectionKey: "flood_map",
+              })
+            }
+          />
         </div>
 
         <MapBanner
