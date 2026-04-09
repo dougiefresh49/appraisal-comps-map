@@ -1000,3 +1000,5 @@ TODO
 Inferior
 Similar
 Superior
+Slightly Inferior
+Slightly Superior

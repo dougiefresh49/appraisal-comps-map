@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  type RefObject,
+} from "react";
 import {
   XMarkIcon,
   ArchiveBoxArrowDownIcon,
@@ -137,7 +145,9 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
   const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const panelWidthDuringResizeRef = useRef(panelWidth);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  /** Two instances of the chat column exist (desktop + mobile); each needs its own ref or scroll targets the wrong (hidden) node. */
+  const chatScrollDesktopRef = useRef<HTMLDivElement>(null);
+  const chatScrollMobileRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Restore saved panel width
@@ -301,11 +311,40 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       .finally(() => setIsLoadingMessages(false));
   }, [activeThreadId]);
 
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  const scrollChatColumnsToBottom = useCallback(() => {
+    for (const el of [
+      chatScrollDesktopRef.current,
+      chatScrollMobileRef.current,
+    ]) {
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
+  // Keep view pinned to newest messages (bottom): thread switch, load complete, sends, stream chunks
+  useLayoutEffect(() => {
+    if (isLoadingMessages) return;
+
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) scrollChatColumnsToBottom();
+    };
+
+    run();
+    const id = requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [
+    messages,
+    activeThreadId,
+    isLoadingMessages,
+    scrollChatColumnsToBottom,
+  ]);
 
   // Focus title input when editing starts
   useEffect(() => {
@@ -342,6 +381,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const handleSwitchThread = useCallback(
     (threadId: string) => {
       if (threadId === activeThreadId) return;
+      setIsLoadingMessages(true);
       setActiveThreadId(threadId);
       // Messages load via the effect above
     },
@@ -583,9 +623,9 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const activeTitle = activeThread?.title ?? null;
 
   // -------------------------------------------------------------------------
-  // Panel content (shared between desktop/mobile)
+  // Panel content (shared between desktop/mobile — separate scroll refs each)
   // -------------------------------------------------------------------------
-  const panelContent = (
+  const renderPanelContent = (scrollRef: RefObject<HTMLDivElement | null>) => (
     <div className="flex h-full min-h-0 flex-row border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
       {/* Full-height thread rail (Gemini-style: sidebar spans entire panel height) */}
       <ThreadsRail
@@ -666,7 +706,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-5"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-5"
         >
           {isLoadingMessages ? (
             <div className="flex h-full items-center justify-center">
@@ -758,7 +798,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
             }
           }}
         />
-        {panelContent}
+        {renderPanelContent(chatScrollDesktopRef)}
       </div>
 
       {/* Mobile: full-screen overlay */}
@@ -768,7 +808,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           onClick={onClose}
         />
         <div className="absolute inset-x-0 bottom-0 top-14 flex flex-col border-t border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
-          {panelContent}
+          {renderPanelContent(chatScrollMobileRef)}
         </div>
       </div>
     </>

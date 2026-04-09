@@ -12,7 +12,7 @@ import { createClient } from "~/utils/supabase/server";
 const searchAllProjects: FunctionDeclaration = {
   name: "search_all_projects",
   description:
-    "Search across ALL appraisal projects in the database. Use this when the user asks about a property or report that is not the current active project. Returns project id, name, subject address, and property type for each match. Call this first to get the project_id, then use query_subject_data or list_project_comps with that project_id.",
+    "Search across ALL appraisal projects/reports in the database, including past (reference) reports. Each row in the projects table represents one appraisal report. Past reports have is_reference=true and contain historical comparables. Use this when the user asks about a property, report, or historical/past comps. Returns project id, name, subject address, property type, and whether it is a reference report. Call this first to get project_id(s), then use list_project_comps or query_comp_data with that project_id.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -25,6 +25,17 @@ const searchAllProjects: FunctionDeclaration = {
         type: Type.STRING,
         description:
           "Partial project name to search for (case-insensitive).",
+      },
+      property_type_search: {
+        type: Type.STRING,
+        description:
+          "Filter by property type (e.g. 'office', 'warehouse', 'retail', 'industrial'). Case-insensitive partial match.",
+      },
+      include_reference: {
+        type: Type.STRING,
+        description:
+          "Set to 'true' to include past/reference reports, 'only' to return ONLY reference reports, or 'false' (default) for active projects only. When the user asks about 'past reports', 'old reports', or 'historical comps', set this to 'true' or 'only'.",
+        enum: ["true", "false", "only"],
       },
     },
   },
@@ -265,26 +276,32 @@ export async function executeToolCall(
 async function executeSearchAllProjects(
   args: Record<string, string>,
 ): Promise<ToolCallResult> {
-  const { address_search, name_search } = args;
+  const { address_search, name_search, property_type_search, include_reference } = args;
 
-  if (!address_search && !name_search) {
+  if (!address_search && !name_search && !property_type_search && include_reference !== "only") {
     return {
       toolName: "search_all_projects",
       args,
       success: false,
-      message: "Provide at least one of: address_search or name_search",
+      message: "Provide at least one of: address_search, name_search, or property_type_search",
       silent: true,
     };
   }
 
   const supabase = await createClient();
 
-  // Fetch all non-archived, non-reference projects with their subject address
-  const { data, error } = await supabase
+  let query = supabase
     .from("projects")
-    .select("id, name, property_type, subject_data(core)")
-    .is("archived_at", null)
-    .or("is_reference.is.null,is_reference.eq.false");
+    .select("id, name, property_type, is_reference, subject_data(core)")
+    .is("archived_at", null);
+
+  if (include_reference === "only") {
+    query = query.eq("is_reference", true);
+  } else if (include_reference !== "true") {
+    query = query.or("is_reference.is.null,is_reference.eq.false");
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return {
@@ -296,18 +313,20 @@ async function executeSearchAllProjects(
     };
   }
 
-  // Filter by address or name in JS (Supabase can't ilike on nested JSONB easily)
   const addrLower = address_search?.toLowerCase();
   const nameLower = name_search?.toLowerCase();
+  const typeLower = property_type_search?.toLowerCase();
 
   type ProjectRow = {
     id: string;
     name: string | null;
     property_type: string | null;
+    is_reference: boolean | null;
     subject_data: { core: Record<string, unknown> } | { core: Record<string, unknown> }[] | null;
   };
 
   const matches = ((data ?? []) as ProjectRow[])
+    .filter((row) => (row.name ?? "").toLowerCase() !== "reference library")
     .map((row) => {
       const sd = row.subject_data;
       const core: Record<string, unknown> | null = sd == null
@@ -317,9 +336,19 @@ async function executeSearchAllProjects(
           : sd.core ?? null;
       const address = typeof core?.Address === "string" ? core.Address : "";
       const city = typeof core?.City === "string" ? core.City : "";
-      return { id: row.id, name: row.name, address, city, property_type: row.property_type };
+      return {
+        id: row.id,
+        name: row.name,
+        address,
+        city,
+        property_type: row.property_type,
+        is_reference: row.is_reference === true,
+      };
     })
     .filter((r) => {
+      const hasSearch = addrLower ?? nameLower ?? typeLower;
+      if (!hasSearch && include_reference === "only") return true;
+
       const addressMatch = addrLower
         ? r.address.toLowerCase().includes(addrLower) ||
           r.city.toLowerCase().includes(addrLower)
@@ -327,14 +356,17 @@ async function executeSearchAllProjects(
       const nameMatch = nameLower
         ? (r.name ?? "").toLowerCase().includes(nameLower)
         : false;
-      return addressMatch || nameMatch;
+      const typeMatch = typeLower
+        ? (r.property_type ?? "").toLowerCase().includes(typeLower)
+        : false;
+      return addressMatch || nameMatch || typeMatch;
     });
 
   return {
     toolName: "search_all_projects",
     args,
     success: true,
-    message: `Found ${matches.length} matching project(s)`,
+    message: `Found ${matches.length} matching project(s)${include_reference === "only" ? " (reference/past reports)" : include_reference === "true" ? " (including past reports)" : ""}`,
     data: matches,
     silent: true,
   };

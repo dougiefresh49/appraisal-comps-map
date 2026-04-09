@@ -157,6 +157,9 @@ export async function generateChatStream(
       try {
         let loopCount = 0;
         const maxLoops = 5;
+        let lastToolName: string | null = null;
+        let repeatCount = 0;
+        const REPEAT_THRESHOLD = 3;
 
         while (loopCount < maxLoops) {
           loopCount++;
@@ -173,6 +176,7 @@ export async function generateChatStream(
           });
 
           const candidate = response.candidates?.[0];
+
           if (!candidate) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify("No response from AI.")}\n\n`),
@@ -189,12 +193,10 @@ export async function generateChatStream(
             const finishReason = candidate.finishReason;
 
             if (!text) {
-              // Log so it's visible in server logs for debugging
               console.warn(
                 `[generateChatStream] Empty response from model "${model}". finishReason="${finishReason ?? "unknown"}"`,
               );
 
-              // Map known finish reasons to human-readable messages
               let fallback: string;
               if (finishReason === FinishReason.SAFETY) {
                 fallback =
@@ -219,7 +221,6 @@ export async function generateChatStream(
             break;
           }
 
-          // Execute function calls and collect results
           contents.push({
             role: "model",
             parts: functionCalls,
@@ -237,7 +238,6 @@ export async function generateChatStream(
               projectId,
             );
 
-            // Only send UI event for write tools; read tools are silent
             if (!result.silent) {
               controller.enqueue(
                 encoder.encode(
@@ -252,7 +252,6 @@ export async function generateChatStream(
                 response: {
                   success: result.success,
                   message: result.message,
-                  // Include retrieved data so the model can use it in its answer
                   ...(result.data !== undefined ? { data: result.data } : {}),
                 },
               },
@@ -263,6 +262,38 @@ export async function generateChatStream(
             role: "user",
             parts: functionResponses,
           });
+
+          const currentToolNames = functionCalls
+            .map((p) => p.functionCall?.name)
+            .filter(Boolean)
+            .sort()
+            .join(",");
+          if (currentToolNames === lastToolName) {
+            repeatCount++;
+          } else {
+            lastToolName = currentToolNames;
+            repeatCount = 1;
+          }
+
+          if (repeatCount >= REPEAT_THRESHOLD) {
+            contents.push({
+              role: "user",
+              parts: [
+                {
+                  text: "You have called the same tool(s) multiple times with similar arguments. Please stop calling tools and provide your best answer using the data you have already retrieved. If you cannot answer, explain what information is missing.",
+                },
+              ],
+            });
+          }
+        }
+
+        if (loopCount >= maxLoops) {
+          const exhaustedMsg =
+            "I wasn't able to complete my response — the AI kept searching for data without producing a final answer. " +
+            "This can happen with complex queries that span multiple projects. Please try rephrasing your question or breaking it into smaller parts.";
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(exhaustedMsg)}\n\n`),
+          );
         }
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
