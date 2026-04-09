@@ -22,9 +22,10 @@ export async function POST(request: NextRequest) {
       fileIds?: string[];
       extraContext?: string;
       previewOnly?: boolean;
+      reparse?: boolean;
     };
 
-    const { compId, projectId, type, fileIds, extraContext, previewOnly } = body;
+    const { compId, projectId, type, fileIds, extraContext, previewOnly, reparse } = body;
 
     if (!compId || !projectId || !type) {
       return NextResponse.json(
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         driveToken,
         extraContext,
         previewOnly,
+        reparse,
       });
 
       if (!result.ok) {
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
         fileBuffers,
         extraContext,
         previewOnly,
+        reparse,
       });
 
       if (!result.ok) {

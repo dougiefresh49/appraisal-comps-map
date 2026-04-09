@@ -66,7 +66,9 @@ export type ComparableParsedDataStatus =
   | "none"
   | "processing"
   | "parsed"
-  | "error";
+  | "error"
+  | "reparsing"
+  | "pending_review";
 
 export interface Comparable {
   id: string;
@@ -795,6 +797,8 @@ function normalizeComparableEntity(
     "processing",
     "parsed",
     "error",
+    "reparsing",
+    "pending_review",
   ];
   const parsedDataStatus =
     status && validStatuses.includes(status) ? status : undefined;

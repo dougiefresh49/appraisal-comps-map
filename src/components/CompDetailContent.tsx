@@ -914,6 +914,7 @@ export function CompDetailContent({
   );
 
   const isProcessing = parsedDataStatus === "processing";
+  const isReparsing = parsedDataStatus === "reparsing" || parsedDataStatus === "pending_review";
 
   // ---------------------------------------------------------------------------
   // Loading / error states
@@ -999,7 +1000,7 @@ export function CompDetailContent({
     "w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100 dark:placeholder-gray-600";
 
   return (
-    <div>
+    <div className={isReparsing ? "pointer-events-none opacity-60" : ""}>
       {/* Map banner */}
       <div className="mb-6">
         <MapBanner

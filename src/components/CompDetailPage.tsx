@@ -32,13 +32,29 @@ function statusBadgeClasses(
 ): string {
   switch (status) {
     case "processing":
+    case "reparsing":
       return "bg-blue-100 text-blue-800 ring-1 ring-blue-200 animate-pulse dark:bg-blue-950/80 dark:text-blue-300 dark:ring-blue-800/80";
     case "parsed":
       return "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:ring-emerald-800/80";
+    case "pending_review":
+      return "bg-amber-100 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:ring-amber-800/80";
     case "error":
       return "bg-red-100 text-red-800 ring-1 ring-red-200 dark:bg-red-950/80 dark:text-red-300 dark:ring-red-800/80";
     default:
       return "bg-gray-100 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800/80 dark:text-gray-400 dark:ring-gray-700";
+  }
+}
+
+function statusDisplayLabel(
+  status: ComparableParsedDataStatus | undefined,
+): string {
+  switch (status) {
+    case "reparsing":
+      return "re-parsing";
+    case "pending_review":
+      return "review needed";
+    default:
+      return status ?? "none";
   }
 }
 
@@ -78,6 +94,7 @@ export function CompDetailPage({
   const {
     parsedData,
     saveParsedData,
+    clearProposedData,
     refreshParsedData,
   } = useCompParsedData(compId);
 
@@ -88,6 +105,7 @@ export function CompDetailPage({
     string,
     unknown
   > | null>(null);
+  const [showMergeReview, setShowMergeReview] = useState(false);
   const [folderName, setFolderName] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -134,19 +152,57 @@ export function CompDetailPage({
 
   const headerLabel = `${compType.toUpperCase()} COMP #${displayNumber} — ${displayAddress}`;
 
-  // Keep a stable ref to saveParsedData for the DataMergeDialog confirm handler
   const saveParsedDataRef = useRef(saveParsedData);
   saveParsedDataRef.current = saveParsedData;
+  const clearProposedDataRef = useRef(clearProposedData);
+  clearProposedDataRef.current = clearProposedData;
+
+  const isPendingReview = comp?.parsedDataStatus === "pending_review";
+
+  // Whether the merge dialog should be open -- driven by user action or
+  // inline pendingProposedData from the legacy preview flow.
+  const isMergeDialogOpen = showMergeReview || !!pendingProposedData;
+
+  // The proposed data to show in the dialog: inline (legacy) or from DB
+  const effectiveProposedData = pendingProposedData
+    ?? (showMergeReview && parsedData?.proposed_raw_data
+      ? (parsedData.proposed_raw_data as Record<string, unknown>)
+      : null);
+
+  // Whether this merge is against DB-stored proposed_raw_data (vs inline)
+  const isDbMerge = !pendingProposedData && showMergeReview;
+
+  const handleStartReview = useCallback(async () => {
+    await refreshParsedData();
+    setShowMergeReview(true);
+  }, [refreshParsedData]);
 
   const handleMergeConfirm = useCallback(
     async (merged: Record<string, unknown>) => {
-      await saveParsedDataRef.current(
-        merged as unknown as LandSaleData | SaleData | RentalData,
-      );
+      if (isDbMerge) {
+        await clearProposedDataRef.current(
+          merged as unknown as LandSaleData | SaleData | RentalData,
+        );
+      } else {
+        await saveParsedDataRef.current(
+          merged as unknown as LandSaleData | SaleData | RentalData,
+        );
+      }
       setPendingProposedData(null);
+      setShowMergeReview(false);
     },
-    [],
+    [isDbMerge],
   );
+
+  const handleMergeCancel = useCallback(async () => {
+    if (isDbMerge && parsedData) {
+      await clearProposedDataRef.current(
+        parsedData.raw_data as unknown as LandSaleData | SaleData | RentalData,
+      );
+    }
+    setPendingProposedData(null);
+    setShowMergeReview(false);
+  }, [isDbMerge, parsedData]);
 
   if (projectLoading) {
     return (
@@ -220,7 +276,7 @@ export function CompDetailPage({
               Save failed
             </span>
           )}
-          {parsedData && (
+          {parsedData && comp.parsedDataStatus !== "reparsing" && comp.parsedDataStatus !== "pending_review" && (
             <button
               type="button"
               onClick={() => setShowReparseFlow(true)}
@@ -266,7 +322,7 @@ export function CompDetailPage({
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadgeClasses(comp.parsedDataStatus)}`}
             >
-              {comp.parsedDataStatus}
+              {statusDisplayLabel(comp.parsedDataStatus)}
             </span>
           )}
         </div>
@@ -276,6 +332,46 @@ export function CompDetailPage({
           </p>
         )}
       </div>
+
+      {/* Re-parse banner */}
+      {comp.parsedDataStatus === "reparsing" && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-950/20">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+              Re-parse in progress
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-blue-700 dark:text-blue-400">
+            Editing is disabled until the re-parse completes and you review the
+            results.
+          </p>
+        </div>
+      )}
+
+      {/* Pending review banner */}
+      {isPendingReview && !showMergeReview && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                Re-parse complete — review needed
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                New data is available from the re-parse. Review and merge the
+                changes to update this comp.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleStartReview()}
+              className="shrink-0 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-500"
+            >
+              Review Changes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Body — uses CompDetailContent for map + form */}
       <CompDetailContent
@@ -328,14 +424,14 @@ export function CompDetailPage({
         />
       )}
 
-      {pendingProposedData && parsedData && (
+      {isMergeDialogOpen && effectiveProposedData && parsedData && (
         <DataMergeDialog
           isOpen
           title="Review & Merge Re-parse Results"
           currentData={parsedData.raw_data as Record<string, unknown>}
-          proposedData={pendingProposedData}
+          proposedData={effectiveProposedData}
           onConfirm={handleMergeConfirm}
-          onCancel={() => setPendingProposedData(null)}
+          onCancel={() => void handleMergeCancel()}
         />
       )}
     </div>

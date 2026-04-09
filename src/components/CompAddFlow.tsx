@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "~/utils/supabase/client";
 import { upsertComparable } from "~/lib/supabase-queries";
 import { driveFetch } from "~/lib/drive-fetch";
+import { useTaskManagerMaybe } from "~/components/TaskManagerContext";
 import type { ComparableType, Comparable } from "~/utils/projectStore";
 import type { CompType } from "~/types/comp-data";
 
@@ -77,7 +78,7 @@ function routeSlugForCompType(compType: ComparableType): string {
   }
 }
 
-type Step = "select-folder" | "select-files" | "parsing" | "done" | "error";
+type Step = "select-folder" | "select-files" | "parsing" | "done" | "error" | "queued";
 type ActiveTab = "drive" | "search";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -498,16 +499,67 @@ export function CompAddFlow({
   };
 
   const pendingCompIdRef = useRef<string | null>(null);
+  const taskManager = useTaskManagerMaybe();
 
   const handleParse = async () => {
     if (selectedFileIds.size === 0) return;
 
-    setStep("parsing");
     setErrorMessage(null);
 
+    const isReparseMode = !!(onPreviewComplete && compId);
     let activeCompId = compId ?? pendingCompIdRef.current;
 
-    // Preview-only mode: skip DB writes, call onPreviewComplete with proposed data
+    // When the task manager is available, dispatch to background
+    if (taskManager) {
+      try {
+        if (isAddMode && !activeCompId) {
+          activeCompId = crypto.randomUUID();
+          pendingCompIdRef.current = activeCompId;
+          const newComp: Comparable = {
+            id: activeCompId,
+            type: compType,
+            address: "",
+            addressForDisplay: "",
+            folderId: selectedFolderId ?? undefined,
+            parsedDataStatus: "processing",
+          };
+          await upsertComparable(projectId, newComp);
+        }
+
+        const label =
+          selectedFolderName ??
+          `${compType} comp`;
+
+        taskManager.addParseTask({
+          compId: activeCompId!,
+          projectId,
+          compType,
+          label,
+          kind: isReparseMode ? "reparse" : "parse",
+          fileIds: Array.from(selectedFileIds),
+          extraContext: extraContext.trim() || undefined,
+        });
+
+        pendingCompIdRef.current = null;
+        setResultCompId(activeCompId ?? null);
+        setStep("queued");
+      } catch (err) {
+        if (isAddMode && activeCompId) {
+          const supabase = createClient();
+          void supabase.from("comparables").delete().eq("id", activeCompId);
+          pendingCompIdRef.current = null;
+        }
+        setErrorMessage(
+          err instanceof Error ? err.message : "Failed to queue parse",
+        );
+        setStep("error");
+      }
+      return;
+    }
+
+    // Fallback: blocking parse when task manager is not available
+    setStep("parsing");
+
     const isPreviewMode = !!(onPreviewComplete && compId);
 
     try {
@@ -549,8 +601,7 @@ export function CompAddFlow({
         data?: Record<string, unknown>;
       };
 
-      // Preview mode: hand off to caller and close dialog
-      if (isPreviewMode && responseData.proposedData) {
+      if (isPreviewMode && responseData.proposedData && onPreviewComplete) {
         onPreviewComplete(responseData.proposedData);
         onClose();
         return;
@@ -782,18 +833,45 @@ export function CompAddFlow({
                 </div>
               )}
 
+              {step === "queued" && (
+                <div className="space-y-4 py-8 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
+                    {onPreviewComplete
+                      ? "Re-parse queued. You\u2019ll be notified when review is ready."
+                      : "Documents queued for parsing."}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-500">
+                    This typically takes 15\u201330 seconds. You can continue
+                    working \u2014 check the task panel at the bottom of the
+                    screen for progress.
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (resultCompId) onComplete(resultCompId);
+                      onClose();
+                    }}
+                    className="rounded-md bg-blue-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+                  >
+                    OK
+                  </button>
+                </div>
+              )}
+
               {step === "parsing" && (
                 <div className="space-y-3 py-12 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-300">
                     {isAddMode
-                      ? "Creating comp & extracting data with AI…"
+                      ? "Creating comp & extracting data with AI\u2026"
                       : onPreviewComplete
-                        ? "Extracting proposed data with AI…"
-                        : "Extracting comp data with AI…"}
+                        ? "Extracting proposed data with AI\u2026"
+                        : "Extracting comp data with AI\u2026"}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-500">
-                    This may take 15–30 seconds.
+                    This may take 15\u201330 seconds.
                   </p>
                 </div>
               )}
