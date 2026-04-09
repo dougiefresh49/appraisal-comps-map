@@ -166,7 +166,7 @@ export function CompDetailPage({
   // The proposed data to show in the dialog: inline (legacy) or from DB
   const effectiveProposedData = pendingProposedData
     ?? (showMergeReview && parsedData?.proposed_raw_data
-      ? (parsedData.proposed_raw_data as Record<string, unknown>)
+      ? parsedData.proposed_raw_data
       : null);
 
   // Whether this merge is against DB-stored proposed_raw_data (vs inline)
