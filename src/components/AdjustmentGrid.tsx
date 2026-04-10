@@ -23,55 +23,21 @@ import { useSubjectData } from "~/hooks/useSubjectData";
 import { useCompsParsedDataMulti } from "~/hooks/useCompsParsedDataMulti";
 import type { AdjustmentGridSuggestions } from "~/lib/adjustment-suggestions";
 import { CompDetailSidePanel } from "~/components/CompDetailSidePanel";
+import type {
+  AdjustmentCategoryState,
+  AdjustmentCellState,
+  AdjustmentGridState,
+  CompColumnState,
+  GridConfig,
+} from "~/types/adjustment-grid";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface GridConfig {
-  exclude_extremes: boolean;
-  round_up: boolean;
-  disable_rounding: boolean;
-  round_final_value: boolean;
-  round_to_5k: boolean;
-  include_median: boolean;
-  percent_inc_per_month: number;
-  report_effective_date: string;
-}
-
-export interface AdjustmentCellState {
-  qualitative: string;
-  percentage: number;
-  from_ai?: boolean;
-}
-
-export interface AdjustmentCategoryState {
-  name: string;
-  sort_order: number;
-  comp_values: Record<string, AdjustmentCellState>;
-  subject_value: string;
-}
-
-export interface CompColumnState {
-  id: string;
-  number: number;
-  address: string;
-  date_of_sale: string;
-  base_price_per_unit: number;
-  size: number;
-}
-
-export interface AdjustmentGridState {
-  transaction_categories: AdjustmentCategoryState[];
-  property_categories: AdjustmentCategoryState[];
-  comps: CompColumnState[];
-  subject_size: number;
-  price_unit: string;
-  config: GridConfig;
-  source: "ai_suggested" | "manual" | "mixed";
-  size_label?: string;
-  price_label?: string;
-}
+export type {
+  AdjustmentCategoryState,
+  AdjustmentCellState,
+  AdjustmentGridState,
+  CompColumnState,
+  GridConfig,
+} from "~/types/adjustment-grid";
 
 interface AdjustmentGridProps {
   projectId: string;
@@ -842,9 +808,7 @@ function reconcileDraftComps(
     cats.map((cat) => {
       const cv = { ...cat.comp_values };
       for (const c of added) {
-        if (!cv[c.id]) {
-          cv[c.id] = emptyCell();
-        }
+        cv[c.id] ??= emptyCell();
       }
       for (const id of Object.keys(cv)) {
         if (!freshMap.has(id)) {
@@ -903,10 +867,10 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     const yearsBuilt = parseYearsBuiltList(
       rawSubjectCore["Year Built"] as string | number | null | undefined,
     );
+    const bldSfRaw = rawSubjectCore["Building Size (SF)"];
     const totalBldSf =
-      typeof rawSubjectCore["Building Size (SF)"] === "number" &&
-      !Number.isNaN(rawSubjectCore["Building Size (SF)"] as number)
-        ? (rawSubjectCore["Building Size (SF)"] as number)
+      typeof bldSfRaw === "number" && !Number.isNaN(bldSfRaw)
+        ? bldSfRaw
         : null;
     const computedEff = calcEffectiveAgeWeighted(
       yearsBuilt,
