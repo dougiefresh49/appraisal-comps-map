@@ -11,7 +11,11 @@ import { useSearchParams } from "next/navigation";
 import { useProject } from "~/hooks/useProject";
 import { createClient } from "~/utils/supabase/client";
 import { computeGeneratedFields } from "~/lib/calculated-fields";
-import type { Comparable } from "~/utils/projectStore";
+import {
+  getMapForComp,
+  type Comparable,
+  type ProjectData,
+} from "~/utils/projectStore";
 import { PushToSheetButton } from "~/components/PushToSheetButton";
 
 // ============================================================
@@ -466,25 +470,35 @@ function SectionBlock({
 // Sub-component: rendered comp card
 // ============================================================
 
+function compBannerThumbnailUrl(project: ProjectData, compId: string): string | null {
+  const id = getMapForComp(project, compId)?.imageFileId?.trim();
+  if (!id) return null;
+  return `/api/drive/thumbnail/${id}?sz=1200`;
+}
+
 function CompRendered({
   comp,
   index,
   compType,
   rawData,
   sections,
+  project,
 }: {
   comp: Comparable;
   index: number;
   compType: CompUITemplateType;
   rawData: Record<string, unknown>;
   sections: CompTemplateSection[];
+  project: ProjectData;
 }) {
   const leftSections = sections.filter((s) => s.side === "left");
   const rightSections = sections.filter((s) => s.side === "right");
   const fullSections = sections.filter((s) => s.side === "full");
 
   const imageUrl =
-    comp.images?.[0]?.webViewLink ?? comp.images?.[0]?.webViewUrl;
+    compBannerThumbnailUrl(project, comp.id) ??
+    comp.images?.[0]?.webViewLink ??
+    comp.images?.[0]?.webViewUrl;
 
   return (
     <div
@@ -1021,6 +1035,7 @@ export function CompUITemplate({
                   compType={compType}
                   rawData={firstCompRaw}
                   sections={editSections}
+                  project={project}
                 />
               ) : (
                 <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-500">
@@ -1042,6 +1057,7 @@ export function CompUITemplate({
                 compType={compType}
                 rawData={dataMap[comp.id] ?? {}}
                 sections={sections}
+                project={project}
               />
             ))}
             {comparables.length === 0 && !parsedLoading && (
