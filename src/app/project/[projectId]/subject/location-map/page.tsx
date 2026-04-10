@@ -103,6 +103,7 @@ export default function SubjectLocationMapPage({
   });
   const mapCameraEditedWhileUnlockedRef = useRef(false);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSnapshotRef = useRef<ProjectData | undefined>(undefined);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -487,6 +488,19 @@ export default function SubjectLocationMapPage({
         pageKey="subject-location-map"
         onReadOnlyChange={setMapReadOnly}
         bodyClassName="relative flex min-h-0 flex-1 flex-row"
+        onEditStart={() => {
+          editSnapshotRef.current = project ? structuredClone(project) : undefined;
+        }}
+        onCancelEdits={() => {
+          const snapshot = editSnapshotRef.current;
+          if (!snapshot) return;
+          if (debouncedSaveRef.current) {
+            clearTimeout(debouncedSaveRef.current);
+            debouncedSaveRef.current = null;
+          }
+          updateProject(() => snapshot);
+          applyProjectState(snapshot);
+        }}
       >
         {({ readOnly }) => (
           <>

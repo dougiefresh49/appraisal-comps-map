@@ -25,6 +25,12 @@ export interface MapLockGuardProps {
   className?: string;
   /** Applied to the wrapper around `children` (default: min-h-0 flex-1). */
   bodyClassName?: string;
+  /** Called synchronously after the lock is acquired — use to snapshot state. */
+  onEditStart?: () => void;
+  /** Called synchronously before releasing the lock on "Save Edits". */
+  onSaveEdits?: () => void;
+  /** Called synchronously before releasing the lock on "Cancel Edits" — use to restore snapshot. */
+  onCancelEdits?: () => void;
   children:
     | React.ReactNode
     | ((ctx: { readOnly: boolean }) => React.ReactNode);
@@ -36,6 +42,9 @@ export function MapLockGuard({
   onReadOnlyChange,
   className,
   bodyClassName,
+  onEditStart,
+  onSaveEdits,
+  onCancelEdits,
   children,
 }: MapLockGuardProps) {
   const [lock, setLock] = useState<PageLockRow | null>(null);
@@ -168,6 +177,7 @@ export function MapLockGuard({
       holdingLockRef.current = true;
       setIsEditing(true);
       await refreshLock();
+      onEditStart?.();
     } finally {
       setBusy(false);
     }
@@ -243,10 +253,24 @@ export function MapLockGuard({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void releaseLock()}
+            onClick={() => {
+              onCancelEdits?.();
+              void releaseLock();
+            }}
+            className="rounded-md border border-gray-400 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel Edits
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              onSaveEdits?.();
+              void releaseLock();
+            }}
             className="rounded-md border border-green-700 bg-white px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Done Editing
+            Save Edits
           </button>
         </div>
       ) : null}
