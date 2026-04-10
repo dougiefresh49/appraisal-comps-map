@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import {
@@ -661,6 +662,27 @@ function buildSuggestionMap(
 
 function emptyCell(): AdjustmentCellState {
   return { qualitative: "Similar", percentage: 0, from_ai: false };
+}
+
+/** F2 on a % cell: copy that cell's value to all comps to the right on the same row. */
+function onPctInputKeyDownFillRight(
+  e: KeyboardEvent<HTMLInputElement>,
+  compIdx: number,
+  comps: CompColumnState[],
+  onPctChange: (compId: string, pct: number) => void,
+): void {
+  if (e.key !== "F2") {
+    return;
+  }
+  e.preventDefault();
+  const v = Number.parseFloat(e.currentTarget.value);
+  const pct = Number.isNaN(v) ? 0 : v / 100;
+  for (let i = compIdx + 1; i < comps.length; i++) {
+    const id = comps[i]?.id;
+    if (id) {
+      onPctChange(id, pct);
+    }
+  }
 }
 
 function suggestionsToState(
@@ -2481,7 +2503,7 @@ function FragmentCategoryRows({
         <td className="border-r border-gray-200 bg-gray-100 px-3 py-1 text-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
           —
         </td>
-        {comps.map((c) => {
+        {comps.map((c, compIdx) => {
           if (isMC) {
             const pct = marketConditionsPct(c.date_of_sale, config);
             return (
@@ -2510,12 +2532,16 @@ function FragmentCategoryRows({
                 <input
                   type="number"
                   step={0.01}
+                  title="F2: copy this % to all comps to the right"
                   className="w-full min-w-[56px] bg-transparent font-mono text-[11px] text-gray-700 outline-none focus:outline-none dark:text-gray-200"
                   value={displayPct}
                   onChange={(e) => {
                     const v = Number.parseFloat(e.target.value);
                     onPctChange(c.id, Number.isNaN(v) ? 0 : v / 100);
                   }}
+                  onKeyDown={(e) =>
+                    onPctInputKeyDownFillRight(e, compIdx, comps, onPctChange)
+                  }
                 />
                 {cell.from_ai && (
                   <button
@@ -2687,7 +2713,7 @@ function FragmentPropertyRows({
         <td className="border-r border-gray-200 bg-gray-100 px-3 py-1 text-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600">
           —
         </td>
-        {comps.map((c) => {
+        {comps.map((c, compIdx) => {
           const cell = cat.comp_values[c.id] ?? emptyCell();
           const displayPct = (cell.percentage * 100).toFixed(2);
           return (
@@ -2703,12 +2729,16 @@ function FragmentPropertyRows({
                 <input
                   type="number"
                   step={0.01}
+                  title="F2: copy this % to all comps to the right"
                   className="w-full min-w-[56px] bg-transparent font-mono text-[11px] text-gray-700 outline-none focus:outline-none dark:text-gray-200"
                   value={displayPct}
                   onChange={(e) => {
                     const v = Number.parseFloat(e.target.value);
                     onPctChange(c.id, Number.isNaN(v) ? 0 : v / 100);
                   }}
+                  onKeyDown={(e) =>
+                    onPctInputKeyDownFillRight(e, compIdx, comps, onPctChange)
+                  }
                 />
                 {cell.from_ai && (
                   <button
