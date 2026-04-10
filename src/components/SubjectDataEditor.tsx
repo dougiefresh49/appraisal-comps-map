@@ -26,7 +26,12 @@ import {
   ArrowUpTrayIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
+  TableCellsIcon,
 } from "@heroicons/react/24/outline";
+import { ParcelDataTable, parcelDataToRow, rowToParcelData } from "~/components/ParcelDataTable";
+import { ParcelImprovementsTable, parcelImprovementToRow, rowToParcelImprovement } from "~/components/ParcelImprovementsTable";
+import type { ParcelData, ParcelImprovement } from "~/types/comp-data";
+import type { CompParcelPatch, CompParcelImprovementPatch } from "~/hooks/useCompParcels";
 import {
   PROPERTY_RIGHTS_OPTIONS,
   FRONTAGE_OPTIONS,
@@ -233,10 +238,16 @@ function SectionCard({
   title,
   children,
   className,
+  isExpanded,
+  onToggleExpand,
+  expandLabel,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  expandLabel?: string;
 }) {
   return (
     <div
@@ -245,9 +256,30 @@ function SectionCard({
         (className ? ` ${className}` : "")
       }
     >
-      <h3 className="mb-4 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
-        {title}
-      </h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+          {title}
+        </h3>
+        {onToggleExpand && (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            title={
+              isExpanded
+                ? `Hide ${expandLabel ?? "detail"}`
+                : `Show ${expandLabel ?? "detail"}`
+            }
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium transition hover:bg-gray-100 dark:hover:bg-gray-800 ${
+              isExpanded
+                ? "text-blue-600 dark:text-blue-400"
+                : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            <TableCellsIcon className="h-3.5 w-3.5" aria-hidden />
+            {isExpanded ? "Hide" : (expandLabel ?? "Parcels")}
+          </button>
+        )}
+      </div>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -282,6 +314,136 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     proposedFema: Record<string, unknown>;
   } | null>(null);
   const [showMergeReview, setShowMergeReview] = useState(false);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleSection = useCallback((title: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Subject parcel / improvement mutations (write to subject_data JSONB arrays)
+  // ---------------------------------------------------------------------------
+
+  const handleParcelUpdate = useCallback(
+    async (id: string, patch: CompParcelPatch) => {
+      const currentParcels = subjectData?.parcels ?? [];
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      if (isNaN(idx) || idx < 0 || idx >= currentParcels.length) return;
+      const existing = currentParcels[idx];
+      if (!existing) return;
+      // Merge patch (snake_case) back onto the ParcelData (spreadsheet-key) shape
+      const updatedRow = {
+        ...parcelDataToRow(existing, idx),
+        ...patch,
+      };
+      const updatedParcels = currentParcels.map((p, i) =>
+        i === idx ? rowToParcelData(updatedRow) : p,
+      ) as ParcelData[];
+      await saveSubjectData({ parcels: updatedParcels });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleParcelDelete = useCallback(
+    async (id: string) => {
+      const currentParcels = subjectData?.parcels ?? [];
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      if (isNaN(idx)) return;
+      const updatedParcels = currentParcels.filter(
+        (_, i) => i !== idx,
+      ) as ParcelData[];
+      await saveSubjectData({ parcels: updatedParcels });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleParcelAdd = useCallback(async () => {
+    const currentParcels = subjectData?.parcels ?? [];
+    const newParcel: ParcelData = {
+      instrumentNumber: null,
+      APN: "",
+      "APN Link": "",
+      Location: "",
+      Legal: "",
+      "Lot #": null,
+      "Size (AC)": null,
+      "Size (SF)": null,
+      "Flood Zone": null,
+      "Building Size (SF)": null,
+      "Office Area (SF)": null,
+      "Warehouse Area (SF)": null,
+      "Storage Area (SF)": null,
+      "Parking (SF)": null,
+      Buildings: null,
+      "Total Tax Amount": null,
+    };
+    await saveSubjectData({ parcels: [...currentParcels, newParcel] as ParcelData[] });
+  }, [subjectData, saveSubjectData]);
+
+  const handleImprovementUpdate = useCallback(
+    async (id: string, patch: CompParcelImprovementPatch) => {
+      const currentImps = subjectData?.improvements ?? [];
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      if (isNaN(idx) || idx < 0 || idx >= currentImps.length) return;
+      const existing = currentImps[idx];
+      if (!existing) return;
+      const updatedRow = {
+        ...parcelImprovementToRow(existing, idx),
+        ...patch,
+      };
+      const updatedImps = currentImps.map((imp, i) =>
+        i === idx ? rowToParcelImprovement(updatedRow) : imp,
+      ) as ParcelImprovement[];
+      await saveSubjectData({ improvements: updatedImps });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleImprovementDelete = useCallback(
+    async (id: string) => {
+      const currentImps = subjectData?.improvements ?? [];
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      if (isNaN(idx)) return;
+      const updatedImps = currentImps.filter(
+        (_, i) => i !== idx,
+      ) as ParcelImprovement[];
+      await saveSubjectData({ improvements: updatedImps });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleImprovementAdd = useCallback(async () => {
+    const currentImps = subjectData?.improvements ?? [];
+    const newImp: ParcelImprovement = {
+      instrumentNumber: null,
+      APN: "",
+      "Building #": (currentImps.length) + 1,
+      "Section #": 1,
+      "Year Built": null,
+      "Gross Building Area (SF)": null,
+      "Office Area (SF)": null,
+      "Warehouse Area (SF)": null,
+      "Parking (SF)": null,
+      "Storage Area (SF)": null,
+      "Is GLA": true,
+      Construction: "",
+      Comments: null,
+    };
+    await saveSubjectData({
+      improvements: [...currentImps, newImp] as ParcelImprovement[],
+    });
+  }, [subjectData, saveSubjectData]);
 
   const actionsMenuWrapRef = useRef<HTMLDivElement>(null);
   const pushToSheetRef = useRef<PushToSheetButtonHandle | null>(null);
@@ -763,7 +925,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             {/* Property Info */}
             <SectionCard
               title="Property Info"
-              className="mb-4 w-full break-inside-avoid"
+              className={`mb-4 w-full${expandedSections.has("Property Info") ? " [column-span:all]" : " break-inside-avoid"}`}
+              isExpanded={expandedSections.has("Property Info")}
+              onToggleExpand={() => toggleSection("Property Info")}
+              expandLabel="Parcels"
             >
               <FormField
                 label="Address"
@@ -861,6 +1026,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                   core.Zip as string | number | null | undefined,
                 )}
               />
+              {expandedSections.has("Property Info") && (
+                <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcels
+                  </p>
+                  <ParcelDataTable
+                    rows={(subjectData?.parcels ?? []).map((p, i) =>
+                      parcelDataToRow(p, i),
+                    )}
+                    onUpdate={handleParcelUpdate}
+                    onDelete={handleParcelDelete}
+                    onAdd={handleParcelAdd}
+                  />
+                </div>
+              )}
             </SectionCard>
 
             {/* Zoning & Location */}
@@ -917,7 +1097,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             {/* Physical */}
             <SectionCard
               title="Physical Characteristics"
-              className="mb-4 w-full break-inside-avoid"
+              className={`mb-4 w-full${expandedSections.has("Physical Characteristics") ? " [column-span:all]" : " break-inside-avoid"}`}
+              isExpanded={expandedSections.has("Physical Characteristics")}
+              onToggleExpand={() => toggleSection("Physical Characteristics")}
+              expandLabel="Improvements"
             >
               <div className="grid grid-cols-2 gap-3">
                 <FormField
@@ -1143,6 +1326,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                 onChange={(v) => updateCore("Construction", v || null)}
                 onBlur={saveNow}
               />
+              {expandedSections.has("Physical Characteristics") && (
+                <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcel Improvements
+                  </p>
+                  <ParcelImprovementsTable
+                    rows={(subjectData?.improvements ?? []).map((imp, i) =>
+                      parcelImprovementToRow(imp, i),
+                    )}
+                    onUpdate={handleImprovementUpdate}
+                    onDelete={handleImprovementDelete}
+                    onAdd={handleImprovementAdd}
+                  />
+                </div>
+              )}
             </SectionCard>
 
             {/* Utilities */}

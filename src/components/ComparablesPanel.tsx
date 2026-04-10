@@ -133,6 +133,8 @@ interface ComparablesPanelProps {
   onAutoPlace?: () => void;
   /** True while geocoding / layout is running. */
   isAutoPlacing?: boolean;
+  /** Saves a PNG of the document-frame crop (when overlay is on). */
+  onCaptureScreenshot?: () => void;
 }
 
 export function ComparablesPanel({
@@ -164,6 +166,7 @@ export function ComparablesPanel({
   readOnly = false,
   onAutoPlace,
   isAutoPlacing = false,
+  onCaptureScreenshot,
 }: ComparablesPanelProps) {
   const [searchAddress, setSearchAddress] = useState("");
   const [coordinateInputsById, setCoordinateInputsById] = useState<
@@ -803,6 +806,16 @@ export function ComparablesPanel({
                   +
                 </button>
               </div>
+              {onCaptureScreenshot && (
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={onCaptureScreenshot}
+                  className="mt-3 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+                >
+                  📸 Capture Screenshot
+                </button>
+              )}
             </div>
           )}
         <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">

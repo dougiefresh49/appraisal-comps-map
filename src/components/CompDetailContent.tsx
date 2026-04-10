@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TableCellsIcon } from "@heroicons/react/24/outline";
 import { MapBanner } from "~/components/MapBanner";
 import { ToggleSwitch } from "~/components/ToggleField";
+import { ParcelDataTable } from "~/components/ParcelDataTable";
+import { ParcelImprovementsTable } from "~/components/ParcelImprovementsTable";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
+import { useCompParcels } from "~/hooks/useCompParcels";
 import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
 import {
   acToSf,
@@ -807,6 +811,35 @@ export function CompDetailContent({
     saveParsedData,
   } = useCompParsedData(compId);
 
+  const {
+    parcels,
+    improvements,
+    isLoading: parcelsLoading,
+    error: parcelsError,
+    updateParcel,
+    updateImprovement,
+    deleteParcel,
+    deleteImprovement,
+    addParcel,
+    addImprovement,
+  } = useCompParcels(compId);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleSection = useCallback((title: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  }, []);
+
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -1038,15 +1071,49 @@ export function CompDetailContent({
         {/* Sections — @container so field rows respond to card width, not the viewport */}
         <div className="@container">
           <div className={columnsClass}>
-            {sections.map((section) => (
+            {sections.map((section) => {
+              const isExpandable =
+                layout === "page" &&
+                (section.title === "Property Info" ||
+                  section.title === "Property Improvements");
+              const isExpanded = expandedSections.has(section.title);
+
+              return (
               <div
                 key={section.title}
-                className="mb-4 w-full break-inside-avoid @container rounded-xl border border-gray-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-900/40 dark:shadow-none dark:ring-white/5"
+                className={`mb-4 w-full @container rounded-xl border border-gray-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-900/40 dark:shadow-none dark:ring-white/5${isExpanded ? " [column-span:all]" : " break-inside-avoid"}`}
               >
-              <h2 className="mb-4 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-500">
-                {section.title}
+              <h2 className="mb-4 flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-800">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-500">
+                  {section.title}
+                </span>
+                {isExpandable && (
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.title)}
+                    title={
+                      isExpanded
+                        ? `Hide ${section.title === "Property Info" ? "parcel" : "improvement"} detail`
+                        : `Show ${section.title === "Property Info" ? "parcel" : "improvement"} detail`
+                    }
+                    className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium transition hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                      isExpanded
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-gray-400 dark:text-gray-500"
+                    }`}
+                  >
+                    <TableCellsIcon className="h-3.5 w-3.5" aria-hidden />
+                    {isExpanded ? "Hide" : "Parcels"}
+                  </button>
+                )}
               </h2>
-              <div className="space-y-3">
+              <div
+                className={
+                  isExpanded
+                    ? "grid grid-cols-1 gap-3 @min-[700px]:grid-cols-2"
+                    : "space-y-3"
+                }
+              >
                 {section.fields.map((field) => {
                   const {
                     key,
@@ -1131,8 +1198,45 @@ export function CompDetailContent({
                   );
                 })}
               </div>
+
+              {/* Parcels table — shown when Property Info is expanded */}
+              {isExpanded && section.title === "Property Info" && (
+                <div className="mt-5 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcels
+                  </p>
+                  <ParcelDataTable
+                    rows={parcels}
+                    onUpdate={updateParcel}
+                    onDelete={deleteParcel}
+                    onAdd={() => addParcel()}
+                    isLoading={parcelsLoading}
+                    error={parcelsError}
+                  />
+                </div>
+              )}
+
+              {/* Improvements table — shown when Property Improvements is expanded */}
+              {isExpanded && section.title === "Property Improvements" && (
+                <div className="mt-5 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcel Improvements
+                  </p>
+                  <ParcelImprovementsTable
+                    rows={improvements}
+                    onUpdate={updateImprovement}
+                    onDelete={deleteImprovement}
+                    onAdd={() =>
+                      addImprovement(parcels[0]?.id ?? null)
+                    }
+                    isLoading={parcelsLoading}
+                    error={parcelsError}
+                  />
+                </div>
+              )}
             </div>
-            ))}
+            );
+            })}
           </div>
         </div>
 
