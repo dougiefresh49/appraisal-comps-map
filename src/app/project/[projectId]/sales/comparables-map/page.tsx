@@ -1,5 +1,6 @@
 "use client";
 
+import "~/utils/injectCanvasHack";
 import { useState, useRef, useEffect, useCallback, useMemo, use } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
@@ -139,6 +140,7 @@ export default function SalesComparablesMapPage({
   });
   const mapCameraEditedWhileUnlockedRef = useRef(false);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSnapshotRef = useRef<ProjectData | undefined>(undefined);
 
   const applyProjectState = useCallback(
     (project?: ProjectData, typeOverride?: ComparableType) => {
@@ -656,6 +658,19 @@ export default function SalesComparablesMapPage({
         pageKey="comparables-map-sales"
         onReadOnlyChange={setMapReadOnly}
         bodyClassName="relative flex min-h-0 flex-1 flex-row"
+        onEditStart={() => {
+          editSnapshotRef.current = project ? structuredClone(project) : undefined;
+        }}
+        onCancelEdits={() => {
+          const snapshot = editSnapshotRef.current;
+          if (!snapshot) return;
+          if (debouncedSaveRef.current) {
+            clearTimeout(debouncedSaveRef.current);
+            debouncedSaveRef.current = null;
+          }
+          updateProject(() => snapshot);
+          applyProjectState(snapshot, PAGE_COMPARABLE_TYPE);
+        }}
       >
         {({ readOnly }) => (
           <>

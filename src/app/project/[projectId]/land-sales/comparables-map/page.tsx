@@ -1,5 +1,6 @@
 "use client";
 
+import "~/utils/injectCanvasHack";
 import { useState, useRef, useEffect, useCallback, useMemo, use } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
@@ -135,6 +136,7 @@ export default function LandComparablesMapPage({
   /** True after the user changes pan/zoom while the map lock is held (editing). */
   const mapCameraEditedWhileUnlockedRef = useRef(false);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSnapshotRef = useRef<ProjectData | undefined>(undefined);
 
   const applyProjectState = useCallback((project?: ProjectData) => {
     const snapshot = normalizeProjectData(project);
@@ -645,6 +647,19 @@ export default function LandComparablesMapPage({
         pageKey="comparables-map-land"
         onReadOnlyChange={setMapReadOnly}
         bodyClassName="relative flex min-h-0 flex-1 flex-row"
+        onEditStart={() => {
+          editSnapshotRef.current = project ? structuredClone(project) : undefined;
+        }}
+        onCancelEdits={() => {
+          const snapshot = editSnapshotRef.current;
+          if (!snapshot) return;
+          if (debouncedSaveRef.current) {
+            clearTimeout(debouncedSaveRef.current);
+            debouncedSaveRef.current = null;
+          }
+          updateProject(() => snapshot);
+          applyProjectState(snapshot);
+        }}
       >
         {({ readOnly }) => (
           <>

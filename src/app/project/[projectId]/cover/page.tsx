@@ -177,9 +177,11 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
+                          projectId,
                           projectFolderId: project.projectFolderId,
                           subjectPhotosFolderId:
-                            project.folderStructure?.subjectPhotosFolderId ?? undefined,
+                            project.folderStructure?.subjectPhotosFolderId ??
+                            undefined,
                         }),
                       });
 
