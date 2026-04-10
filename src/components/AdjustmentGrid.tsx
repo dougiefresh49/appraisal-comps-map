@@ -23,6 +23,10 @@ import { useSubjectData } from "~/hooks/useSubjectData";
 import { useCompsParsedDataMulti } from "~/hooks/useCompsParsedDataMulti";
 import type { AdjustmentGridSuggestions } from "~/lib/adjustment-suggestions";
 import { CompDetailSidePanel } from "~/components/CompDetailSidePanel";
+import {
+  applyBulkImportFromRecords,
+  parseBulkImportJson,
+} from "~/lib/adjustment-grid-bulk-import";
 import type {
   AdjustmentCategoryState,
   AdjustmentCellState,
@@ -922,6 +926,12 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     string | null
   >(null);
   const [basePriceEditText, setBasePriceEditText] = useState("");
+  const [importJsonOpen, setImportJsonOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState("");
+  const [importJsonMessage, setImportJsonMessage] = useState<string | null>(
+    null,
+  );
+  const importJsonFileRef = useRef<HTMLInputElement | null>(null);
 
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1292,6 +1302,36 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     }
   };
 
+  const applyJsonImport = () => {
+    if (!state) {
+      return;
+    }
+    setImportJsonMessage(null);
+    const parsed = parseBulkImportJson(importJsonText);
+    if (!parsed.ok) {
+      setImportJsonMessage(parsed.error);
+      return;
+    }
+    const { nextState, warnings, appliedCells } = applyBulkImportFromRecords(
+      parsed.rows,
+      state,
+    );
+    const allWarnings = [...parsed.parseWarnings, ...warnings];
+    setState(nextState);
+    setImportJsonOpen(false);
+    setImportJsonText("");
+    const parts = [
+      appliedCells > 0
+        ? `Updated ${appliedCells} adjustment cell${appliedCells === 1 ? "" : "s"}.`
+        : "No cells were updated.",
+    ];
+    if (allWarnings.length > 0) {
+      parts.push(allWarnings.join(" "));
+    }
+    setCopyMsg(parts.join(" "));
+    setTimeout(() => setCopyMsg(null), 6000);
+  };
+
   const copyGrid = async () => {
     if (!state) {
       return;
@@ -1563,10 +1603,10 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
 
   return (
     <>
-    <div>
-      <div className="space-y-3">
+    <div className="min-w-0">
+      <div className="flex w-full min-w-0 flex-col gap-3">
       {/* Action bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -1574,6 +1614,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700"
           >
             Reset to AI Suggestions
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setImportJsonOpen(true);
+              setImportJsonMessage(null);
+            }}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700"
+          >
+            Import JSON
           </button>
           <button
             type="button"
@@ -1606,7 +1656,7 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       </div>
 
       {/* Config bar */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-400">
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-400">
         <label className="flex cursor-pointer items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300">
           <input
             type="checkbox"
@@ -1695,9 +1745,9 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-300 bg-white dark:border-gray-800 dark:bg-gray-950">
+      <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-gray-300 bg-white dark:border-gray-800 dark:bg-gray-950">
         <table
-          className="border-collapse text-left text-xs text-gray-700 dark:text-gray-100"
+          className="w-full min-w-0 border-collapse text-left text-xs text-gray-700 dark:text-gray-100"
           style={{
             tableLayout: "fixed",
             minWidth: `${176 + 152 + state.comps.length * 152}px`,
@@ -2094,7 +2144,7 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       </div>
 
       {/* Value summary card */}
-      <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 dark:border-gray-700/60 dark:bg-gray-900">
+      <div className="w-full min-w-0 rounded-lg border border-gray-200 bg-white px-5 py-4 dark:border-gray-700/60 dark:bg-gray-900">
         <div className="mb-3 text-[10px] font-semibold tracking-widest text-gray-400 uppercase dark:text-gray-600">
           Value Summary
         </div>
@@ -2188,6 +2238,113 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       )}
       </div>
     </div>
+
+    {importJsonOpen && (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-json-title"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setImportJsonOpen(false);
+            setImportJsonMessage(null);
+          }
+        }}
+      >
+        <div
+          className="flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+            <h2
+              id="import-json-title"
+              className="text-sm font-semibold text-gray-900 dark:text-gray-100"
+            >
+              Import adjustment JSON
+            </h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Paste an array of objects with{" "}
+              <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">#</code>
+              , field names, and{" "}
+              <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
+                Field adj
+              </code>{" "}
+              keys. Merges into the current grid; empty values are skipped.
+            </p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <textarea
+              value={importJsonText}
+              onChange={(e) => {
+                setImportJsonText(e.target.value);
+                setImportJsonMessage(null);
+              }}
+              spellCheck={false}
+              className="h-64 w-full resize-y rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-xs text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-200 dark:focus:border-blue-600"
+              placeholder='[ { "#": 1, "Location": "Inferior", "Location adj": "15%" } ]'
+            />
+            {importJsonMessage && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {importJsonMessage}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={importJsonFileRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) {
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const text = reader.result;
+                    setImportJsonText(
+                      typeof text === "string" ? text : "",
+                    );
+                    setImportJsonMessage(null);
+                  };
+                  reader.readAsText(f);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => importJsonFileRef.current?.click()}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Choose file…
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setImportJsonOpen(false);
+                  setImportJsonMessage(null);
+                }}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyJsonImport}
+                className="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Comp detail side panel — fixed to right viewport edge, full height */}
     {selectedCompId && selectedComp && (
