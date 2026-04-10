@@ -10,8 +10,53 @@ import {
 } from "~/lib/drive-api";
 
 interface CoverDataRequest {
+  /** Required — cover image must come from this project's photos / analyses. */
+  projectId: string;
   projectFolderId: string;
   subjectPhotosFolderId?: string;
+}
+
+/** Parse Drive `input.json` ([{ image, label }, …]) and resolve file id for "Subject Front". */
+async function coverFileIdFromInputJson(
+  token: string,
+  subjectPhotosFolderId: string,
+): Promise<string | null> {
+  const inputMeta = await findChildByName(
+    token,
+    subjectPhotosFolderId,
+    "input.json",
+  );
+  if (!inputMeta) {
+    return null;
+  }
+  const buf = await downloadFile(token, inputMeta.id);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(buf));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) {
+    return null;
+  }
+  const entry = parsed.find((row) => {
+    if (!row || typeof row !== "object") return false;
+    const label = (row as { label?: unknown }).label;
+    return (
+      typeof label === "string" &&
+      label.trim().toLowerCase() === "subject front"
+    );
+  }) as { image?: unknown } | undefined;
+  const imageName = entry?.image;
+  if (typeof imageName !== "string" || !imageName.trim()) {
+    return null;
+  }
+  const imageFile = await findChildByName(
+    token,
+    subjectPhotosFolderId,
+    imageName.trim(),
+  );
+  return imageFile?.id ?? null;
 }
 
 /**
@@ -24,8 +69,15 @@ interface CoverDataRequest {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CoverDataRequest;
-    const { projectFolderId } = body;
+    const { projectId, projectFolderId } = body;
     let { subjectPhotosFolderId } = body;
+
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "projectId is required" },
+        { status: 400 },
+      );
+    }
 
     if (!projectFolderId) {
       return NextResponse.json(
@@ -82,22 +134,32 @@ export async function POST(request: Request) {
       subjectPhotosFolderId = photosFolder.id;
     }
 
-    // Try to find the Subject Front photo from Supabase photo_analyses
+    // Try the Subject Front photo for *this project* only (photo_analyses)
     let coverFileId: string | null = null;
 
     const supabase = await createClient();
     const { data: photoRows } = await supabase
       .from("photo_analyses")
       .select("file_id")
+      .eq("project_id", projectId)
       .eq("label", "Subject Front")
       .not("file_id", "is", null)
+      .order("sort_order", { ascending: true })
       .limit(1);
 
     if (photoRows && photoRows.length > 0) {
       coverFileId = (photoRows[0] as { file_id: string }).file_id;
     }
 
-    // Fallback: look for the first image in the photos folder directly
+    // Fallback: Drive input.json in subject/photos (labels from export / Apps Script)
+    if (!coverFileId) {
+      coverFileId = await coverFileIdFromInputJson(
+        token,
+        subjectPhotosFolderId,
+      );
+    }
+
+    // Fallback: first image file in the photos folder
     if (!coverFileId) {
       const photoFiles = await listFolderChildren(
         token,
