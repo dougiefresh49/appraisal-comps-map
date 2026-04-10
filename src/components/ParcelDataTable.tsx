@@ -214,7 +214,7 @@ export function ParcelDataTable({
                         </span>
                       ) : (
                         <EditableCell
-                          value={row[col.key] as string | number | null}
+                          value={row[col.key]}
                           type={col.type}
                           onCommit={(v) => {
                             const parsed: CompParcelPatch = {};

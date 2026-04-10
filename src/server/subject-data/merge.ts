@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ParcelData, ParcelImprovement } from "~/types/comp-data";
 import { createServiceClient } from "~/utils/supabase/server";
 import { parseZoningLocation } from "~/types/comp-field-options";
 
@@ -445,8 +446,8 @@ export { MERGE_MAP };
  */
 export function computeProposedParcelsFromDocuments(
   documents: Array<{ document_type: string; structured_data: unknown }>,
-): import("~/types/comp-data").ParcelData[] {
-  const parcels: import("~/types/comp-data").ParcelData[] = [];
+): ParcelData[] {
+  const parcels: ParcelData[] = [];
 
   for (const doc of documents) {
     if (doc.document_type !== "cad") continue;
@@ -501,8 +502,8 @@ export function computeProposedParcelsFromDocuments(
  */
 export function computeProposedImprovementsFromDocuments(
   documents: Array<{ document_type: string; structured_data: unknown }>,
-): import("~/types/comp-data").ParcelImprovement[] {
-  const improvements: import("~/types/comp-data").ParcelImprovement[] = [];
+): ParcelImprovement[] {
+  const improvements: ParcelImprovement[] = [];
 
   // Track APNs that have been covered by CAD so notes/sketch don't double-add
   const cadApns = new Set<string>();

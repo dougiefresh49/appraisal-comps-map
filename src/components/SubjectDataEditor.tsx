@@ -6,9 +6,11 @@ import { useProject } from "~/hooks/useProject";
 import { DEFAULT_APPROACHES } from "~/utils/projectStore";
 import type {
   ExpenseStructure,
+  FemaData,
+  ParcelData,
+  ParcelImprovement,
   SubjectData,
   SubjectTax,
-  FemaData,
 } from "~/types/comp-data";
 import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
 import { useDocumentPanel } from "~/components/DocumentPanelContext";
@@ -30,7 +32,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { ParcelDataTable, parcelDataToRow, rowToParcelData } from "~/components/ParcelDataTable";
 import { ParcelImprovementsTable, parcelImprovementToRow, rowToParcelImprovement } from "~/components/ParcelImprovementsTable";
-import type { ParcelData, ParcelImprovement } from "~/types/comp-data";
 import type { CompParcelPatch, CompParcelImprovementPatch } from "~/hooks/useCompParcels";
 import {
   PROPERTY_RIGHTS_OPTIONS,
@@ -353,7 +354,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       };
       const updatedParcels = currentParcels.map((p, i) =>
         i === idx ? rowToParcelData(updatedRow) : p,
-      ) as ParcelData[];
+      );
       await saveSubjectData({ parcels: updatedParcels });
     },
     [subjectData, saveSubjectData],
@@ -364,9 +365,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       const currentParcels = subjectData?.parcels ?? [];
       const idx = parseInt(id.replace("subject-parcel-", ""), 10);
       if (isNaN(idx)) return;
-      const updatedParcels = currentParcels.filter(
-        (_, i) => i !== idx,
-      ) as ParcelData[];
+      const updatedParcels = currentParcels.filter((_, i) => i !== idx);
       await saveSubjectData({ parcels: updatedParcels });
     },
     [subjectData, saveSubjectData],
@@ -408,7 +407,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       };
       const updatedImps = currentImps.map((imp, i) =>
         i === idx ? rowToParcelImprovement(updatedRow) : imp,
-      ) as ParcelImprovement[];
+      );
       await saveSubjectData({ improvements: updatedImps });
     },
     [subjectData, saveSubjectData],
@@ -419,9 +418,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       const currentImps = subjectData?.improvements ?? [];
       const idx = parseInt(id.replace("subject-imp-", ""), 10);
       if (isNaN(idx)) return;
-      const updatedImps = currentImps.filter(
-        (_, i) => i !== idx,
-      ) as ParcelImprovement[];
+      const updatedImps = currentImps.filter((_, i) => i !== idx);
       await saveSubjectData({ improvements: updatedImps });
     },
     [subjectData, saveSubjectData],
@@ -615,18 +612,30 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   }, [yearBuiltForAge, buildingSfForEffectiveAge, refYear]);
 
   /** When subject_data.parcels is empty, derive a single row from core so the table isn't blank. */
-  const displayParcels: import("~/types/comp-data").ParcelData[] = useMemo(() => {
+  const displayParcels: ParcelData[] = useMemo(() => {
     const dbParcels = subjectData?.parcels ?? [];
     if (dbParcels.length > 0) return dbParcels;
-    const apn = core.APN as string | undefined;
+    const apn = typeof core.APN === "string" ? core.APN : undefined;
     if (!apn && !core.Address) return [];
+    const cav = core["County Appraised Value"];
+    const countyAppraised =
+      cav === null || cav === undefined
+        ? undefined
+        : typeof cav === "string" || typeof cav === "number" || typeof cav === "boolean"
+          ? String(cav)
+          : typeof cav === "bigint"
+            ? String(cav)
+            : undefined;
     return [
       {
-        instrumentNumber: (core.instrumentNumber as string | null) ?? null,
-        APN: (apn as string) ?? "",
+        instrumentNumber:
+          typeof core.instrumentNumber === "string"
+            ? core.instrumentNumber
+            : null,
+        APN: apn ?? "",
         "APN Link": "",
-        Location: (core.Address as string) ?? "",
-        Legal: (core.Legal as string) ?? "",
+        Location: typeof core.Address === "string" ? core.Address : "",
+        Legal: typeof core.Legal === "string" ? core.Legal : "",
         "Lot #": null,
         "Size (AC)": (core["Land Size (AC)"] as number | null) ?? null,
         "Size (SF)": (core["Land Size (SF)"] as number | null) ?? null,
@@ -641,45 +650,48 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
         Buildings: null,
         "Total Tax Amount": null,
-        "County Appraised Value":
-          core["County Appraised Value"] != null
-            ? String(core["County Appraised Value"])
-            : undefined,
+        "County Appraised Value": countyAppraised,
       },
     ];
   }, [subjectData?.parcels, core]);
 
   /** When subject_data.improvements is empty, derive a single row from core. */
-  const displayImprovements: import("~/types/comp-data").ParcelImprovement[] =
-    useMemo(() => {
-      const dbImps = subjectData?.improvements ?? [];
-      if (dbImps.length > 0) return dbImps;
-      const bldSf = core["Building Size (SF)"] as number | null | undefined;
-      if (!bldSf) return [];
-      return [
-        {
-          instrumentNumber:
-            (core.instrumentNumber as string | null) ?? null,
-          APN: (core.APN as string) ?? "",
-          "Building #": 1,
-          "Section #": 1,
-          "Year Built":
-            typeof core["Year Built"] === "number"
-              ? core["Year Built"]
-              : null,
-          "Gross Building Area (SF)": bldSf ?? null,
-          "Office Area (SF)":
-            (core["Office Area (SF)"] as number | null) ?? null,
-          "Warehouse Area (SF)":
-            (core["Warehouse Area (SF)"] as number | null) ?? null,
-          "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
-          "Storage Area (SF)": null,
-          "Is GLA": true,
-          Construction: (core.Construction as string) ?? "",
-          Comments: null,
-        },
-      ];
-    }, [subjectData?.improvements, core]);
+  const displayImprovements: ParcelImprovement[] = useMemo(() => {
+    const dbImps = subjectData?.improvements ?? [];
+    if (dbImps.length > 0) return dbImps;
+    const bldSfRaw = core["Building Size (SF)"];
+    const bldSf =
+      typeof bldSfRaw === "number" && !Number.isNaN(bldSfRaw)
+        ? bldSfRaw
+        : null;
+    if (!bldSf) return [];
+    return [
+      {
+        instrumentNumber:
+          typeof core.instrumentNumber === "string"
+            ? core.instrumentNumber
+            : null,
+        APN: typeof core.APN === "string" ? core.APN : "",
+        "Building #": 1,
+        "Section #": 1,
+        "Year Built":
+          typeof core["Year Built"] === "number"
+            ? core["Year Built"]
+            : null,
+        "Gross Building Area (SF)": bldSf ?? null,
+        "Office Area (SF)":
+          (core["Office Area (SF)"] as number | null) ?? null,
+        "Warehouse Area (SF)":
+          (core["Warehouse Area (SF)"] as number | null) ?? null,
+        "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
+        "Storage Area (SF)": null,
+        "Is GLA": true,
+        Construction:
+          typeof core.Construction === "string" ? core.Construction : "",
+        Comments: null,
+      },
+    ];
+  }, [subjectData?.improvements, core]);
 
   const handleRebuildFromDocuments = async () => {
     if (taskManager) {
@@ -753,7 +765,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         normalizeLandSizeFromAc(coreOnly as CoreData),
         project?.effectiveDate,
       );
-      const mergedFema = (subjectData?.proposed_fema ?? fema) as FemaData;
+      const mergedFema = subjectData?.proposed_fema ?? fema;
       await clearProposedData(
         merged,
         mergedFema,
