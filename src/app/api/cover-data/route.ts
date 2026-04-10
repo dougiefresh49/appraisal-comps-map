@@ -152,12 +152,10 @@ export async function POST(request: Request) {
     }
 
     // Fallback: Drive input.json in subject/photos (labels from export / Apps Script)
-    if (!coverFileId) {
-      coverFileId = await coverFileIdFromInputJson(
-        token,
-        subjectPhotosFolderId,
-      );
-    }
+    coverFileId ??= await coverFileIdFromInputJson(
+      token,
+      subjectPhotosFolderId,
+    );
 
     // Fallback: first image file in the photos folder
     if (!coverFileId) {
@@ -169,9 +167,7 @@ export async function POST(request: Request) {
       const imageFile = photoFiles.find(
         (f) => f.mimeType.startsWith("image/"),
       );
-      if (imageFile) {
-        coverFileId = imageFile.id;
-      }
+      coverFileId ??= imageFile?.id ?? null;
     }
 
     if (!coverFileId) {

@@ -181,7 +181,7 @@ export function MapLockGuard({
     } finally {
       setBusy(false);
     }
-  }, [projectId, pageKey, refreshLock]);
+  }, [projectId, pageKey, refreshLock, onEditStart]);
 
   const releaseLock = useCallback(async () => {
     setError(null);
