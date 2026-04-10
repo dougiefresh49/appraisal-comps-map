@@ -1,5 +1,6 @@
 "use client";
 
+import "~/utils/injectCanvasHack";
 import { useState, useRef, useEffect, useCallback, useMemo, use } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { env } from "~/env";
