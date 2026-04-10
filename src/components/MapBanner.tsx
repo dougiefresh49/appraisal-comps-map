@@ -13,7 +13,11 @@ import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 import { useProject } from "~/hooks/useProject";
 import { driveFetch } from "~/lib/drive-fetch";
 import { onDriveAuthRestored } from "~/lib/drive-auth-event";
-import type { MapType, ProjectData } from "~/utils/projectStore";
+import {
+  ensureCompLocationMap,
+  type MapType,
+  type ProjectData,
+} from "~/utils/projectStore";
 
 export type MapBannerActionType = "edit" | "expand";
 
@@ -24,6 +28,11 @@ type MapBannerBase = {
   imageType: string;
   /** When set, resolves `imageFileId` from `project.maps` and enables the image picker. */
   mapType?: MapType;
+  /**
+   * For `mapType="comp-location"`, the comparable this banner belongs to (per-comp
+   * `imageFileId` on that map row). Omit for shared maps (e.g. land-comps).
+   */
+  linkedCompId?: string;
   /**
    * When provided, images are listed and auto-detected from this Drive folder
    * instead of the project's `reportMapsFolderId`. Useful for comp detail pages
@@ -101,6 +110,7 @@ export function MapBanner(props: MapBannerProps) {
     projectId,
     imageType,
     mapType,
+    linkedCompId,
     sourceFolderId,
     height = "h-56",
     fallbackLabel,
@@ -136,7 +146,14 @@ export function MapBanner(props: MapBannerProps) {
 
   const mapRow =
     mapType && project
-      ? project.maps.find((m) => m.type === mapType)
+      ? mapType === "comp-location"
+        ? linkedCompId
+          ? project.maps.find(
+              (m) =>
+                m.type === "comp-location" && m.linkedCompId === linkedCompId,
+            )
+          : undefined
+        : project.maps.find((m) => m.type === mapType)
       : undefined;
 
   const fetchFolderImages = useCallback(
@@ -225,6 +242,7 @@ export function MapBanner(props: MapBannerProps) {
     project,
     activeFolderId,
     mapType,
+    linkedCompId,
     mapRow?.imageFileId,
     imageType,
     fetchFolderImages,
@@ -279,6 +297,19 @@ export function MapBanner(props: MapBannerProps) {
 
   const handlePickImage = (fileId: string) => {
     if (!mapType) return;
+    if (mapType === "comp-location" && linkedCompId) {
+      updateProject((prev: ProjectData) => {
+        const { map, maps } = ensureCompLocationMap(prev, linkedCompId);
+        return {
+          ...prev,
+          maps: maps.map((m) =>
+            m.id === map.id ? { ...m, imageFileId: fileId } : m,
+          ),
+        };
+      });
+      setPickerOpen(false);
+      return;
+    }
     updateProject((prev: ProjectData) => ({
       ...prev,
       maps: prev.maps.map((m) =>
@@ -290,6 +321,19 @@ export function MapBanner(props: MapBannerProps) {
 
   const handleClearSelection = () => {
     if (!mapType) return;
+    if (mapType === "comp-location" && linkedCompId) {
+      updateProject((prev: ProjectData) => {
+        const { map, maps } = ensureCompLocationMap(prev, linkedCompId);
+        return {
+          ...prev,
+          maps: maps.map((m) =>
+            m.id === map.id ? { ...m, imageFileId: undefined } : m,
+          ),
+        };
+      });
+      setPickerOpen(false);
+      return;
+    }
     updateProject((prev: ProjectData) => ({
       ...prev,
       maps: prev.maps.map((m) =>
@@ -301,7 +345,10 @@ export function MapBanner(props: MapBannerProps) {
 
   const highlightedId = mapRow?.imageFileId ?? resolvedFileId ?? null;
   const showChooseImage =
-    Boolean(mapType) && Boolean(activeFolderId) && !projectLoading;
+    Boolean(mapType) &&
+    Boolean(activeFolderId) &&
+    !projectLoading &&
+    (mapType !== "comp-location" || Boolean(linkedCompId));
 
   const showBannerSpinner = projectLoading || isLoading;
 

@@ -47,10 +47,9 @@ import {
   WASH_BAY_OPTIONS,
   ZONING_LOCATION_OPTIONS,
 } from "~/types/comp-field-options";
-import {
-  mapTypeForCompType,
-  type ComparableType,
-  type ComparableParsedDataStatus,
+import type {
+  ComparableType,
+  ComparableParsedDataStatus,
 } from "~/utils/projectStore";
 
 // ---------------------------------------------------------------------------
@@ -1163,7 +1162,8 @@ export function CompDetailContent({
         <MapBanner
           projectId={projectId}
           imageType={mapBannerImageType(compType)}
-          mapType={mapTypeForCompType(compType)}
+          mapType="comp-location"
+          linkedCompId={compId}
           sourceFolderId={compFolderId}
           editHref={locationMapHref ?? "#"}
           height="h-48"
