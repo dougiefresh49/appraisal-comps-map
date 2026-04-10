@@ -1,4 +1,5 @@
 import { sortComparables } from "~/utils/comparable-sort";
+import { formatDistanceAndDirection } from "~/utils/mapUtils";
 
 // ============================================================
 // Core Primitive Types
@@ -450,6 +451,33 @@ export function getCompMarker(
   compId: string,
 ): MapMarker | undefined {
   return mapView.markers.find((m) => m.compId === compId);
+}
+
+/**
+ * Distance from subject to a comp on the type's comparables map (same reference
+ * points as comparables-map pages: pinned tail tip when set, else marker position).
+ */
+export function getDistanceLabelFromCompsMap(
+  project: ProjectData,
+  compId: string,
+  compType: ComparableType,
+): string | undefined {
+  const mapView = getMapByType(project, mapTypeForCompType(compType));
+  if (!mapView) return undefined;
+  const subjectMarker = getSubjectMarker(mapView);
+  const compMarker = getCompMarker(mapView, compId);
+  if (!subjectMarker || !compMarker) return undefined;
+  const subjectRef =
+    subjectMarker.pinnedTailTipPosition ?? subjectMarker.markerPosition;
+  const compRef =
+    compMarker.pinnedTailTipPosition ?? compMarker.markerPosition;
+  if (!subjectRef || !compRef) return undefined;
+  return formatDistanceAndDirection(
+    subjectRef.lat,
+    subjectRef.lng,
+    compRef.lat,
+    compRef.lng,
+  );
 }
 
 export function getComparablesByType(

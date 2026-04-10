@@ -11,14 +11,144 @@ import {
 import {
   COMPARABLE_TYPES,
   getComparablesByType,
+  getDistanceLabelFromCompsMap,
   DEFAULT_APPROACHES,
+  normalizeProjectApproaches,
   type ComparableType,
   type Comparable,
+  type ProjectData,
 } from "~/utils/projectStore";
 import { useProject } from "~/hooks/useProject";
 import { useSubjectData } from "~/hooks/useSubjectData";
 
 import { ToggleSwitch } from "~/components/ToggleField";
+
+function sectionSlugForComparableType(type: ComparableType): string {
+  if (type === "Land") return "land-sales";
+  if (type === "Sales") return "sales";
+  return "rentals";
+}
+
+function DashboardComparableSection({
+  type,
+  list,
+  projectId,
+  project,
+}: {
+  type: ComparableType;
+  list: Comparable[];
+  projectId: string;
+  project: ProjectData;
+}) {
+  const sectionSlug = sectionSlugForComparableType(type);
+  const openCompsLabel = `Open ${type} comparables`;
+
+  return (
+    <div className="min-w-0 space-y-3">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-2 dark:border-gray-800">
+        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+          {type} Comparables ({list.length})
+        </span>
+        <Link
+          href={`/project/${projectId}/${sectionSlug}/comparables`}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          aria-label={openCompsLabel}
+          title={openCompsLabel}
+        >
+          <ArrowTopRightOnSquareIcon className="h-4 w-4" aria-hidden />
+        </Link>
+      </div>
+
+      {list.length === 0 ? (
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          No {type.toLowerCase()} comparables yet.
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+          {list.map((comparable, index) => {
+            const distanceLabel = getDistanceLabelFromCompsMap(
+              project,
+              comparable.id,
+              type,
+            );
+            return (
+            <li
+              key={comparable.id}
+              className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {type} #{index + 1}
+                  </span>
+                  {type === "Land" ? (
+                    <Link
+                      href={`/project/${projectId}/land-sales/comps/${comparable.id}/location-map`}
+                      className="text-[10px] font-semibold uppercase tracking-wide text-green-700 underline-offset-2 hover:text-green-600 hover:underline dark:text-green-400 dark:hover:text-green-300"
+                    >
+                      Map
+                    </Link>
+                  ) : null}
+                </div>
+                <Link
+                  href={`/project/${projectId}/${sectionSlug}/comps/${comparable.id}`}
+                  className="inline-block text-sm font-medium text-gray-900 underline-offset-2 hover:text-blue-600 hover:underline dark:text-gray-100 dark:hover:text-blue-400"
+                  title={`Open ${type} comp ${index + 1}`}
+                  aria-label={`View details for ${comparable.address?.trim() ? comparable.address : `${type} comparable ${index + 1}`}`}
+                >
+                  {comparable.address || "No Address"}
+                </Link>
+                {comparable.addressForDisplay &&
+                  comparable.addressForDisplay !== comparable.address && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Display: {comparable.addressForDisplay}
+                    </p>
+                  )}
+              </div>
+              <dl className="grid min-w-0 max-w-full shrink grid-cols-2 gap-x-4 gap-y-1 text-xs sm:gap-x-6 sm:text-right">
+                <div className="min-w-0">
+                  <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    APN
+                  </dt>
+                  <dd className="font-mono text-[11px] leading-snug text-gray-800 dark:text-gray-200">
+                    {comparable.apn && comparable.apn.length > 0 ? (
+                      <span className="flex flex-col gap-1 sm:items-end">
+                        {comparable.apn.map((apn, apnIdx) => (
+                          <span
+                            key={`${comparable.id}-apn-${apnIdx}`}
+                            className="block max-w-full overflow-x-auto whitespace-nowrap sm:text-right"
+                            title={apn}
+                          >
+                            {apn}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-600">—</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Distance
+                  </dt>
+                  <dd className="text-gray-800 dark:text-gray-200">
+                    {distanceLabel ?? (
+                      <span className="text-gray-400 dark:text-gray-600">
+                        —
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 interface ProjectPageProps {
   params: Promise<{
@@ -65,6 +195,19 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
       {} as Record<ComparableType, Comparable[]>,
     );
   }, [selectedProject]);
+
+  /** Same flags as Report Approaches — controls which comp lists appear below. */
+  const reportApproaches = useMemo(
+    () => normalizeProjectApproaches(selectedProject?.approaches),
+    [selectedProject?.approaches],
+  );
+  const showLandCompsSection = reportApproaches.salesComparison.land;
+  const showSalesCompsSection = reportApproaches.salesComparison.sales;
+  const showRentalsCompsSection = reportApproaches.income;
+  const anyComparableSectionVisible =
+    showLandCompsSection ||
+    showSalesCompsSection ||
+    showRentalsCompsSection;
 
 
   if (isLoading) {
@@ -593,109 +736,50 @@ export default function ProjectDashboard({ params }: ProjectPageProps) {
               </h3>
             </div>
 
-            <div className="space-y-8">
-              {COMPARABLE_TYPES.map((type) => {
-                const list = comparablesByType[type];
-                const sectionSlug =
-                  type === "Land"
-                    ? "land-sales"
-                    : type === "Sales"
-                      ? "sales"
-                      : "rentals";
-                const openCompsLabel = `Open ${type} comparables`;
-
-                return (
-                  <div key={type} className="space-y-3">
-                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-2 dark:border-gray-800">
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                        {type} Comparables ({list.length})
-                      </span>
-                      <Link
-                        href={`/project/${projectId}/${sectionSlug}/comparables`}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-                        aria-label={openCompsLabel}
-                        title={openCompsLabel}
-                      >
-                        <ArrowTopRightOnSquareIcon
-                          className="h-4 w-4"
-                          aria-hidden
-                        />
-                      </Link>
-                    </div>
-
-                    {list.length === 0 ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        No {type.toLowerCase()} comparables yet.
-                      </p>
-                    ) : (
-                      <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
-                        {list.map((comparable, index) => (
-                          <li
-                            key={comparable.id}
-                            className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-                          >
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  {type} #{index + 1}
-                                </span>
-                                {type === "Land" ? (
-                                  <Link
-                                    href={`/project/${projectId}/land-sales/comps/${comparable.id}/location-map`}
-                                    className="text-[10px] font-semibold uppercase tracking-wide text-green-700 underline-offset-2 hover:text-green-600 hover:underline dark:text-green-400 dark:hover:text-green-300"
-                                  >
-                                    Map
-                                  </Link>
-                                ) : null}
-                              </div>
-                              <Link
-                                href={`/project/${projectId}/${sectionSlug}/comps/${comparable.id}`}
-                                className="inline-block text-sm font-medium text-gray-900 underline-offset-2 hover:text-blue-600 hover:underline dark:text-gray-100 dark:hover:text-blue-400"
-                                title={`Open ${type} comp ${index + 1}`}
-                                aria-label={`View details for ${comparable.address?.trim() ? comparable.address : `${type} comparable ${index + 1}`}`}
-                              >
-                                {comparable.address || "No Address"}
-                              </Link>
-                              {comparable.addressForDisplay &&
-                                comparable.addressForDisplay !==
-                                  comparable.address && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    Display: {comparable.addressForDisplay}
-                                  </p>
-                                )}
-                            </div>
-                            <dl className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-1 text-xs sm:text-right">
-                              <div>
-                                <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  APN
-                                </dt>
-                                <dd className="font-mono text-gray-800 dark:text-gray-200">
-                                  {comparable.apn &&
-                                  comparable.apn.length > 0 ? (
-                                    comparable.apn.join(", ")
-                                  ) : (
-                                    <span className="text-gray-400 dark:text-gray-600">
-                                      —
-                                    </span>
-                                  )}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  Distance
-                                </dt>
-                                <dd className="text-gray-800 dark:text-gray-200">
-                                  —
-                                </dd>
-                              </div>
-                            </dl>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex flex-col gap-8">
+              {showLandCompsSection || showSalesCompsSection ? (
+                <div
+                  className={`grid gap-8 md:gap-6 md:items-start ${
+                    showLandCompsSection && showSalesCompsSection
+                      ? "md:grid-cols-2"
+                      : ""
+                  }`}
+                >
+                  {showLandCompsSection ? (
+                    <DashboardComparableSection
+                      type="Land"
+                      list={comparablesByType.Land}
+                      projectId={projectId}
+                      project={selectedProject}
+                    />
+                  ) : null}
+                  {showSalesCompsSection ? (
+                    <DashboardComparableSection
+                      type="Sales"
+                      list={comparablesByType.Sales}
+                      projectId={projectId}
+                      project={selectedProject}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {showRentalsCompsSection ? (
+                <DashboardComparableSection
+                  type="Rentals"
+                  list={comparablesByType.Rentals}
+                  projectId={projectId}
+                  project={selectedProject}
+                />
+              ) : null}
+              {!anyComparableSectionVisible ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No comparable sections are enabled. Turn on approaches in{" "}
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    Report Approaches
+                  </span>{" "}
+                  above.
+                </p>
+              ) : null}
             </div>
           </section>
       </div>

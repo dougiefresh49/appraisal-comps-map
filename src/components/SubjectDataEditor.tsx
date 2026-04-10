@@ -152,6 +152,9 @@ function fmtDisplayRatio(val: number | null | undefined): string | null {
   return val != null && !Number.isNaN(val) ? val.toFixed(2) : null;
 }
 
+const FORM_FIELD_CONTROL_CLASS =
+  "w-full rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500";
+
 function FormField({
   label,
   value,
@@ -159,27 +162,41 @@ function FormField({
   onBlur,
   type = "text",
   placeholder,
+  rows = 4,
 }: {
   label: string;
   value: string | number | null | undefined;
   onChange: (value: string) => void;
   onBlur?: () => void;
-  type?: "text" | "number";
+  type?: "text" | "number" | "textarea";
   placeholder?: string;
+  /** Only used when `type="textarea"`. */
+  rows?: number;
 }) {
   return (
     <div className="space-y-1">
       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
       </label>
-      <input
-        type={type}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        className="w-full rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
-      />
+      {type === "textarea" ? (
+        <textarea
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          rows={rows}
+          className={`${FORM_FIELD_CONTROL_CLASS} min-h-[5rem] resize-y`}
+        />
+      ) : (
+        <input
+          type={type}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          className={FORM_FIELD_CONTROL_CLASS}
+        />
+      )}
     </div>
   );
 }
@@ -1536,6 +1553,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             >
               <FormField
                 label="Other Features"
+                type="textarea"
                 value={core["Other Features"] as string | undefined}
                 onChange={(v) => updateCore("Other Features", v || null)}
                 onBlur={saveNow}
