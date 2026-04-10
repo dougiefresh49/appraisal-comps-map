@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Type, type FunctionDeclaration } from "@google/genai";
+import type { AdjustmentPatchInput } from "~/server/adjustment-grid-chat";
 import { createClient } from "~/utils/supabase/server";
 
 // ---------------------------------------------------------------------------
@@ -190,15 +191,57 @@ const updateParcelField: FunctionDeclaration = {
   },
 };
 
+const queryAdjustmentGrid: FunctionDeclaration = {
+  name: "query_adjustment_grid",
+  description:
+    "Read the land or sales adjustment grid for the current project: comparable numbers with IDs, row names (transaction + property adjustments), and each cell's qualitative label and percentage. Use before applying updates from a user-provided table so comp # columns match (Comp #1, #2, …).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      comp_type: {
+        type: Type.STRING,
+        description:
+          "'land' = land sales comparison adjustment grid; 'sales' = improved sales comparison grid.",
+        enum: ["land", "sales"],
+      },
+    },
+    required: ["comp_type"],
+  },
+};
+
+const updateAdjustmentGrid: FunctionDeclaration = {
+  name: "update_adjustment_grid",
+  description:
+    "Apply adjustment grid updates when the user supplies a table of qualitative + percentage adjustments per comparable column. Row names must match the grid (land property rows include Location, Land Size (SF), Surface, Utilities, Frontage; add Zoning or other rows as needed — new rows are created if missing). Percentages are stored as decimal fractions: 0.15 = 15%, -0.25 = -25%. Pass comp_number matching Comp # in the app (1, 2, 3, …). Call query_adjustment_grid first if comp IDs or row names are unclear. Saves to the same draft the Land/Sales Adjustments pages use.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      comp_type: {
+        type: Type.STRING,
+        enum: ["land", "sales"],
+        description: "Which adjustment grid to update.",
+      },
+      updates_json: {
+        type: Type.STRING,
+        description:
+          'JSON array of objects, e.g. [{"row":"Location","comp_number":1,"qualitative":"Inferior","percentage":0.15}]. Each object: row (string), comp_number (integer), qualitative (string: Inferior, Similar, Superior, etc.), percentage (number: use decimal 0.15 for 15%; values like 15 are treated as 15%).',
+      },
+    },
+    required: ["comp_type", "updates_json"],
+  },
+};
+
 export const toolConfig = {
   functionDeclarations: [
     searchAllProjects,
     querySubjectData,
     listProjectComps,
     queryCompData,
+    queryAdjustmentGrid,
     updateSubjectField,
     updateCompField,
     updateParcelField,
+    updateAdjustmentGrid,
   ],
 };
 
@@ -251,6 +294,10 @@ export async function executeToolCall(
         return await executeUpdateCompField(args);
       case "update_parcel_field":
         return await executeUpdateParcelField(args, projectId);
+      case "query_adjustment_grid":
+        return await executeQueryAdjustmentGrid(args, projectId);
+      case "update_adjustment_grid":
+        return await executeUpdateAdjustmentGrid(args, projectId);
       default:
         return {
           toolName,
@@ -737,5 +784,187 @@ async function executeUpdateParcelField(
     args,
     success: true,
     message: `Updated parcel ${apn}: ${field_name} = ${value}`,
+  };
+}
+
+async function executeQueryAdjustmentGrid(
+  args: Record<string, string>,
+  activeProjectId: string,
+): Promise<ToolCallResult> {
+  const compType = args.comp_type?.trim().toLowerCase();
+  if (compType !== "land" && compType !== "sales") {
+    return {
+      toolName: "query_adjustment_grid",
+      args,
+      success: false,
+      message: "comp_type must be \"land\" or \"sales\"",
+      silent: true,
+    };
+  }
+
+  const {
+    loadOrBootstrapAdjustmentGrid,
+    summarizeAdjustmentGridForChat,
+  } = await import("~/server/adjustment-grid-chat");
+
+  const { state, bootstrapped } = await loadOrBootstrapAdjustmentGrid(
+    activeProjectId,
+    compType,
+  );
+  const summary = summarizeAdjustmentGridForChat(state);
+
+  return {
+    toolName: "query_adjustment_grid",
+    args,
+    success: true,
+    message: bootstrapped
+      ? "Adjustment grid loaded (built from suggestions — no prior draft)."
+      : "Adjustment grid draft loaded.",
+    data: { ...summary, bootstrapped },
+    silent: true,
+  };
+}
+
+async function executeUpdateAdjustmentGrid(
+  args: Record<string, string>,
+  projectId: string,
+): Promise<ToolCallResult> {
+  const compType = args.comp_type?.trim().toLowerCase();
+  const updatesJson = args.updates_json?.trim();
+
+  if (compType !== "land" && compType !== "sales") {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message: "comp_type must be \"land\" or \"sales\"",
+    };
+  }
+
+  if (!updatesJson) {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message: "updates_json is required",
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(updatesJson) as unknown;
+  } catch {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message: "updates_json must be valid JSON",
+    };
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message: "updates_json must be a non-empty JSON array",
+    };
+  }
+
+  const {
+    loadOrBootstrapAdjustmentGrid,
+    applyAdjustmentPatches,
+    saveAdjustmentGridDraft,
+    coercePercentageToDecimal,
+  } = await import("~/server/adjustment-grid-chat");
+
+  const patches: AdjustmentPatchInput[] = [];
+
+  for (const item of parsed) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const rowRaw =
+      typeof o.row === "string"
+        ? o.row
+        : typeof o.Row === "string"
+          ? o.Row
+          : "";
+    const row = rowRaw.trim();
+    let compNum: number;
+    if (typeof o.comp_number === "number" && Number.isFinite(o.comp_number)) {
+      compNum = Math.trunc(o.comp_number);
+    } else if (typeof o.comp_number === "string") {
+      compNum = Number.parseInt(o.comp_number.trim(), 10);
+    } else {
+      compNum = NaN;
+    }
+    const qualitative =
+      typeof o.qualitative === "string"
+        ? o.qualitative
+        : typeof o.Qualitative === "string"
+          ? o.Qualitative
+          : "";
+    const pctRaw = o.percentage ?? o.pct ?? o.percent ?? o.Percentage;
+    const percentage = coercePercentageToDecimal(pctRaw);
+
+    if (!row || Number.isNaN(compNum)) {
+      continue;
+    }
+    if (percentage === null) {
+      return {
+        toolName: "update_adjustment_grid",
+        args,
+        success: false,
+        message: `Invalid percentage for row "${row}" comp #${compNum}: ${String(pctRaw)}`,
+      };
+    }
+    patches.push({
+      row,
+      comp_number: compNum,
+      qualitative,
+      percentage,
+    });
+  }
+
+  if (patches.length === 0) {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message:
+        "No valid entries in updates_json (need row, comp_number, qualitative, percentage per item)",
+    };
+  }
+
+  const { state: current, bootstrapped } =
+    await loadOrBootstrapAdjustmentGrid(projectId, compType);
+  const { next, warnings } = applyAdjustmentPatches(current, patches);
+  const save = await saveAdjustmentGridDraft(projectId, compType, next);
+
+  if (!save.ok) {
+    return {
+      toolName: "update_adjustment_grid",
+      args,
+      success: false,
+      message: save.error ?? "Failed to save adjustment grid",
+    };
+  }
+
+  let msg = `Updated ${patches.length} cell(s) on the ${compType} adjustment grid.`;
+  if (bootstrapped) {
+    msg +=
+      " (Grid was created from AI suggestions because no saved draft existed.)";
+  }
+  if (warnings.length > 0) {
+    msg += ` ${warnings.join(" ")}`;
+  }
+
+  return {
+    toolName: "update_adjustment_grid",
+    args,
+    success: true,
+    message: msg,
   };
 }

@@ -7,11 +7,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { ComparableType } from "~/utils/projectStore";
 
 export type DocumentPanelOpenPayload = {
   projectId: string;
   sectionKey: string;
   compFolderId?: string;
+  /** Current comp id — used for "copy source files" on comp detail. */
+  compId?: string;
+  /** Comp type for past-comp search (same as Add Comp flow). */
+  compType?: ComparableType;
+  /** Project comps folder (land/sales/rentals) — required to create a comp folder when missing. */
+  compsFolderId?: string;
   sectionTag?: string;
   onExcludedIdsChange?: (excludedIds: Set<string>) => void;
   showPhotoContext?: boolean;

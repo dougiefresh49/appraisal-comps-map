@@ -327,6 +327,101 @@ export default function LandComparablesMapPage({
     [projectId],
   );
 
+  const handleCaptureScreenshot = useCallback(async () => {
+    try {
+      const { toPng } = await import("html-to-image");
+      const container = document.getElementById("comparables-map-container");
+      if (!container) return;
+
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+
+      const documentAspectRatio = 8.5 / 11;
+      const sizeMultiplier = documentFrameSize;
+
+      let docWidth = containerWidth * 0.9 * sizeMultiplier;
+      let docHeight = docWidth / documentAspectRatio;
+
+      if (docHeight > containerHeight * 0.9 * sizeMultiplier) {
+        docHeight = containerHeight * 0.9 * sizeMultiplier;
+        docWidth = docHeight * documentAspectRatio;
+      }
+
+      const x = (containerWidth - docWidth) / 2;
+      const y = (containerHeight - docHeight) / 2;
+
+      const dataUrl = await toPng(container, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "transparent",
+        fontEmbedCSS: "",
+      });
+
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const canvas = document.createElement("canvas");
+      const scale = 2;
+      canvas.width = docWidth * scale;
+      canvas.height = docHeight * scale;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.drawImage(
+        img,
+        x * scale,
+        y * scale,
+        docWidth * scale,
+        docHeight * scale,
+        0,
+        0,
+        docWidth * scale,
+        docHeight * scale,
+      );
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      if (!blob) throw new Error("Failed to create image blob");
+
+      try {
+        /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+        if ((window as any).showSaveFilePicker) {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: "land-comparables-map.png",
+            types: [
+              {
+                description: "PNG Image",
+                accept: { "image/png": [".png"] },
+              },
+            ],
+          });
+          const stream = await handle.createWritable();
+          await stream.write(blob);
+          await stream.close();
+        } else {
+          throw new Error("File System Access API not supported");
+        }
+        /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
+
+        const croppedDataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = croppedDataUrl;
+        link.download = "land-comparables-map.png";
+        link.click();
+      }
+    } catch (error) {
+      console.error("Screenshot failed:", error);
+      alert("Failed to capture screenshot. Please try manually.");
+    }
+  }, [documentFrameSize]);
+
   const saveProjectRef = useRef(saveProject);
   useEffect(() => {
     saveProjectRef.current = saveProject;
@@ -592,10 +687,14 @@ export default function LandComparablesMapPage({
         readOnly={mapReadOnly}
         onAutoPlace={autoPlace}
         isAutoPlacing={isAutoPlacing}
+        onCaptureScreenshot={handleCaptureScreenshot}
       />
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div
+        id="comparables-map-container"
+        className="relative min-h-0 flex-1"
+      >
         <APIProvider
           apiKey={env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           libraries={["drawing"]}

@@ -14,6 +14,9 @@ export function DocumentPanelSlot({ projectId }: { projectId: string }) {
       isOpen={isOpen}
       onClose={close}
       compFolderId={payload.compFolderId}
+      compId={payload.compId}
+      compType={payload.compType}
+      compsFolderId={payload.compsFolderId}
       sectionTag={payload.sectionTag}
       onExcludedIdsChange={payload.onExcludedIdsChange}
       showPhotoContext={payload.showPhotoContext}

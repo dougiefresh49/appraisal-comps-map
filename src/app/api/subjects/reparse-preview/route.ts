@@ -5,6 +5,8 @@ import { createClient } from "~/utils/supabase/server";
 import {
   computeProposedCoreFromDocuments,
   computeProposedFemaFromDocuments,
+  computeProposedParcelsFromDocuments,
+  computeProposedImprovementsFromDocuments,
 } from "~/server/subject-data/merge";
 
 const SUBJECT_DOCUMENT_TYPES = new Set([
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     // 2. Fetch current subject_data
     const { data: subjectRow, error: subjectError } = await supabase
       .from("subject_data")
-      .select("core, fema")
+      .select("core, fema, parcels, improvements")
       .eq("project_id", projectId)
       .maybeSingle();
 
@@ -80,14 +82,22 @@ export async function POST(request: NextRequest) {
 
     const currentCore = (subjectRow?.core ?? {}) as Record<string, unknown>;
     const currentFema = (subjectRow?.fema ?? {}) as Record<string, unknown>;
+    const currentParcels = (subjectRow?.parcels ?? []) as unknown[];
+    const currentImprovements = (subjectRow?.improvements ?? []) as unknown[];
 
     // 3. Compute proposed values by re-applying MERGE_MAP (no fill-empty-only)
     const proposedCore = computeProposedCoreFromDocuments(subjectDocs);
     const proposedFema = computeProposedFemaFromDocuments(subjectDocs);
+    const proposedParcels = computeProposedParcelsFromDocuments(subjectDocs);
+    const proposedImprovements =
+      computeProposedImprovementsFromDocuments(subjectDocs);
 
     const hasChanges =
       JSON.stringify(proposedCore) !== JSON.stringify(currentCore) ||
-      JSON.stringify(proposedFema) !== JSON.stringify(currentFema);
+      JSON.stringify(proposedFema) !== JSON.stringify(currentFema) ||
+      JSON.stringify(proposedParcels) !== JSON.stringify(currentParcels) ||
+      JSON.stringify(proposedImprovements) !==
+        JSON.stringify(currentImprovements);
 
     if (writeProposed) {
       const { error: updateError } = await supabase
@@ -95,6 +105,10 @@ export async function POST(request: NextRequest) {
         .update({
           proposed_core: hasChanges ? proposedCore : null,
           proposed_fema: hasChanges ? proposedFema : null,
+          proposed_parcels:
+            proposedParcels.length > 0 ? proposedParcels : null,
+          proposed_improvements:
+            proposedImprovements.length > 0 ? proposedImprovements : null,
         })
         .eq("project_id", projectId);
 
@@ -118,6 +132,10 @@ export async function POST(request: NextRequest) {
       proposedCore,
       currentFema,
       proposedFema,
+      currentParcels,
+      proposedParcels,
+      currentImprovements,
+      proposedImprovements,
       documentCount: subjectDocs.length,
     });
   } catch (err) {

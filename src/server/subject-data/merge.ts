@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ParcelData, ParcelImprovement } from "~/types/comp-data";
 import { createServiceClient } from "~/utils/supabase/server";
 import { parseZoningLocation } from "~/types/comp-field-options";
 
@@ -434,6 +435,225 @@ export function computeProposedFemaFromDocuments(
 
 // Re-export MERGE_MAP for use in the reparse-preview route
 export { MERGE_MAP };
+
+// ------------------------------------------------------------------
+// Parcel & improvement builders from document structured_data
+// ------------------------------------------------------------------
+
+/**
+ * Build a proposed `ParcelData[]` from processed CAD documents.
+ * Each CAD document represents one parcel.
+ */
+export function computeProposedParcelsFromDocuments(
+  documents: Array<{ document_type: string; structured_data: unknown }>,
+): ParcelData[] {
+  const parcels: ParcelData[] = [];
+
+  for (const doc of documents) {
+    if (doc.document_type !== "cad") continue;
+    const { structured_data } = doc;
+    if (!structured_data || typeof structured_data !== "object") continue;
+
+    const fields = (
+      typeof (structured_data as Record<string, unknown>).structured_data ===
+        "object" &&
+      (structured_data as Record<string, unknown>).structured_data !== null
+        ? (structured_data as Record<string, unknown>).structured_data
+        : structured_data
+    ) as Record<string, unknown>;
+
+    const apn = str(fields.property_id) ?? "";
+    const improvements = Array.isArray(fields.improvements)
+      ? (fields.improvements as unknown[])
+      : [];
+
+    parcels.push({
+      instrumentNumber: null,
+      APN: apn,
+      "APN Link": "",
+      Location: str(fields.property_address) ?? "",
+      Legal: str(fields.legal_description) ?? "",
+      "Lot #": null,
+      "Size (AC)": num(fields.lot_area_acres),
+      "Size (SF)": num(fields.lot_area_sqft),
+      "Flood Zone": null,
+      "Building Size (SF)":
+        num(fields.building_size_sf) ?? num(fields.total_building_sf),
+      "Office Area (SF)": num(fields.office_area_sf),
+      "Warehouse Area (SF)": num(fields.warehouse_area_sf),
+      "Storage Area (SF)": num(fields.storage_area_sf),
+      "Parking (SF)": num(fields.parking_sf),
+      Buildings: improvements.length > 0 ? improvements.length : null,
+      "Total Tax Amount": str(fields.total_tax_amount),
+      "County Appraised Value":
+        str(fields.total_assessed_value) ??
+        str(fields.assessed_improvement_value) ??
+        undefined,
+    });
+  }
+
+  return parcels;
+}
+
+/**
+ * Build a proposed `ParcelImprovement[]` from CAD, notes, and sketch documents.
+ * CAD improvements are authoritative; notes/sketch buildings supplement when
+ * no CAD improvements exist for a given APN.
+ */
+export function computeProposedImprovementsFromDocuments(
+  documents: Array<{ document_type: string; structured_data: unknown }>,
+): ParcelImprovement[] {
+  const improvements: ParcelImprovement[] = [];
+
+  // Track APNs that have been covered by CAD so notes/sketch don't double-add
+  const cadApns = new Set<string>();
+
+  for (const doc of documents) {
+    if (doc.document_type !== "cad") continue;
+    const { structured_data } = doc;
+    if (!structured_data || typeof structured_data !== "object") continue;
+
+    const fields = (
+      typeof (structured_data as Record<string, unknown>).structured_data ===
+        "object" &&
+      (structured_data as Record<string, unknown>).structured_data !== null
+        ? (structured_data as Record<string, unknown>).structured_data
+        : structured_data
+    ) as Record<string, unknown>;
+
+    const apn = str(fields.property_id) ?? "";
+    const cadImps = Array.isArray(fields.improvements)
+      ? (fields.improvements as Record<string, unknown>[])
+      : [];
+
+    if (cadImps.length > 0) {
+      cadApns.add(apn);
+      cadImps.forEach((imp, idx) => {
+        improvements.push({
+          instrumentNumber: null,
+          APN: apn,
+          "Building #": num(imp.building_number) ?? idx + 1,
+          "Section #": num(imp.section_number) ?? 1,
+          "Year Built": num(imp.year_built),
+          "Gross Building Area (SF)": num(imp.area_sf),
+          "Office Area (SF)": num(imp.office_area_sf),
+          "Warehouse Area (SF)": num(imp.warehouse_area_sf),
+          "Parking (SF)": num(imp.parking_sf),
+          "Storage Area (SF)": num(imp.storage_area_sf),
+          "Is GLA": imp.is_gla !== false,
+          Construction: str(imp.construction) ?? str(fields.construction_type) ?? "",
+          Comments: str(imp.description),
+        });
+      });
+    } else if (apn) {
+      // CAD doc exists but no per-section rows — create one from aggregate fields
+      const bldSf =
+        num(fields.building_size_sf) ?? num(fields.total_building_sf);
+      if (bldSf != null && bldSf > 0) {
+        cadApns.add(apn);
+        improvements.push({
+          instrumentNumber: null,
+          APN: apn,
+          "Building #": 1,
+          "Section #": 1,
+          "Year Built": num(fields.year_built),
+          "Gross Building Area (SF)": bldSf,
+          "Office Area (SF)": num(fields.office_area_sf),
+          "Warehouse Area (SF)": num(fields.warehouse_area_sf),
+          "Parking (SF)": num(fields.parking_sf),
+          "Storage Area (SF)": num(fields.storage_area_sf),
+          "Is GLA": true,
+          Construction:
+            str(fields.construction_type) ?? str(fields.construction) ?? "",
+          Comments: null,
+        });
+      }
+    }
+  }
+
+  // Supplement from notes buildings when CAD produced no improvements
+  let notesBldIdx = improvements.length;
+  for (const doc of documents) {
+    if (doc.document_type !== "notes") continue;
+    const { structured_data } = doc;
+    if (!structured_data || typeof structured_data !== "object") continue;
+
+    const fields = (
+      typeof (structured_data as Record<string, unknown>).structured_data ===
+        "object" &&
+      (structured_data as Record<string, unknown>).structured_data !== null
+        ? (structured_data as Record<string, unknown>).structured_data
+        : structured_data
+    ) as Record<string, unknown>;
+
+    const buildings = Array.isArray(fields.buildings)
+      ? (fields.buildings as Record<string, unknown>[])
+      : [];
+
+    // Only add notes buildings if CAD didn't produce any improvements at all
+    if (cadApns.size === 0 && buildings.length > 0) {
+      buildings.forEach((bld, idx) => {
+        improvements.push({
+          instrumentNumber: null,
+          APN: "",
+          "Building #": notesBldIdx + idx + 1,
+          "Section #": 1,
+          "Year Built": num(bld.year_built),
+          "Gross Building Area (SF)": num(bld.size_sf),
+          "Office Area (SF)": null,
+          "Warehouse Area (SF)": null,
+          "Parking (SF)": null,
+          "Storage Area (SF)": null,
+          "Is GLA": true,
+          Construction: str(bld.construction) ?? "",
+          Comments: str(bld.name),
+        });
+      });
+      notesBldIdx += buildings.length;
+    }
+  }
+
+  // Supplement from sketch buildings when still no improvements exist
+  if (improvements.length === 0) {
+    for (const doc of documents) {
+      if (doc.document_type !== "sketch") continue;
+      const { structured_data } = doc;
+      if (!structured_data || typeof structured_data !== "object") continue;
+
+      const fields = (
+        typeof (structured_data as Record<string, unknown>).structured_data ===
+          "object" &&
+        (structured_data as Record<string, unknown>).structured_data !== null
+          ? (structured_data as Record<string, unknown>).structured_data
+          : structured_data
+      ) as Record<string, unknown>;
+
+      const buildings = Array.isArray(fields.buildings)
+        ? (fields.buildings as Record<string, unknown>[])
+        : [];
+
+      buildings.forEach((bld, idx) => {
+        improvements.push({
+          instrumentNumber: null,
+          APN: "",
+          "Building #": idx + 1,
+          "Section #": 1,
+          "Year Built": null,
+          "Gross Building Area (SF)": num(bld.area_sf),
+          "Office Area (SF)": null,
+          "Warehouse Area (SF)": null,
+          "Parking (SF)": null,
+          "Storage Area (SF)": null,
+          "Is GLA": bld.type !== "non_living_area",
+          Construction: "",
+          Comments: str(bld.name),
+        });
+      });
+    }
+  }
+
+  return improvements;
+}
 
 // ------------------------------------------------------------------
 // Value helpers

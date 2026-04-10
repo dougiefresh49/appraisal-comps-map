@@ -19,13 +19,17 @@ import {
   DocumentTextIcon,
   CheckCircleIcon,
   TagIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "~/utils/supabase/client";
 import { useProject } from "~/hooks/useProject";
 import { DriveFolderBrowser } from "~/components/DriveFolderBrowser";
 import { DeleteDocumentConfirmDialog } from "~/components/DeleteDocumentConfirmDialog";
 import { deleteProjectDocument } from "~/lib/supabase-queries";
-import type { ProjectFolderStructure } from "~/utils/projectStore";
+import type {
+  ComparableType,
+  ProjectFolderStructure,
+} from "~/utils/projectStore";
 import {
   DOCUMENT_TYPE_BADGE_CLASS,
   formatDocumentTypeShort,
@@ -305,6 +309,28 @@ function getFolderStructure(project: unknown): ProjectFolderStructure | undefine
   return undefined;
 }
 
+/** Fallback when `compType` is not passed on the panel payload (e.g. older callers). */
+function inferComparableTypeFromSectionTag(
+  tag: string | undefined,
+): ComparableType | null {
+  if (!tag?.trim()) return null;
+  const m = /^(land|sales|rentals)-comp-/.exec(tag.trim());
+  if (!m) return null;
+  if (m[1] === "land") return "Land";
+  if (m[1] === "sales") return "Sales";
+  return "Rentals";
+}
+
+/** Same shape as `/api/comps/search` results (Add Comp → Search Past Comps). */
+interface CompSearchResultRow {
+  comp_id: string;
+  comp_type: string;
+  address: string;
+  instrument_number: string | null;
+  raw_data: Record<string, string>;
+  projects_using: { project_id: string; project_name: string }[];
+}
+
 interface DocumentContextPanelProps {
   projectId: string;
   sectionKey: string;
@@ -312,6 +338,12 @@ interface DocumentContextPanelProps {
   onClose: () => void;
   /** When set, the inline browser starts here and documents are filtered to this tag. */
   compFolderId?: string;
+  /** Comp id for copy-from-source flow on comp detail. */
+  compId?: string;
+  /** Land / Sales / Rentals — same as Add Comp search. */
+  compType?: ComparableType;
+  /** Project comps folder id (land/sales/rentals) when creating a comp folder. */
+  compsFolderId?: string;
   /** Explicit section_tag override (e.g. "sales-comp-1"). */
   sectionTag?: string;
   /** Called whenever the set of excluded document IDs changes. */
@@ -328,6 +360,9 @@ export function DocumentContextPanel({
   isOpen,
   onClose,
   compFolderId,
+  compId,
+  compType,
+  compsFolderId,
   sectionTag: sectionTagProp,
   onExcludedIdsChange,
   showPhotoContext,
@@ -360,6 +395,29 @@ export function DocumentContextPanel({
   } | null>(null);
   const [previewMetaExpanded, setPreviewMetaExpanded] = useState(false);
 
+  /** Past-comp search + copy (comp detail empty state). */
+  const [sourceSearchQuery, setSourceSearchQuery] = useState("");
+  const [compSearchResults, setCompSearchResults] = useState<
+    CompSearchResultRow[]
+  >([]);
+  const [isSearchingSource, setIsSearchingSource] = useState(false);
+  const [copyingSourceCompId, setCopyingSourceCompId] = useState<string | null>(
+    null,
+  );
+  const [sourceCopyError, setSourceCopyError] = useState<string | null>(null);
+  /** When the API cannot infer `folder_id`, user picks from Drive folders under the source project comps root. */
+  const [sourceFolderPick, setSourceFolderPick] = useState<{
+    sourceCompId: string;
+    candidates: Array<{ id: string; name: string; score: number }>;
+  } | null>(null);
+  const [selectedSourceFolderId, setSelectedSourceFolderId] = useState<
+    string | null
+  >(null);
+  const sourceSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const [hasSearchedPastComps, setHasSearchedPastComps] = useState(false);
+
   const [panelWidth, setPanelWidth] = useState(DOCUMENT_PANEL_DEFAULT_WIDTH);
   const [isResizingDocPanel, setIsResizingDocPanel] = useState(false);
   const docResizeDragRef = useRef<{
@@ -384,6 +442,11 @@ export function DocumentContextPanel({
   // The tag used to filter/scope documents for this section
   const effectiveSectionTag =
     sectionTagProp ?? sectionKeyToTag(sectionKey);
+
+  const effectiveCompType = useMemo((): ComparableType | null => {
+    if (compType) return compType;
+    return inferComparableTypeFromSectionTag(sectionTagProp);
+  }, [compType, sectionTagProp]);
 
   // The folder to pre-navigate in the inline browser
   const browserRootFolderId = useMemo(
@@ -498,6 +561,27 @@ export function DocumentContextPanel({
   useEffect(() => {
     if (isOpen) void fetchDocuments();
   }, [isOpen, fetchDocuments]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSourceSearchQuery("");
+      setCompSearchResults([]);
+      setSourceCopyError(null);
+      setIsSearchingSource(false);
+      setCopyingSourceCompId(null);
+      setHasSearchedPastComps(false);
+      setSourceFolderPick(null);
+      setSelectedSourceFolderId(null);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (sourceSearchDebounceRef.current) {
+        clearTimeout(sourceSearchDebounceRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -638,6 +722,129 @@ export function DocumentContextPanel({
     [projectId, effectiveSectionTag],
   );
 
+  const performPastCompSearch = useCallback(
+    async (q: string) => {
+      if (!effectiveCompType) return;
+      if (q.trim().length < 2) {
+        setCompSearchResults([]);
+        setSourceCopyError(null);
+        setHasSearchedPastComps(false);
+        return;
+      }
+
+      setIsSearchingSource(true);
+      setSourceCopyError(null);
+      setHasSearchedPastComps(true);
+
+      try {
+        const res = await fetch("/api/comps/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: q.trim(),
+            type: effectiveCompType,
+            limit: 30,
+          }),
+        });
+        const data = (await res.json()) as {
+          results?: CompSearchResultRow[];
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.error ?? "Search failed");
+        }
+        setCompSearchResults(data.results ?? []);
+      } catch (err) {
+        setSourceCopyError(
+          err instanceof Error ? err.message : "Could not search for comps",
+        );
+        setCompSearchResults([]);
+      } finally {
+        setIsSearchingSource(false);
+      }
+    },
+    [effectiveCompType],
+  );
+
+  const handlePastCompSearchChange = useCallback(
+    (value: string) => {
+      setSourceSearchQuery(value);
+      if (sourceSearchDebounceRef.current) {
+        clearTimeout(sourceSearchDebounceRef.current);
+      }
+      sourceSearchDebounceRef.current = setTimeout(() => {
+        void performPastCompSearch(value);
+      }, 300);
+    },
+    [performPastCompSearch],
+  );
+
+  const handleCopyFromSource = useCallback(
+    async (sourceCompId: string, sourceFolderIdOverride?: string) => {
+      if (!compId?.trim() || !effectiveSectionTag) return;
+      setCopyingSourceCompId(sourceCompId);
+      setSourceCopyError(null);
+      if (!sourceFolderIdOverride) {
+        setSourceFolderPick(null);
+        setSelectedSourceFolderId(null);
+      }
+      try {
+        const res = await driveFetch("/api/comps/copy-source-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            compId: compId.trim(),
+            projectId,
+            sourceCompId,
+            compsFolderId: compsFolderId ?? undefined,
+            sectionTag: effectiveSectionTag,
+            ...(sourceFolderIdOverride?.trim()
+              ? { sourceFolderId: sourceFolderIdOverride.trim() }
+              : {}),
+          }),
+        });
+        const data = (await res.json()) as {
+          filesCopied?: number;
+          error?: string;
+          code?: string;
+          candidates?: Array<{ id: string; name: string; score: number }>;
+        };
+        if (!res.ok) {
+          if (
+            data.code === "SOURCE_FOLDER_REQUIRED" &&
+            Array.isArray(data.candidates) &&
+            data.candidates.length > 0
+          ) {
+            setSourceFolderPick({
+              sourceCompId,
+              candidates: data.candidates,
+            });
+            setSelectedSourceFolderId(data.candidates[0]?.id ?? null);
+            return;
+          }
+          throw new Error(data.error ?? "Copy failed");
+        }
+        setCompSearchResults([]);
+        setSourceSearchQuery("");
+        setSourceFolderPick(null);
+        await fetchDocuments();
+      } catch (err) {
+        setSourceCopyError(
+          err instanceof Error ? err.message : "Could not copy files",
+        );
+      } finally {
+        setCopyingSourceCompId(null);
+      }
+    },
+    [
+      compId,
+      projectId,
+      effectiveSectionTag,
+      compsFolderId,
+      fetchDocuments,
+    ],
+  );
+
   // Section-scoped docs (matching sectionTag or relevantTypes)
   const scopedDocs = useMemo(() => {
     if (effectiveSectionTag) {
@@ -667,6 +874,25 @@ export function DocumentContextPanel({
     relevantTypes,
     isStrictTagScope,
   ]);
+
+  const showCopySourceFiles =
+    sectionKey === "comp-detail" &&
+    Boolean(compId?.trim()) &&
+    sectionTagProp !== undefined &&
+    scopedDocs.length === 0;
+
+  const pastCompResultsForDisplay = useMemo(() => {
+    const cid = compId?.trim();
+    if (!cid) return compSearchResults;
+    return compSearchResults.filter((r) => r.comp_id !== cid);
+  }, [compSearchResults, compId]);
+
+  const noPastCompMatches =
+    hasSearchedPastComps &&
+    !isSearchingSource &&
+    pastCompResultsForDisplay.length === 0 &&
+    !sourceCopyError &&
+    sourceSearchQuery.trim().length >= 2;
 
   const previewFileId = previewDoc?.file_id ?? previewDriveFile?.fileId ?? null;
   const previewFileName =
@@ -1048,6 +1274,234 @@ export function DocumentContextPanel({
                           ? "Add a document from this comp's folder to tag and attach it here."
                           : 'Click "Add Document" to browse your Drive.'}
                       </p>
+                      {showCopySourceFiles && (
+                        <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-4 text-left dark:border-gray-800 dark:bg-gray-900/40">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            Copy from another project
+                          </p>
+                          <p className="mt-1 text-xs text-gray-600 dark:text-gray-500">
+                            Search by address or APN (same as Add Comp → Search Past
+                            Comps). Pick a result to copy its Drive files into this
+                            comp&apos;s folder. Reference reports are included except
+                            the aggregate &quot;Reference Library&quot; project.
+                          </p>
+                          {!effectiveCompType && (
+                            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200/90">
+                              Comp type could not be determined — reopen the panel from
+                              a comp detail page.
+                            </p>
+                          )}
+                          {!compFolderId && !compsFolderId && (
+                            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200/90">
+                              This comp has no Drive folder yet and the project comps
+                              folder is not set. Fix folder discovery or use Add
+                              Document to link files manually.
+                            </p>
+                          )}
+                          {effectiveCompType ? (
+                            <div className="mt-3 space-y-3">
+                              <div className="relative">
+                                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                                  <MagnifyingGlassIcon
+                                    className="h-4 w-4 text-gray-400 dark:text-gray-500"
+                                    aria-hidden
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  value={sourceSearchQuery}
+                                  onChange={(e) =>
+                                    handlePastCompSearchChange(e.target.value)
+                                  }
+                                  placeholder="Search by address or APN…"
+                                  disabled={!effectiveCompType}
+                                  className="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-9 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
+                                />
+                                {isSearchingSource && (
+                                  <div className="absolute inset-y-0 right-3 flex items-center">
+                                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                                  </div>
+                                )}
+                              </div>
+                              {sourceCopyError && (
+                                <p className="text-xs text-red-600 dark:text-red-400">
+                                  {sourceCopyError}
+                                </p>
+                              )}
+                              {sourceFolderPick && (
+                                <div className="rounded-md border border-blue-200 bg-blue-50/90 p-3 dark:border-blue-900/50 dark:bg-blue-950/35">
+                                  <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+                                    Select the Drive folder for this comp
+                                  </p>
+                                  <p className="mt-1 text-[11px] leading-snug text-blue-800/90 dark:text-blue-300/90">
+                                    Folders are listed from the source project&apos;s
+                                    comps folder (same as Add Comp). Higher % =
+                                    better match to the comp address.
+                                  </p>
+                                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                                    {sourceFolderPick.candidates.map((c) => (
+                                      <li key={c.id}>
+                                        <label className="flex cursor-pointer items-start gap-2 rounded border border-transparent px-2 py-1.5 hover:bg-white/70 dark:hover:bg-gray-900/50">
+                                          <input
+                                            type="radio"
+                                            name="source-folder-pick"
+                                            className="mt-0.5"
+                                            checked={selectedSourceFolderId === c.id}
+                                            onChange={() =>
+                                              setSelectedSourceFolderId(c.id)
+                                            }
+                                          />
+                                          <span className="min-w-0 flex-1 text-xs text-gray-900 dark:text-gray-100">
+                                            <span className="font-medium">
+                                              {c.name}
+                                            </span>
+                                            <span className="ml-2 text-[10px] text-gray-500 dark:text-gray-400">
+                                              {c.score}% match
+                                            </span>
+                                          </span>
+                                        </label>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleCopyFromSource(
+                                          sourceFolderPick.sourceCompId,
+                                          selectedSourceFolderId ?? undefined,
+                                        )
+                                      }
+                                      disabled={
+                                        !selectedSourceFolderId ||
+                                        copyingSourceCompId !== null
+                                      }
+                                      className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600"
+                                    >
+                                      {copyingSourceCompId ===
+                                      sourceFolderPick.sourceCompId ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
+                                          Copying…
+                                        </span>
+                                      ) : (
+                                        "Copy using selected folder"
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSourceFolderPick(null);
+                                        setSelectedSourceFolderId(null);
+                                      }}
+                                      disabled={copyingSourceCompId !== null}
+                                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {!hasSearchedPastComps && !isSearchingSource && (
+                                  <div className="rounded-md border border-dashed border-gray-300 bg-white py-6 text-center dark:border-gray-700 dark:bg-gray-800/50">
+                                    <p className="text-xs text-gray-600 dark:text-gray-500">
+                                      Type at least 2 characters to search past comps
+                                    </p>
+                                  </div>
+                                )}
+                              {noPastCompMatches && (
+                                <div className="rounded-md border border-dashed border-gray-300 bg-white py-6 text-center dark:border-gray-700 dark:bg-gray-800/50">
+                                  <p className="text-xs text-gray-600 dark:text-gray-500">
+                                    No comps found matching &ldquo;
+                                    {sourceSearchQuery.trim()}&rdquo;
+                                  </p>
+                                </div>
+                              )}
+                              {pastCompResultsForDisplay.length > 0 && (
+                                <ul className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
+                                  {pastCompResultsForDisplay.map((result) => {
+                                    const salePrice =
+                                      result.raw_data["Sale Price"] ??
+                                      result.raw_data["Rent / Month Start"] ??
+                                      null;
+                                    const dateOfSale =
+                                      result.raw_data["Date of Sale"] ??
+                                      result.raw_data["Lease Start"] ??
+                                      null;
+                                    const isCopyingThis =
+                                      copyingSourceCompId === result.comp_id;
+
+                                    return (
+                                      <li
+                                        key={result.comp_id}
+                                        className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0 flex-1 space-y-1">
+                                            <p className="truncate text-xs font-medium text-gray-900 dark:text-gray-100">
+                                              {result.address || "—"}
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-600 dark:text-gray-400">
+                                              {salePrice ? (
+                                                <span>
+                                                  <span className="text-gray-500">
+                                                    Price:
+                                                  </span>{" "}
+                                                  {salePrice}
+                                                </span>
+                                              ) : null}
+                                              {dateOfSale ? (
+                                                <span>
+                                                  <span className="text-gray-500">
+                                                    Date:
+                                                  </span>{" "}
+                                                  {dateOfSale}
+                                                </span>
+                                              ) : null}
+                                              <span className="inline-flex items-center rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                                {result.comp_type}
+                                              </span>
+                                            </div>
+                                            {result.projects_using.length > 0 ? (
+                                              <p className="text-[10px] text-gray-600 dark:text-gray-500">
+                                                <span className="text-gray-700 dark:text-gray-600">
+                                                  Used in:
+                                                </span>{" "}
+                                                {result.projects_using
+                                                  .map((p) => p.project_name)
+                                                  .join(", ")}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            disabled={copyingSourceCompId !== null}
+                                            onClick={() =>
+                                              void handleCopyFromSource(
+                                                result.comp_id,
+                                              )
+                                            }
+                                            className="shrink-0 rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {isCopyingThis ? (
+                                              <span className="flex items-center gap-1">
+                                                <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
+                                                …
+                                              </span>
+                                            ) : (
+                                              "Copy files"
+                                            )}
+                                          </button>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   )}
 

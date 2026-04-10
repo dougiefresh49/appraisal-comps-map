@@ -6,9 +6,11 @@ import { useProject } from "~/hooks/useProject";
 import { DEFAULT_APPROACHES } from "~/utils/projectStore";
 import type {
   ExpenseStructure,
+  FemaData,
+  ParcelData,
+  ParcelImprovement,
   SubjectData,
   SubjectTax,
-  FemaData,
 } from "~/types/comp-data";
 import { DocumentPanelToggle } from "~/components/DocumentContextPanel";
 import { useDocumentPanel } from "~/components/DocumentPanelContext";
@@ -26,7 +28,11 @@ import {
   ArrowUpTrayIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
+  TableCellsIcon,
 } from "@heroicons/react/24/outline";
+import { ParcelDataTable, parcelDataToRow, rowToParcelData } from "~/components/ParcelDataTable";
+import { ParcelImprovementsTable, parcelImprovementToRow, rowToParcelImprovement } from "~/components/ParcelImprovementsTable";
+import type { CompParcelPatch, CompParcelImprovementPatch } from "~/hooks/useCompParcels";
 import {
   PROPERTY_RIGHTS_OPTIONS,
   FRONTAGE_OPTIONS,
@@ -233,10 +239,16 @@ function SectionCard({
   title,
   children,
   className,
+  isExpanded,
+  onToggleExpand,
+  expandLabel,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  expandLabel?: string;
 }) {
   return (
     <div
@@ -245,9 +257,30 @@ function SectionCard({
         (className ? ` ${className}` : "")
       }
     >
-      <h3 className="mb-4 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
-        {title}
-      </h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+          {title}
+        </h3>
+        {onToggleExpand && (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            title={
+              isExpanded
+                ? `Hide ${expandLabel ?? "detail"}`
+                : `Show ${expandLabel ?? "detail"}`
+            }
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium transition hover:bg-gray-100 dark:hover:bg-gray-800 ${
+              isExpanded
+                ? "text-blue-600 dark:text-blue-400"
+                : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            <TableCellsIcon className="h-3.5 w-3.5" aria-hidden />
+            {isExpanded ? "Hide" : (expandLabel ?? "Parcels")}
+          </button>
+        )}
+      </div>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -280,8 +313,138 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     proposedCore: Record<string, unknown>;
     currentFema: Record<string, unknown>;
     proposedFema: Record<string, unknown>;
+    currentParcels: ParcelData[];
+    proposedParcels: ParcelData[];
+    currentImprovements: ParcelImprovement[];
+    proposedImprovements: ParcelImprovement[];
   } | null>(null);
   const [showMergeReview, setShowMergeReview] = useState(false);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleSection = useCallback((title: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Subject parcel / improvement mutations (write to subject_data JSONB arrays)
+  // ---------------------------------------------------------------------------
+
+  const handleParcelUpdate = useCallback(
+    async (id: string, patch: CompParcelPatch) => {
+      const currentParcels = subjectData?.parcels ?? [];
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      if (isNaN(idx) || idx < 0 || idx >= currentParcels.length) return;
+      const existing = currentParcels[idx];
+      if (!existing) return;
+      // Merge patch (snake_case) back onto the ParcelData (spreadsheet-key) shape
+      const updatedRow = {
+        ...parcelDataToRow(existing, idx),
+        ...patch,
+      };
+      const updatedParcels = currentParcels.map((p, i) =>
+        i === idx ? rowToParcelData(updatedRow) : p,
+      );
+      await saveSubjectData({ parcels: updatedParcels });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleParcelDelete = useCallback(
+    async (id: string) => {
+      const currentParcels = subjectData?.parcels ?? [];
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      if (isNaN(idx)) return;
+      const updatedParcels = currentParcels.filter((_, i) => i !== idx);
+      await saveSubjectData({ parcels: updatedParcels });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleParcelAdd = useCallback(async () => {
+    const currentParcels = subjectData?.parcels ?? [];
+    const newParcel: ParcelData = {
+      instrumentNumber: null,
+      APN: "",
+      "APN Link": "",
+      Location: "",
+      Legal: "",
+      "Lot #": null,
+      "Size (AC)": null,
+      "Size (SF)": null,
+      "Flood Zone": null,
+      "Building Size (SF)": null,
+      "Office Area (SF)": null,
+      "Warehouse Area (SF)": null,
+      "Storage Area (SF)": null,
+      "Parking (SF)": null,
+      Buildings: null,
+      "Total Tax Amount": null,
+    };
+    await saveSubjectData({ parcels: [...currentParcels, newParcel] as ParcelData[] });
+  }, [subjectData, saveSubjectData]);
+
+  const handleImprovementUpdate = useCallback(
+    async (id: string, patch: CompParcelImprovementPatch) => {
+      const currentImps = subjectData?.improvements ?? [];
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      if (isNaN(idx) || idx < 0 || idx >= currentImps.length) return;
+      const existing = currentImps[idx];
+      if (!existing) return;
+      const updatedRow = {
+        ...parcelImprovementToRow(existing, idx),
+        ...patch,
+      };
+      const updatedImps = currentImps.map((imp, i) =>
+        i === idx ? rowToParcelImprovement(updatedRow) : imp,
+      );
+      await saveSubjectData({ improvements: updatedImps });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleImprovementDelete = useCallback(
+    async (id: string) => {
+      const currentImps = subjectData?.improvements ?? [];
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      if (isNaN(idx)) return;
+      const updatedImps = currentImps.filter((_, i) => i !== idx);
+      await saveSubjectData({ improvements: updatedImps });
+    },
+    [subjectData, saveSubjectData],
+  );
+
+  const handleImprovementAdd = useCallback(async () => {
+    const currentImps = subjectData?.improvements ?? [];
+    const newImp: ParcelImprovement = {
+      instrumentNumber: null,
+      APN: "",
+      "Building #": (currentImps.length) + 1,
+      "Section #": 1,
+      "Year Built": null,
+      "Gross Building Area (SF)": null,
+      "Office Area (SF)": null,
+      "Warehouse Area (SF)": null,
+      "Parking (SF)": null,
+      "Storage Area (SF)": null,
+      "Is GLA": true,
+      Construction: "",
+      Comments: null,
+    };
+    await saveSubjectData({
+      improvements: [...currentImps, newImp] as ParcelImprovement[],
+    });
+  }, [subjectData, saveSubjectData]);
 
   const actionsMenuWrapRef = useRef<HTMLDivElement>(null);
   const pushToSheetRef = useRef<PushToSheetButtonHandle | null>(null);
@@ -448,6 +611,88 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     return calcEffectiveAgeWeighted(years, refYear, undefined, totalBld);
   }, [yearBuiltForAge, buildingSfForEffectiveAge, refYear]);
 
+  /** When subject_data.parcels is empty, derive a single row from core so the table isn't blank. */
+  const displayParcels: ParcelData[] = useMemo(() => {
+    const dbParcels = subjectData?.parcels ?? [];
+    if (dbParcels.length > 0) return dbParcels;
+    const apn = typeof core.APN === "string" ? core.APN : undefined;
+    if (!apn && !core.Address) return [];
+    const cav = core["County Appraised Value"];
+    const countyAppraised =
+      cav === null || cav === undefined
+        ? undefined
+        : typeof cav === "string" || typeof cav === "number" || typeof cav === "boolean"
+          ? String(cav)
+          : typeof cav === "bigint"
+            ? String(cav)
+            : undefined;
+    return [
+      {
+        instrumentNumber:
+          typeof core.instrumentNumber === "string"
+            ? core.instrumentNumber
+            : null,
+        APN: apn ?? "",
+        "APN Link": "",
+        Location: typeof core.Address === "string" ? core.Address : "",
+        Legal: typeof core.Legal === "string" ? core.Legal : "",
+        "Lot #": null,
+        "Size (AC)": (core["Land Size (AC)"] as number | null) ?? null,
+        "Size (SF)": (core["Land Size (SF)"] as number | null) ?? null,
+        "Flood Zone": null,
+        "Building Size (SF)":
+          (core["Building Size (SF)"] as number | null) ?? null,
+        "Office Area (SF)":
+          (core["Office Area (SF)"] as number | null) ?? null,
+        "Warehouse Area (SF)":
+          (core["Warehouse Area (SF)"] as number | null) ?? null,
+        "Storage Area (SF)": null,
+        "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
+        Buildings: null,
+        "Total Tax Amount": null,
+        "County Appraised Value": countyAppraised,
+      },
+    ];
+  }, [subjectData?.parcels, core]);
+
+  /** When subject_data.improvements is empty, derive a single row from core. */
+  const displayImprovements: ParcelImprovement[] = useMemo(() => {
+    const dbImps = subjectData?.improvements ?? [];
+    if (dbImps.length > 0) return dbImps;
+    const bldSfRaw = core["Building Size (SF)"];
+    const bldSf =
+      typeof bldSfRaw === "number" && !Number.isNaN(bldSfRaw)
+        ? bldSfRaw
+        : null;
+    if (!bldSf) return [];
+    return [
+      {
+        instrumentNumber:
+          typeof core.instrumentNumber === "string"
+            ? core.instrumentNumber
+            : null,
+        APN: typeof core.APN === "string" ? core.APN : "",
+        "Building #": 1,
+        "Section #": 1,
+        "Year Built":
+          typeof core["Year Built"] === "number"
+            ? core["Year Built"]
+            : null,
+        "Gross Building Area (SF)": bldSf ?? null,
+        "Office Area (SF)":
+          (core["Office Area (SF)"] as number | null) ?? null,
+        "Warehouse Area (SF)":
+          (core["Warehouse Area (SF)"] as number | null) ?? null,
+        "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
+        "Storage Area (SF)": null,
+        "Is GLA": true,
+        Construction:
+          typeof core.Construction === "string" ? core.Construction : "",
+        Comments: null,
+      },
+    ];
+  }, [subjectData?.improvements, core]);
+
   const handleRebuildFromDocuments = async () => {
     if (taskManager) {
       taskManager.addSubjectRebuildTask({
@@ -474,6 +719,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         proposedCore: Record<string, unknown>;
         currentFema: Record<string, unknown>;
         proposedFema: Record<string, unknown>;
+        currentParcels?: ParcelData[];
+        proposedParcels?: ParcelData[];
+        currentImprovements?: ParcelImprovement[];
+        proposedImprovements?: ParcelImprovement[];
         documentCount: number;
       };
       if (data.documentCount === 0) {
@@ -485,6 +734,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         proposedCore: data.proposedCore,
         currentFema: data.currentFema,
         proposedFema: data.proposedFema,
+        currentParcels: data.currentParcels ?? [],
+        proposedParcels: data.proposedParcels ?? [],
+        currentImprovements: data.currentImprovements ?? [],
+        proposedImprovements: data.proposedImprovements ?? [],
       });
     } catch (err) {
       setRebuildError(err instanceof Error ? err.message : "Rebuild failed");
@@ -493,7 +746,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     }
   };
 
-  const isPendingReview = subjectData?.proposed_core != null;
+  const isPendingReview =
+    subjectData?.proposed_core != null ||
+    subjectData?.proposed_parcels != null ||
+    subjectData?.proposed_improvements != null;
 
   const handleStartReview = useCallback(async () => {
     await refreshSubjectData();
@@ -501,13 +757,23 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   }, [refreshSubjectData]);
 
   const handleMergeConfirm = useCallback(
-    async (mergedCore: Record<string, unknown>) => {
+    async (mergedCombined: Record<string, unknown>) => {
+      // Extract array fields from combined object, leaving scalar fields for core
+      const { parcels: mergedParcels, improvements: mergedImprovements, ...coreOnly } =
+        mergedCombined;
       const merged = applyComputedAgeFields(
-        normalizeLandSizeFromAc(mergedCore as CoreData),
+        normalizeLandSizeFromAc(coreOnly as CoreData),
         project?.effectiveDate,
       );
       const mergedFema = subjectData?.proposed_fema ?? fema;
-      await clearProposedData(merged, mergedFema);
+      await clearProposedData(
+        merged,
+        mergedFema,
+        Array.isArray(mergedParcels) ? (mergedParcels as ParcelData[]) : undefined,
+        Array.isArray(mergedImprovements)
+          ? (mergedImprovements as ParcelImprovement[])
+          : undefined,
+      );
       dirtyRef.current = false;
       setCore(merged);
       setFema(mergedFema);
@@ -520,9 +786,17 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     await clearProposedData(
       (subjectData?.core ?? {}) as Record<string, unknown>,
       subjectData?.fema ?? {},
+      subjectData?.parcels ?? [],
+      subjectData?.improvements ?? [],
     );
     setShowMergeReview(false);
-  }, [clearProposedData, subjectData?.core, subjectData?.fema]);
+  }, [
+    clearProposedData,
+    subjectData?.core,
+    subjectData?.fema,
+    subjectData?.parcels,
+    subjectData?.improvements,
+  ]);
 
   const rebuildDisabled = isLoading || isRebuildLoading || isPendingReview;
   const actionsDisabled = isLoading;
@@ -763,7 +1037,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             {/* Property Info */}
             <SectionCard
               title="Property Info"
-              className="mb-4 w-full break-inside-avoid"
+              className={`mb-4 w-full${expandedSections.has("Property Info") ? " [column-span:all]" : " break-inside-avoid"}`}
+              isExpanded={expandedSections.has("Property Info")}
+              onToggleExpand={() => toggleSection("Property Info")}
+              expandLabel="Parcels"
             >
               <FormField
                 label="Address"
@@ -861,6 +1138,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                   core.Zip as string | number | null | undefined,
                 )}
               />
+              {expandedSections.has("Property Info") && (
+                <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcels
+                  </p>
+                  <ParcelDataTable
+                    rows={displayParcels.map((p, i) =>
+                      parcelDataToRow(p, i),
+                    )}
+                    onUpdate={handleParcelUpdate}
+                    onDelete={handleParcelDelete}
+                    onAdd={handleParcelAdd}
+                  />
+                </div>
+              )}
             </SectionCard>
 
             {/* Zoning & Location */}
@@ -917,7 +1209,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
             {/* Physical */}
             <SectionCard
               title="Physical Characteristics"
-              className="mb-4 w-full break-inside-avoid"
+              className={`mb-4 w-full${expandedSections.has("Physical Characteristics") ? " [column-span:all]" : " break-inside-avoid"}`}
+              isExpanded={expandedSections.has("Physical Characteristics")}
+              onToggleExpand={() => toggleSection("Physical Characteristics")}
+              expandLabel="Improvements"
             >
               <div className="grid grid-cols-2 gap-3">
                 <FormField
@@ -1143,6 +1438,21 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                 onChange={(v) => updateCore("Construction", v || null)}
                 onBlur={saveNow}
               />
+              {expandedSections.has("Physical Characteristics") && (
+                <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Parcel Improvements
+                  </p>
+                  <ParcelImprovementsTable
+                    rows={displayImprovements.map((imp, i) =>
+                      parcelImprovementToRow(imp, i),
+                    )}
+                    onUpdate={handleImprovementUpdate}
+                    onDelete={handleImprovementDelete}
+                    onAdd={handleImprovementAdd}
+                  />
+                </div>
+              )}
             </SectionCard>
 
             {/* Utilities */}
@@ -1477,16 +1787,35 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         <DataMergeDialog
           isOpen
           title="Rebuild from Documents — Review Changes"
-          currentData={pendingRebuildData.currentCore}
-          proposedData={pendingRebuildData.proposedCore}
-          onConfirm={async (mergedCore) => {
+          currentData={{
+            ...pendingRebuildData.currentCore,
+            parcels: pendingRebuildData.currentParcels,
+            improvements: pendingRebuildData.currentImprovements,
+          }}
+          proposedData={{
+            ...pendingRebuildData.proposedCore,
+            parcels: pendingRebuildData.proposedParcels,
+            improvements: pendingRebuildData.proposedImprovements,
+          }}
+          onConfirm={async (mergedCombined) => {
+            const {
+              parcels: mParcels,
+              improvements: mImprovements,
+              ...coreOnly
+            } = mergedCombined;
             const merged = applyComputedAgeFields(
-              normalizeLandSizeFromAc(mergedCore as CoreData),
+              normalizeLandSizeFromAc(coreOnly as CoreData),
               project?.effectiveDate,
             );
             await saveSubjectData({
               core: merged as SubjectData,
               fema: pendingRebuildData.proposedFema as FemaData,
+              ...(Array.isArray(mParcels)
+                ? { parcels: mParcels as ParcelData[] }
+                : {}),
+              ...(Array.isArray(mImprovements)
+                ? { improvements: mImprovements as ParcelImprovement[] }
+                : {}),
             });
             dirtyRef.current = false;
             setCore(merged);
@@ -1497,12 +1826,26 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       )}
 
       {/* Rebuild from Documents — async (DB-stored proposed data) merge dialog */}
-      {showMergeReview && subjectData?.proposed_core && (
+      {showMergeReview && isPendingReview && (
         <DataMergeDialog
           isOpen
           title="Rebuild from Documents — Review Changes"
-          currentData={(subjectData.core ?? {}) as Record<string, unknown>}
-          proposedData={subjectData.proposed_core}
+          currentData={{
+            ...((subjectData?.core ?? {}) as Record<string, unknown>),
+            parcels: subjectData?.parcels ?? [],
+            improvements: subjectData?.improvements ?? [],
+          }}
+          proposedData={{
+            ...((subjectData?.proposed_core ??
+              subjectData?.core ??
+              {}) as Record<string, unknown>),
+            parcels:
+              subjectData?.proposed_parcels ?? subjectData?.parcels ?? [],
+            improvements:
+              subjectData?.proposed_improvements ??
+              subjectData?.improvements ??
+              [],
+          }}
           onConfirm={handleMergeConfirm}
           onCancel={handleMergeCancel}
         />

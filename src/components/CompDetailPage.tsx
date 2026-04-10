@@ -257,6 +257,9 @@ export function CompDetailPage({
                 projectId,
                 sectionKey: "comp-detail",
                 compFolderId,
+                compId,
+                compType,
+                compsFolderId,
                 sectionTag: compSectionTag(compType, displayNumber),
               })
             }
