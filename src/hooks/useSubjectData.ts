@@ -2,17 +2,27 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "~/utils/supabase/client";
-import type { SubjectDataRow, FemaData } from "~/types/comp-data";
+import type {
+  SubjectDataRow,
+  FemaData,
+  ParcelData,
+  ParcelImprovement,
+} from "~/types/comp-data";
 
 export interface UseSubjectDataReturn {
   subjectData: SubjectDataRow | null;
   isLoading: boolean;
   error: string | null;
   saveSubjectData: (updates: Partial<Omit<SubjectDataRow, "id" | "project_id" | "updated_at">>) => Promise<void>;
-  /** Accept merged rebuild result: updates core + fema, clears proposed columns. */
+  /**
+   * Accept merged rebuild result: updates core, fema, parcels, improvements
+   * and clears all proposed_* columns atomically.
+   */
   clearProposedData: (
     mergedCore: Record<string, unknown>,
     mergedFema: FemaData,
+    mergedParcels?: ParcelData[],
+    mergedImprovements?: ParcelImprovement[],
   ) => Promise<void>;
   refreshSubjectData: () => Promise<void>;
 }
@@ -123,6 +133,8 @@ export function useSubjectData(projectId: string): UseSubjectDataReturn {
     async (
       mergedCore: Record<string, unknown>,
       mergedFema: FemaData,
+      mergedParcels?: ParcelData[],
+      mergedImprovements?: ParcelImprovement[],
     ) => {
       if (!projectId) return;
 
@@ -132,8 +144,14 @@ export function useSubjectData(projectId: string): UseSubjectDataReturn {
         .update({
           core: mergedCore,
           fema: mergedFema,
+          ...(mergedParcels !== undefined ? { parcels: mergedParcels } : {}),
+          ...(mergedImprovements !== undefined
+            ? { improvements: mergedImprovements }
+            : {}),
           proposed_core: null,
           proposed_fema: null,
+          proposed_parcels: null,
+          proposed_improvements: null,
           updated_at: new Date().toISOString(),
         })
         .eq("project_id", projectId);

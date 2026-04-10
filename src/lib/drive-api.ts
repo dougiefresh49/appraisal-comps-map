@@ -35,6 +35,11 @@ export interface DriveFile {
   mimeType: string;
 }
 
+/** File or folder metadata including parent folder ids (Drive `files.get`). */
+export interface DriveItemMetadata extends DriveFile {
+  parents?: string[];
+}
+
 export interface DriveListOptions {
   foldersOnly?: boolean;
   filesOnly?: boolean;
@@ -101,6 +106,28 @@ export async function getFolderMetadata(
   }
 
   return JSON.parse(text) as DriveFile;
+}
+
+/**
+ * Gets Drive metadata for any file or folder id, including `parents` when present.
+ */
+export async function getDriveItemMetadata(
+  token: string,
+  fileId: string,
+): Promise<DriveItemMetadata> {
+  const fields = encodeURIComponent("id,name,mimeType,parents");
+  const url = `${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?fields=${fields}`;
+  const res = await fetch(url, { headers: authHeaders(token) });
+  const text = await res.text();
+  if (!res.ok) {
+    throwForFailedDriveResponse(
+      res,
+      "Drive getDriveItemMetadata failed",
+      text.slice(0, 300),
+    );
+  }
+
+  return JSON.parse(text) as DriveItemMetadata;
 }
 
 /**

@@ -46,17 +46,23 @@ Fields for "structured_data":
 - "assessed_land_value": the assessed value of the land
 - "assessed_improvement_value": the assessed value of improvements
 - "total_assessed_value": total assessed value
+- "total_tax_amount": total annual property tax amount as a string (e.g., "$4,250.00")
 - "lot_dimensions": lot size or dimensions
 - "lot_area_sqft": lot area in square feet if available
 - "lot_area_acres": lot area in acres if available
-- "year_built": year the improvements were built
-- "building_size_sf": total building size in square feet
-- "construction_type": construction type (e.g., "Metal", "Concrete", "Wood Frame")
+- "year_built": year the primary improvement was built
+- "building_size_sf": total building size in square feet (sum of all improvements)
+- "office_area_sf": total office area in square feet across all improvements
+- "warehouse_area_sf": total warehouse/industrial area in square feet across all improvements
+- "parking_sf": total parking area in square feet if listed
+- "storage_area_sf": total storage area in square feet if listed
+- "construction_type": construction type of the primary improvement (e.g., "Metal", "Concrete", "Wood Frame")
 - "condition": overall condition rating
 - "zoning": zoning designation if shown
 - "property_class": the property classification
 - "owner_name": the property owner name
-- "improvements": array of objects for each improvement listed, each with { "description": string, "year_built": number, "area_sf": number, "condition": string }`,
+- "improvements": array of objects for each improvement/section listed in the CAD record, each with:
+  { "description": string, "building_number": number (1-based index if not shown), "section_number": number (1 if not shown), "year_built": number, "area_sf": number (gross building area for this section), "office_area_sf": number or null, "warehouse_area_sf": number or null, "parking_sf": number or null, "storage_area_sf": number or null, "is_gla": boolean (true unless it is a canopy, shed, or non-leasable structure), "construction": string, "condition": string }`,
 
   zoning_map: `You are analyzing a zoning map or GIS screenshot for a commercial real estate appraisal. Describe the zoning of the subject property and surrounding areas.
 

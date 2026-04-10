@@ -6,6 +6,12 @@ All issues 001-038 have been resolved and merged. All issue documents deleted.
 
 ## Open Code Issues
 
+### 041 — Clean up subject parcels/improvements data model
+
+**Status:** Open  
+**Priority:** Medium  
+**Summary:** `subject_data` stores parcel/improvement info in three places (`core`, `parcels[]`, `improvements[]`). Currently `core` is the source of truth (form + adjustment grid), while the arrays are blank for all past projects. A derived-from-core workaround keeps the tables populated in the UI. Needs a decision on canonical storage. See [041-subject-parcels-improvements-data-model.md](./041-subject-parcels-improvements-data-model.md).
+
 ### 040 — Backfill comp_parcels / comp_parcel_improvements from raw_data
 
 **Status:** Deferred (no current consumer)  

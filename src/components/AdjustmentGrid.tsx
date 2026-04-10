@@ -10,8 +10,13 @@ import {
 } from "react";
 import {
   adjSalePrice,
+  calcEffectiveAgeWeighted,
   calcMonthlyIncrease,
+  computeGeneratedFields,
   excessLandValue,
+  getZoneVal,
+  parseYearsBuiltList,
+  reportEffectiveYear,
   salePricePerSf,
 } from "~/lib/calculated-fields";
 import { useSubjectData } from "~/hooks/useSubjectData";
@@ -126,6 +131,40 @@ function formatUnknownForDisplay(v: unknown): string {
   return "";
 }
 
+const usdCurrency2 = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Typical USD display for $/SF fields; coerces numeric strings from parsed comp data. */
+function formatUsdCurrency2(v: unknown): string {
+  if (typeof v === "number" && Number.isFinite(v)) {
+    return usdCurrency2.format(v);
+  }
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[$,\s]/g, "").trim();
+    if (cleaned === "") return formatUnknownForDisplay(v);
+    const n = Number.parseFloat(cleaned);
+    if (!Number.isNaN(n)) return usdCurrency2.format(n);
+  }
+  return formatUnknownForDisplay(v);
+}
+
+/** Round to cents for controlled number inputs (avoids float noise in the DOM). */
+function roundMoneyToInput(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Parse user-typed currency fragment (digits / `-` / `.` only). */
+function parseMoneyInput(raw: string): number {
+  const cleaned = raw.replace(/[^0-9.-]/g, "");
+  if (cleaned === "" || cleaned === "-" || cleaned === ".") return 0;
+  const v = Number.parseFloat(cleaned);
+  return Number.isNaN(v) ? 0 : roundMoneyToInput(v);
+}
+
 /**
  * Fields that show formatted data values in the grid (mirrors GET_ADJUSTMENT_DATA formatting).
  * If a category name is a key here, comp cells show the formatted value instead of a dropdown.
@@ -146,12 +185,9 @@ const DATA_FORMAT_FIELDS: Record<string, (v: unknown) => string> = {
     typeof v === "number" ? v.toFixed(2) : formatUnknownForDisplay(v),
   "Land / Bld Ratio (Adj)": (v) =>
     typeof v === "number" ? v.toFixed(2) : formatUnknownForDisplay(v),
-  "Sale Price / SF": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
-  "Sale Price / SF (Adj)": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
-  "Annual Rent / SF": (v) =>
-    typeof v === "number" ? `$${v.toFixed(2)}` : formatUnknownForDisplay(v),
+  "Sale Price / SF": (v) => formatUsdCurrency2(v),
+  "Sale Price / SF (Adj)": (v) => formatUsdCurrency2(v),
+  "Annual Rent / SF": (v) => formatUsdCurrency2(v),
   "Post Sale Renovation Cost": (v) =>
     typeof v === "number"
       ? `$${Math.round(v).toLocaleString()}`
@@ -443,6 +479,38 @@ function subjectAddress(core: Record<string, unknown>): string {
     typeof c === "string" ? c : "",
   ].filter(Boolean);
   return parts.join(", ") || "Subject";
+}
+
+/** Subject column for "Age / Condition": effective age on first line, condition second (matches sheet layout). */
+function formatSubjectEffectiveAgeLine(core: Record<string, unknown>): string {
+  const v = core["Effective Age"];
+  if (typeof v === "number" && !Number.isNaN(v)) return v.toFixed(1);
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return "—";
+    const n = Number.parseFloat(t.replace(/,/g, ""));
+    return !Number.isNaN(n) ? n.toFixed(1) : t;
+  }
+  return "—";
+}
+
+function formatSubjectConditionLine(core: Record<string, unknown>): string {
+  const c = core.Condition;
+  if (typeof c === "string" && c.trim()) return c.trim();
+  return "—";
+}
+
+/** Subject column text for property rows (Age / Condition uses stacked age + condition for copy). */
+function subjectPropertyCategorySubjectCell(
+  catName: string,
+  compType: "land" | "sales",
+  subjectValue: string,
+  core: Record<string, unknown>,
+): string {
+  if (catName === "Age / Condition" && compType === "sales") {
+    return `${formatSubjectEffectiveAgeLine(core)}\n${formatSubjectConditionLine(core)}`;
+  }
+  return subjectValue;
 }
 
 /**
@@ -800,10 +868,64 @@ function reconcileDraftComps(
 
 export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
   const { subjectData, isLoading: subjectLoading } = useSubjectData(projectId);
-  const subjectCore = useMemo(
+  const rawSubjectCore = useMemo(
     () => jsonRecord(subjectData?.core),
     [subjectData?.core],
   );
+
+  const subjectCore = useMemo(() => {
+    const enriched = computeGeneratedFields(rawSubjectCore, {
+      effectiveDateYear: reportEffectiveYear(
+        rawSubjectCore["Effective Date"] as string | null,
+      ),
+    });
+    // Always re-derive Zoning from Zoning Area + Zoning Description.
+    // core.Zoning may be stale or wrong from an old AI parse;
+    // the Subject Overview form always shows the formula result, so we must match it here.
+    const zoningArea =
+      typeof rawSubjectCore["Zoning Area"] === "string"
+        ? rawSubjectCore["Zoning Area"]
+        : typeof rawSubjectCore["Zoning Location"] === "string"
+          ? rawSubjectCore["Zoning Location"]
+          : null;
+    const zoningDesc =
+      typeof rawSubjectCore["Zoning Description"] === "string"
+        ? rawSubjectCore["Zoning Description"]
+        : null;
+    if (zoningArea ?? zoningDesc) {
+      enriched.Zoning = getZoneVal(zoningArea, zoningDesc);
+    }
+
+    // Match Subject Overview: Effective Age from Year Built + Building SF (same as applyComputedAgeFields).
+    const refYearEff = reportEffectiveYear(
+      rawSubjectCore["Effective Date"] as string | null,
+    );
+    const yearsBuilt = parseYearsBuiltList(
+      rawSubjectCore["Year Built"] as string | number | null | undefined,
+    );
+    const totalBldSf =
+      typeof rawSubjectCore["Building Size (SF)"] === "number" &&
+      !Number.isNaN(rawSubjectCore["Building Size (SF)"] as number)
+        ? (rawSubjectCore["Building Size (SF)"] as number)
+        : null;
+    const computedEff = calcEffectiveAgeWeighted(
+      yearsBuilt,
+      refYearEff,
+      undefined,
+      totalBldSf,
+    );
+    const storedEff = enriched["Effective Age"];
+    const effectiveAgeFinal =
+      computedEff ??
+      (typeof storedEff === "number" && !Number.isNaN(storedEff)
+        ? storedEff
+        : null);
+    if (effectiveAgeFinal != null) {
+      enriched["Effective Age"] = effectiveAgeFinal;
+    }
+
+    return enriched;
+  }, [rawSubjectCore]);
 
   const subjectCoreRef = useRef(subjectCore);
   subjectCoreRef.current = subjectCore;
@@ -831,6 +953,11 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     text: string;
   } | null>(null);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
+  /** `type="number"` drops trailing zeros (0.80 → 0.8); text + focus draft keeps 2 decimals when blurred. */
+  const [editingBasePriceCompId, setEditingBasePriceCompId] = useState<
+    string | null
+  >(null);
+  const [basePriceEditText, setBasePriceEditText] = useState("");
 
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -974,6 +1101,18 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       setState((prev) => (prev ? { ...prev, comps: nextComps } : prev));
     }
   }, [rawDataByComp, state?.comps, compType, initializing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep subject_size in sync with live core data
+  useEffect(() => {
+    if (!state || initializing || subjectLoading) return;
+    const freshSize = subjectSizeFromCore(subjectCore, compType);
+    if (freshSize !== state.subject_size && freshSize > 0) {
+      skipNextSave.current = true;
+      setState((prev) =>
+        prev ? { ...prev, subject_size: freshSize } : prev,
+      );
+    }
+  }, [subjectCore, compType, state?.subject_size, initializing, subjectLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced save
   useEffect(() => {
@@ -1225,7 +1364,12 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
       [
         compType === "sales" ? "Sale Price / SF (Adj)" : "Sale Price / SF",
         "—",
-        ...state.comps.map((c) => String(c.base_price_per_unit)),
+        ...state.comps.map((c) =>
+          typeof c.base_price_per_unit === "number" &&
+          Number.isFinite(c.base_price_per_unit)
+            ? usdCurrency2.format(c.base_price_per_unit)
+            : "",
+        ),
       ].join("\t"),
     );
     lines.push("");
@@ -1271,7 +1415,16 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
     lines.push("");
     for (const cat of state.property_categories) {
       lines.push(
-        [cat.name, cat.subject_value, ...state.comps.map(() => "")].join("\t"),
+        [
+          cat.name,
+          subjectPropertyCategorySubjectCell(
+            cat.name,
+            compType,
+            cat.subject_value,
+            subjectCore,
+          ),
+          ...state.comps.map(() => ""),
+        ].join("\t"),
       );
       lines.push(
         [
@@ -1745,21 +1898,61 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
                   key={c.id}
                   className="border-r border-gray-200 bg-gray-100 px-3 py-2 hover:bg-sky-50 dark:border-gray-800 dark:bg-gray-900/60 dark:hover:bg-sky-950/20"
                 >
-                  <div className="flex items-center font-mono font-medium text-gray-700 dark:text-gray-200">
-                    <span className="mr-0.5">$</span>
+                  <div className="flex items-center font-mono font-medium text-gray-700 tabular-nums dark:text-gray-200">
+                    <span className="mr-0.5 shrink-0">$</span>
                     <input
-                      type="number"
-                      step={0.01}
-                      className="w-full bg-transparent outline-none focus:outline-none"
-                      value={c.base_price_per_unit ?? ""}
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="min-w-0 flex-1 bg-transparent outline-none focus:outline-none"
+                      value={
+                        editingBasePriceCompId === c.id
+                          ? basePriceEditText
+                          : typeof c.base_price_per_unit === "number" &&
+                              Number.isFinite(c.base_price_per_unit)
+                            ? roundMoneyToInput(c.base_price_per_unit).toFixed(2)
+                            : ""
+                      }
+                      onFocus={() => {
+                        setEditingBasePriceCompId(c.id);
+                        const n = c.base_price_per_unit;
+                        setBasePriceEditText(
+                          typeof n === "number" && Number.isFinite(n)
+                            ? roundMoneyToInput(n).toFixed(2)
+                            : "",
+                        );
+                      }}
                       onChange={(e) => {
-                        const v = Number.parseFloat(e.target.value) || 0;
+                        const t = e.target.value;
+                        setBasePriceEditText(t);
+                        const v = parseMoneyInput(t);
                         setState((prev) => {
                           if (!prev) return prev;
                           const comps = [...prev.comps];
-                          comps[ci] = { ...comps[ci]!, base_price_per_unit: v };
+                          comps[ci] = {
+                            ...comps[ci]!,
+                            base_price_per_unit: v,
+                          };
                           return { ...prev, comps };
                         });
+                      }}
+                      onBlur={() => {
+                        const n = c.base_price_per_unit;
+                        const final =
+                          typeof n === "number" && Number.isFinite(n)
+                            ? roundMoneyToInput(n)
+                            : 0;
+                        setState((prev) => {
+                          if (!prev) return prev;
+                          const comps = [...prev.comps];
+                          comps[ci] = {
+                            ...comps[ci]!,
+                            base_price_per_unit: final,
+                          };
+                          return { ...prev, comps };
+                        });
+                        setEditingBasePriceCompId(null);
                       }}
                     />
                   </div>
@@ -2321,6 +2514,17 @@ function FragmentPropertyRows({
             <span className="text-[11px] text-gray-500 dark:text-gray-400">
               {formatFieldValue(cat.name, subjectCore)}
             </span>
+          </td>
+        ) : cat.name === "Age / Condition" && compType === "sales" ? (
+          <td className="border-r border-gray-200 px-3 py-1.5 text-center dark:border-gray-800">
+            <div className="flex flex-col items-center justify-center gap-0.5 leading-tight">
+              <span className="font-mono text-[11px] tabular-nums text-gray-700 dark:text-gray-200">
+                {formatSubjectEffectiveAgeLine(subjectCore)}
+              </span>
+              <span className="text-[11px] text-gray-600 dark:text-gray-300">
+                {formatSubjectConditionLine(subjectCore)}
+              </span>
+            </div>
           </td>
         ) : (
           <td className="border-r border-gray-200 px-3 py-1.5 hover:bg-sky-50 dark:border-gray-800 dark:hover:bg-sky-950/20">

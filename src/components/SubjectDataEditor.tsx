@@ -312,6 +312,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     proposedCore: Record<string, unknown>;
     currentFema: Record<string, unknown>;
     proposedFema: Record<string, unknown>;
+    currentParcels: ParcelData[];
+    proposedParcels: ParcelData[];
+    currentImprovements: ParcelImprovement[];
+    proposedImprovements: ParcelImprovement[];
   } | null>(null);
   const [showMergeReview, setShowMergeReview] = useState(false);
 
@@ -610,6 +614,73 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     return calcEffectiveAgeWeighted(years, refYear, undefined, totalBld);
   }, [yearBuiltForAge, buildingSfForEffectiveAge, refYear]);
 
+  /** When subject_data.parcels is empty, derive a single row from core so the table isn't blank. */
+  const displayParcels: import("~/types/comp-data").ParcelData[] = useMemo(() => {
+    const dbParcels = subjectData?.parcels ?? [];
+    if (dbParcels.length > 0) return dbParcels;
+    const apn = core.APN as string | undefined;
+    if (!apn && !core.Address) return [];
+    return [
+      {
+        instrumentNumber: (core.instrumentNumber as string | null) ?? null,
+        APN: (apn as string) ?? "",
+        "APN Link": "",
+        Location: (core.Address as string) ?? "",
+        Legal: (core.Legal as string) ?? "",
+        "Lot #": null,
+        "Size (AC)": (core["Land Size (AC)"] as number | null) ?? null,
+        "Size (SF)": (core["Land Size (SF)"] as number | null) ?? null,
+        "Flood Zone": null,
+        "Building Size (SF)":
+          (core["Building Size (SF)"] as number | null) ?? null,
+        "Office Area (SF)":
+          (core["Office Area (SF)"] as number | null) ?? null,
+        "Warehouse Area (SF)":
+          (core["Warehouse Area (SF)"] as number | null) ?? null,
+        "Storage Area (SF)": null,
+        "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
+        Buildings: null,
+        "Total Tax Amount": null,
+        "County Appraised Value":
+          core["County Appraised Value"] != null
+            ? String(core["County Appraised Value"])
+            : undefined,
+      },
+    ];
+  }, [subjectData?.parcels, core]);
+
+  /** When subject_data.improvements is empty, derive a single row from core. */
+  const displayImprovements: import("~/types/comp-data").ParcelImprovement[] =
+    useMemo(() => {
+      const dbImps = subjectData?.improvements ?? [];
+      if (dbImps.length > 0) return dbImps;
+      const bldSf = core["Building Size (SF)"] as number | null | undefined;
+      if (!bldSf) return [];
+      return [
+        {
+          instrumentNumber:
+            (core.instrumentNumber as string | null) ?? null,
+          APN: (core.APN as string) ?? "",
+          "Building #": 1,
+          "Section #": 1,
+          "Year Built":
+            typeof core["Year Built"] === "number"
+              ? core["Year Built"]
+              : null,
+          "Gross Building Area (SF)": bldSf ?? null,
+          "Office Area (SF)":
+            (core["Office Area (SF)"] as number | null) ?? null,
+          "Warehouse Area (SF)":
+            (core["Warehouse Area (SF)"] as number | null) ?? null,
+          "Parking (SF)": (core["Parking (SF)"] as number | null) ?? null,
+          "Storage Area (SF)": null,
+          "Is GLA": true,
+          Construction: (core.Construction as string) ?? "",
+          Comments: null,
+        },
+      ];
+    }, [subjectData?.improvements, core]);
+
   const handleRebuildFromDocuments = async () => {
     if (taskManager) {
       taskManager.addSubjectRebuildTask({
@@ -636,6 +707,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         proposedCore: Record<string, unknown>;
         currentFema: Record<string, unknown>;
         proposedFema: Record<string, unknown>;
+        currentParcels?: ParcelData[];
+        proposedParcels?: ParcelData[];
+        currentImprovements?: ParcelImprovement[];
+        proposedImprovements?: ParcelImprovement[];
         documentCount: number;
       };
       if (data.documentCount === 0) {
@@ -647,6 +722,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         proposedCore: data.proposedCore,
         currentFema: data.currentFema,
         proposedFema: data.proposedFema,
+        currentParcels: data.currentParcels ?? [],
+        proposedParcels: data.proposedParcels ?? [],
+        currentImprovements: data.currentImprovements ?? [],
+        proposedImprovements: data.proposedImprovements ?? [],
       });
     } catch (err) {
       setRebuildError(err instanceof Error ? err.message : "Rebuild failed");
@@ -655,7 +734,10 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     }
   };
 
-  const isPendingReview = subjectData?.proposed_core != null;
+  const isPendingReview =
+    subjectData?.proposed_core != null ||
+    subjectData?.proposed_parcels != null ||
+    subjectData?.proposed_improvements != null;
 
   const handleStartReview = useCallback(async () => {
     await refreshSubjectData();
@@ -663,13 +745,23 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
   }, [refreshSubjectData]);
 
   const handleMergeConfirm = useCallback(
-    async (mergedCore: Record<string, unknown>) => {
+    async (mergedCombined: Record<string, unknown>) => {
+      // Extract array fields from combined object, leaving scalar fields for core
+      const { parcels: mergedParcels, improvements: mergedImprovements, ...coreOnly } =
+        mergedCombined;
       const merged = applyComputedAgeFields(
-        normalizeLandSizeFromAc(mergedCore as CoreData),
+        normalizeLandSizeFromAc(coreOnly as CoreData),
         project?.effectiveDate,
       );
-      const mergedFema = subjectData?.proposed_fema ?? fema;
-      await clearProposedData(merged, mergedFema);
+      const mergedFema = (subjectData?.proposed_fema ?? fema) as FemaData;
+      await clearProposedData(
+        merged,
+        mergedFema,
+        Array.isArray(mergedParcels) ? (mergedParcels as ParcelData[]) : undefined,
+        Array.isArray(mergedImprovements)
+          ? (mergedImprovements as ParcelImprovement[])
+          : undefined,
+      );
       dirtyRef.current = false;
       setCore(merged);
       setFema(mergedFema);
@@ -682,9 +774,17 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
     await clearProposedData(
       (subjectData?.core ?? {}) as Record<string, unknown>,
       subjectData?.fema ?? {},
+      subjectData?.parcels ?? [],
+      subjectData?.improvements ?? [],
     );
     setShowMergeReview(false);
-  }, [clearProposedData, subjectData?.core, subjectData?.fema]);
+  }, [
+    clearProposedData,
+    subjectData?.core,
+    subjectData?.fema,
+    subjectData?.parcels,
+    subjectData?.improvements,
+  ]);
 
   const rebuildDisabled = isLoading || isRebuildLoading || isPendingReview;
   const actionsDisabled = isLoading;
@@ -1032,7 +1132,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     Parcels
                   </p>
                   <ParcelDataTable
-                    rows={(subjectData?.parcels ?? []).map((p, i) =>
+                    rows={displayParcels.map((p, i) =>
                       parcelDataToRow(p, i),
                     )}
                     onUpdate={handleParcelUpdate}
@@ -1332,7 +1432,7 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
                     Parcel Improvements
                   </p>
                   <ParcelImprovementsTable
-                    rows={(subjectData?.improvements ?? []).map((imp, i) =>
+                    rows={displayImprovements.map((imp, i) =>
                       parcelImprovementToRow(imp, i),
                     )}
                     onUpdate={handleImprovementUpdate}
@@ -1675,16 +1775,35 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
         <DataMergeDialog
           isOpen
           title="Rebuild from Documents — Review Changes"
-          currentData={pendingRebuildData.currentCore}
-          proposedData={pendingRebuildData.proposedCore}
-          onConfirm={async (mergedCore) => {
+          currentData={{
+            ...pendingRebuildData.currentCore,
+            parcels: pendingRebuildData.currentParcels,
+            improvements: pendingRebuildData.currentImprovements,
+          }}
+          proposedData={{
+            ...pendingRebuildData.proposedCore,
+            parcels: pendingRebuildData.proposedParcels,
+            improvements: pendingRebuildData.proposedImprovements,
+          }}
+          onConfirm={async (mergedCombined) => {
+            const {
+              parcels: mParcels,
+              improvements: mImprovements,
+              ...coreOnly
+            } = mergedCombined;
             const merged = applyComputedAgeFields(
-              normalizeLandSizeFromAc(mergedCore as CoreData),
+              normalizeLandSizeFromAc(coreOnly as CoreData),
               project?.effectiveDate,
             );
             await saveSubjectData({
               core: merged as SubjectData,
               fema: pendingRebuildData.proposedFema as FemaData,
+              ...(Array.isArray(mParcels)
+                ? { parcels: mParcels as ParcelData[] }
+                : {}),
+              ...(Array.isArray(mImprovements)
+                ? { improvements: mImprovements as ParcelImprovement[] }
+                : {}),
             });
             dirtyRef.current = false;
             setCore(merged);
@@ -1695,12 +1814,26 @@ export function SubjectDataEditor({ projectId }: SubjectDataEditorProps) {
       )}
 
       {/* Rebuild from Documents — async (DB-stored proposed data) merge dialog */}
-      {showMergeReview && subjectData?.proposed_core && (
+      {showMergeReview && isPendingReview && (
         <DataMergeDialog
           isOpen
           title="Rebuild from Documents — Review Changes"
-          currentData={(subjectData.core ?? {}) as Record<string, unknown>}
-          proposedData={subjectData.proposed_core}
+          currentData={{
+            ...((subjectData?.core ?? {}) as Record<string, unknown>),
+            parcels: subjectData?.parcels ?? [],
+            improvements: subjectData?.improvements ?? [],
+          }}
+          proposedData={{
+            ...((subjectData?.proposed_core ??
+              subjectData?.core ??
+              {}) as Record<string, unknown>),
+            parcels:
+              subjectData?.proposed_parcels ?? subjectData?.parcels ?? [],
+            improvements:
+              subjectData?.proposed_improvements ??
+              subjectData?.improvements ??
+              [],
+          }}
           onConfirm={handleMergeConfirm}
           onCancel={handleMergeCancel}
         />
