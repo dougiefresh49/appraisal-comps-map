@@ -6,7 +6,28 @@ All issues 001-038 have been resolved and merged. All issue documents deleted.
 
 ## Open Code Issues
 
-None.
+### 040 — Backfill comp_parcels / comp_parcel_improvements from raw_data
+
+**Status:** Deferred (no current consumer)  
+**Trigger:** Implement when issue 033 (push to spreadsheet) or any cross-comp aggregation query needs normalized parcel rows.
+
+**Background:**  
+The UI currently reads and writes parcel and parcel-improvement data exclusively from `comp_parsed_data.raw_data._parcelData` and `raw_data._parcelImprovements`. The normalized tables `comp_parcels` and `comp_parcel_improvements` exist in the schema (migration `018_comp_parcels.sql`) but are not populated for comps parsed through the webapp — only for comps imported via `POST /api/seed/import-csv-comps`.
+
+**What needs to happen:**  
+Write a backfill API route (or one-time migration) that:
+1. Iterates all `comp_parsed_data` rows where `raw_data->'_parcelData'` is non-empty.
+2. Maps each `ParcelData` entry (spreadsheet-key names) to the snake_case `comp_parcels` columns, upserts on `(comp_id, apn)` or instrument number.
+3. For each inserted/updated parcel row, maps `_parcelImprovements` entries with matching `instrumentNumber` or `APN` to `comp_parcel_improvements`, upserts on `(parcel_id, building_number, section_number)`.
+4. Skips comps that already have up-to-date normalized rows (compare `updated_at`).
+
+**Key reference files:**
+- `src/app/api/seed/import-csv-comps/route.ts` — existing importer that does this mapping from CSV; reuse its column-mapping logic
+- `src/app/api/seed/backfill-comps/route.ts` — existing cloner; shows the `parcel_id` remapping pattern
+- `src/types/comp-data.ts` — `ParcelData` and `ParcelImprovement` interfaces (spreadsheet keys)
+- `supabase/migrations/018_comp_parcels.sql` — normalized table schema
+
+**Note:** Until this is done, do not add any direct reads from `comp_parcels` / `comp_parcel_improvements` in the UI — always use `raw_data._parcelData` / `raw_data._parcelImprovements` as the source of truth for comp parcel editing.
 
 **039 (done):** New-project Drive folder list uses `GET /api/projects/list-drive-roots` and env `GOOGLE_DRIVE_APPRAISAL_PROJECTS_PARENT_FOLDER_ID` — see [039-remove-n8n-projects-new-folder-picker.md](./039-remove-n8n-projects-new-folder-picker.md).
 

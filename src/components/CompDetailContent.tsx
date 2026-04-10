@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TableCellsIcon } from "@heroicons/react/24/outline";
 import { MapBanner } from "~/components/MapBanner";
 import { ToggleSwitch } from "~/components/ToggleField";
-import { ParcelDataTable } from "~/components/ParcelDataTable";
-import { ParcelImprovementsTable } from "~/components/ParcelImprovementsTable";
+import { ParcelDataTable, parcelDataToRow, rowToParcelData } from "~/components/ParcelDataTable";
+import { ParcelImprovementsTable, parcelImprovementToRow, rowToParcelImprovement } from "~/components/ParcelImprovementsTable";
 import { useCompParsedData } from "~/hooks/useCompParsedData";
-import { useCompParcels } from "~/hooks/useCompParcels";
-import type { LandSaleData, SaleData, RentalData } from "~/types/comp-data";
+import type { LandSaleData, SaleData, RentalData, ParcelData, ParcelImprovement } from "~/types/comp-data";
+import type { CompParcelPatch, CompParcelImprovementPatch } from "~/hooks/useCompParcels";
 import {
   acToSf,
   adjSalePrice,
@@ -811,19 +811,6 @@ export function CompDetailContent({
     saveParsedData,
   } = useCompParsedData(compId);
 
-  const {
-    parcels,
-    improvements,
-    isLoading: parcelsLoading,
-    error: parcelsError,
-    updateParcel,
-    updateImprovement,
-    deleteParcel,
-    deleteImprovement,
-    addParcel,
-    addImprovement,
-  } = useCompParcels(compId);
-
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(),
   );
@@ -945,6 +932,143 @@ export function CompDetailContent({
     },
     [handleFieldChange],
   );
+
+  // ---------------------------------------------------------------------------
+  // Parcel / improvement mutations — read/write _parcelData and
+  // _parcelImprovements keys within draft (persisted via scheduleSave)
+  // ---------------------------------------------------------------------------
+
+  const handleParcelUpdate = useCallback(
+    (id: string, patch: CompParcelPatch) => {
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      setDraft((prev) => {
+        const currentParcels = (prev._parcelData as ParcelData[] | undefined) ?? [];
+        if (isNaN(idx) || idx < 0 || idx >= currentParcels.length) return prev;
+        const existing = currentParcels[idx];
+        if (!existing) return prev;
+        const updatedRow = { ...parcelDataToRow(existing, idx), ...patch };
+        const next = {
+          ...prev,
+          _parcelData: currentParcels.map((p, i) =>
+            i === idx ? rowToParcelData(updatedRow) : p,
+          ),
+        };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave],
+  );
+
+  const handleParcelDelete = useCallback(
+    (id: string) => {
+      const idx = parseInt(id.replace("subject-parcel-", ""), 10);
+      setDraft((prev) => {
+        const currentParcels = (prev._parcelData as ParcelData[] | undefined) ?? [];
+        if (isNaN(idx)) return prev;
+        const next = {
+          ...prev,
+          _parcelData: currentParcels.filter((_, i) => i !== idx),
+        };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave],
+  );
+
+  const handleParcelAdd = useCallback(() => {
+    setDraft((prev) => {
+      const currentParcels = (prev._parcelData as ParcelData[] | undefined) ?? [];
+      const newParcel: ParcelData = {
+        instrumentNumber: null,
+        APN: "",
+        "APN Link": "",
+        Location: "",
+        Legal: "",
+        "Lot #": null,
+        "Size (AC)": null,
+        "Size (SF)": null,
+        "Flood Zone": null,
+        "Building Size (SF)": null,
+        "Office Area (SF)": null,
+        "Warehouse Area (SF)": null,
+        "Storage Area (SF)": null,
+        "Parking (SF)": null,
+        Buildings: null,
+        "Total Tax Amount": null,
+      };
+      const next = { ...prev, _parcelData: [...currentParcels, newParcel] };
+      scheduleSave(next);
+      return next;
+    });
+  }, [scheduleSave]);
+
+  const handleImprovementUpdate = useCallback(
+    (id: string, patch: CompParcelImprovementPatch) => {
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      setDraft((prev) => {
+        const currentImps = (prev._parcelImprovements as ParcelImprovement[] | undefined) ?? [];
+        if (isNaN(idx) || idx < 0 || idx >= currentImps.length) return prev;
+        const existing = currentImps[idx];
+        if (!existing) return prev;
+        const updatedRow = { ...parcelImprovementToRow(existing, idx), ...patch };
+        const next = {
+          ...prev,
+          _parcelImprovements: currentImps.map((imp, i) =>
+            i === idx ? rowToParcelImprovement(updatedRow) : imp,
+          ),
+        };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave],
+  );
+
+  const handleImprovementDelete = useCallback(
+    (id: string) => {
+      const idx = parseInt(id.replace("subject-imp-", ""), 10);
+      setDraft((prev) => {
+        const currentImps = (prev._parcelImprovements as ParcelImprovement[] | undefined) ?? [];
+        if (isNaN(idx)) return prev;
+        const next = {
+          ...prev,
+          _parcelImprovements: currentImps.filter((_, i) => i !== idx),
+        };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave],
+  );
+
+  const handleImprovementAdd = useCallback(() => {
+    setDraft((prev) => {
+      const currentImps = (prev._parcelImprovements as ParcelImprovement[] | undefined) ?? [];
+      const newImp: ParcelImprovement = {
+        instrumentNumber: null,
+        APN: "",
+        "Building #": currentImps.length + 1,
+        "Section #": 1,
+        "Year Built": null,
+        "Gross Building Area (SF)": null,
+        "Office Area (SF)": null,
+        "Warehouse Area (SF)": null,
+        "Parking (SF)": null,
+        "Storage Area (SF)": null,
+        "Is GLA": true,
+        Construction: "",
+        Comments: null,
+      };
+      const next = {
+        ...prev,
+        _parcelImprovements: [...currentImps, newImp],
+      };
+      scheduleSave(next);
+      return next;
+    });
+  }, [scheduleSave]);
 
   const isProcessing = parsedDataStatus === "processing";
   const isReparsing = parsedDataStatus === "reparsing" || parsedDataStatus === "pending_review";
@@ -1206,12 +1330,12 @@ export function CompDetailContent({
                     Parcels
                   </p>
                   <ParcelDataTable
-                    rows={parcels}
-                    onUpdate={updateParcel}
-                    onDelete={deleteParcel}
-                    onAdd={() => addParcel()}
-                    isLoading={parcelsLoading}
-                    error={parcelsError}
+                    rows={((draft._parcelData as ParcelData[] | undefined) ?? []).map(
+                      (p, i) => parcelDataToRow(p, i),
+                    )}
+                    onUpdate={handleParcelUpdate}
+                    onDelete={handleParcelDelete}
+                    onAdd={handleParcelAdd}
                   />
                 </div>
               )}
@@ -1223,14 +1347,12 @@ export function CompDetailContent({
                     Parcel Improvements
                   </p>
                   <ParcelImprovementsTable
-                    rows={improvements}
-                    onUpdate={updateImprovement}
-                    onDelete={deleteImprovement}
-                    onAdd={() =>
-                      addImprovement(parcels[0]?.id ?? null)
-                    }
-                    isLoading={parcelsLoading}
-                    error={parcelsError}
+                    rows={((draft._parcelImprovements as ParcelImprovement[] | undefined) ?? []).map(
+                      (imp, i) => parcelImprovementToRow(imp, i),
+                    )}
+                    onUpdate={handleImprovementUpdate}
+                    onDelete={handleImprovementDelete}
+                    onAdd={handleImprovementAdd}
                   />
                 </div>
               )}

@@ -739,6 +739,61 @@ function normalizeLoadedDraft(
   };
 }
 
+/**
+ * Merge a saved draft with the current comp list from the suggestions API.
+ * Preserves per-cell edits for comps that still exist; adds columns for new comps;
+ * removes columns for deleted comps; refreshes header fields from fresh data.
+ */
+function reconcileDraftComps(
+  draft: AdjustmentGridState,
+  fresh: AdjustmentGridSuggestions,
+): AdjustmentGridState {
+  const freshMap = new Map(fresh.comps.map((c) => [c.id, c]));
+  const draftIds = new Set(draft.comps.map((c) => c.id));
+
+  const kept = draft.comps
+    .filter((c) => freshMap.has(c.id))
+    .map((c) => {
+      const f = freshMap.get(c.id)!;
+      return {
+        ...c,
+        address: f.address,
+        date_of_sale: f.date_of_sale,
+        base_price_per_unit: f.base_price_per_unit,
+        size: f.size,
+      };
+    });
+
+  const added = fresh.comps
+    .filter((c) => !draftIds.has(c.id))
+    .map((c) => ({ ...c }));
+
+  const comps = [...kept, ...added];
+
+  const patchCategories = (cats: AdjustmentCategoryState[]) =>
+    cats.map((cat) => {
+      const cv = { ...cat.comp_values };
+      for (const c of added) {
+        if (!cv[c.id]) {
+          cv[c.id] = emptyCell();
+        }
+      }
+      for (const id of Object.keys(cv)) {
+        if (!freshMap.has(id)) {
+          delete cv[id];
+        }
+      }
+      return { ...cat, comp_values: cv };
+    });
+
+  return {
+    ...draft,
+    comps,
+    transaction_categories: patchCategories(draft.transaction_categories),
+    property_categories: patchCategories(draft.property_categories),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -817,8 +872,25 @@ export function AdjustmentGrid({ projectId, compType }: AdjustmentGridProps) {
         }
         const normalized = normalizeLoadedDraft(dJson.draft ?? null, compType);
         if (normalized) {
-          rationaleByCellRef.current = new Map();
-          setState(normalized);
+          const sRes = await fetch(
+            `/api/adjustments/suggest?project_id=${encodeURIComponent(projectId)}&type=${compType}`,
+          );
+          if (cancelled) {
+            return;
+          }
+          if (sRes.ok) {
+            const sJson = (await sRes.json()) as AdjustmentGridSuggestions;
+            const reconciled = reconcileDraftComps(normalized, sJson);
+            const m = new Map<string, string>();
+            for (const s of sJson.suggestions) {
+              m.set(suggestionKey(s.category, s.comp_id), s.rationale);
+            }
+            rationaleByCellRef.current = m;
+            setState(reconciled);
+          } else {
+            rationaleByCellRef.current = new Map();
+            setState(normalized);
+          }
           skipNextSave.current = true;
           setInitializing(false);
           return;
