@@ -26,6 +26,7 @@ import {
 import { PhotoCard } from "./PhotoCard";
 import { PhotoDetailPanel } from "./PhotoDetailPanel";
 import { PhotoAnalysisDialog } from "./PhotoAnalysisDialog";
+import type { ImprovementAnalysisRow } from "~/types/comp-data";
 import { useProjectPhotos } from "~/hooks/useProjectPhotos";
 import { useProject } from "~/hooks/useProject";
 import { useSubjectData } from "~/hooks/useSubjectData";
@@ -174,8 +175,14 @@ export default function PhotoGrid({ projectId }: PhotoGridProps) {
     }
   };
 
-  const handleSaveCore = async (core: Record<string, unknown>) => {
-    await saveSubjectData({ core });
+  const handleSaveCore = async (
+    core: Record<string, unknown>,
+    improvementAnalysis?: ImprovementAnalysisRow[],
+  ) => {
+    await saveSubjectData({
+      core,
+      ...(improvementAnalysis ? { improvement_analysis: improvementAnalysis } : {}),
+    });
   };
 
   if (isLoading) {

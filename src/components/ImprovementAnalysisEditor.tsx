@@ -11,6 +11,10 @@ import {
 import { useSubjectData } from "~/hooks/useSubjectData";
 import { useProject } from "~/hooks/useProject";
 import { fetchProjectDocuments, fetchAggregatedPhotoImprovements } from "~/lib/supabase-queries";
+import {
+  buildDefaultImprovementAnalysisRows,
+  normalizeImprovementAnalysisFromDb,
+} from "~/lib/improvement-analysis-default-rows";
 import { populateImprovementRowsFromSources } from "~/lib/improvement-analysis-populate";
 import type {
   ImprovementAnalysisRow,
@@ -73,103 +77,6 @@ const CATEGORY_CHECK: Record<ImprovementCategory, string> = {
   "Site Improvements": "text-lime-500",
   "Legal/Conforming Status": "text-gray-500",
 };
-
-function isImprovementCategory(v: unknown): v is ImprovementCategory {
-  return typeof v === "string" && (CATEGORY_ORDER as string[]).includes(v);
-}
-
-function buildDefaultRows(): ImprovementAnalysisRow[] {
-  const add = (
-    category: ImprovementCategory,
-    labels: string[],
-  ): ImprovementAnalysisRow[] =>
-    labels.map((label) => ({
-      label,
-      category,
-      include: true,
-      value: "",
-    }));
-
-  return [
-    ...add("Improvement Characteristics", [
-      "Property Type",
-      "Property Subtype",
-      "Occupancy",
-    ]),
-    { label: "Investment Class", category: "Improvement Characteristics" as ImprovementCategory, include: false, value: "" },
-    ...add("Improvement Characteristics", [
-      "Number of Buildings",
-      "Number of Stories",
-      "Construction Class",
-      "Construction Quality",
-      "Gross Building Area (GBA)",
-      "Net Rentable Area (NRA)",
-    ]),
-    ...add("Ratios & Parking", [
-      "Land/Bld Ratio",
-      "Floor Area Ratio",
-      "Parking (SF)",
-      "Parking Spaces",
-      "Parking Ratio",
-    ]),
-    ...add("Age/Life", [
-      "Year Built",
-      "Condition",
-      "Age",
-      "Effective Age",
-      "Typical Building Life",
-      "Remaining Economic Life",
-    ]),
-    ...add("Structural Characteristics", [
-      "Foundation",
-      "Roof Type/Material",
-      "Building Frame",
-      "Exterior Walls",
-    ]),
-    ...add("Interior Characteristics", [
-      "Floors",
-      "Walls",
-      "Ceiling",
-      "Lighting",
-      "Restrooms",
-    ]),
-    ...add("Mechanical Systems", [
-      "Electrical",
-      "Plumbing",
-      "Heating",
-      "Air Conditioning",
-      "Fire Protection/Sprinklers",
-      "Number of Elevators",
-    ]),
-    ...add("Site Improvements", ["Site Improvements", "Landscaping"]),
-    ...add("Legal/Conforming Status", [
-      "Legally Permitted Use",
-      "Conforms to Parking",
-      "Conformity Conclusion",
-    ]),
-  ];
-}
-
-function asDisplayString(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return "";
-}
-
-function normalizeFromDb(raw: unknown): ImprovementAnalysisRow[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [];
-  return raw
-    .filter((x): x is Record<string, unknown> => x !== null && typeof x === "object")
-    .map((x) => ({
-      label: asDisplayString(x.label),
-      category: isImprovementCategory(x.category)
-        ? x.category
-        : "Improvement Characteristics",
-      include: Boolean(x.include),
-      value: asDisplayString(x.value),
-    }));
-}
 
 type LocalRow = ImprovementAnalysisRow & { clientId: string };
 
@@ -306,8 +213,9 @@ export function ImprovementAnalysisEditor({
 
   useEffect(() => {
     const raw = subjectData?.improvement_analysis;
-    const normalized = raw ? normalizeFromDb(raw) : [];
-    const base = normalized.length > 0 ? normalized : buildDefaultRows();
+    const normalized = raw ? normalizeImprovementAnalysisFromDb(raw) : [];
+    const base =
+      normalized.length > 0 ? normalized : buildDefaultImprovementAnalysisRows();
     setRows(withClientIds(base));
     // Intentionally depend on serialized analysis only so unrelated subject_data updates
     // (taxes, core, etc.) do not reset local row state.
@@ -591,7 +499,7 @@ function ImprovementRow({
   onUpdate: (patch: Partial<ImprovementAnalysisRow>) => void;
   onRemove: () => void;
 }) {
-  const isCustom = !buildDefaultRows().some(
+  const isCustom = !buildDefaultImprovementAnalysisRows().some(
     (d) => d.label === row.label && d.category === row.category,
   );
 
