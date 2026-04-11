@@ -152,20 +152,20 @@ const updateSubjectField: FunctionDeclaration = {
 const updateSubjectSectionJson: FunctionDeclaration = {
   name: "update_subject_section_json",
   description:
-    "Replace the entire taxes or tax_entities array on subject_data. Use when the user asks to save, set, or update tax rows (amounts) or tax entity rates. Pass json_payload as a JSON array string. taxes items: Entity (string), Amount (number). tax_entities items: Entity (string), Rate (number).",
+    "Replace an entire subject_data JSON column in one call. Arrays: taxes, tax_entities, improvement_analysis (pass a JSON array string). Object: fema (pass a JSON object string with FEMA fields). Use for bulk updates; for a single core field prefer update_subject_field.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       section: {
         type: Type.STRING,
         description:
-          "Which column to replace: 'taxes' for amount rows, 'tax_entities' for rate rows.",
-        enum: ["taxes", "tax_entities"],
+          "Column to replace: taxes / tax_entities / improvement_analysis (JSON array), or fema (JSON object).",
+        enum: ["taxes", "tax_entities", "fema", "improvement_analysis"],
       },
       json_payload: {
         type: Type.STRING,
         description:
-          'JSON array only, e.g. [{"Entity":"County","Amount":96068}] or [{"Entity":"ISD","Rate":0.0145}]. Use [] to clear.',
+          "For taxes, tax_entities, improvement_analysis: JSON array string. For fema: JSON object string (keys like FemaMapNum, FemaZone, FemaIsHazardZone, FemaMapDate). improvement_analysis rows: label, category, include, value. Use [] or {} to clear.",
       },
     },
     required: ["section", "json_payload"],
@@ -717,12 +717,19 @@ async function executeUpdateSubjectSectionJson(
     };
   }
 
-  if (section !== "taxes" && section !== "tax_entities") {
+  const arraySections = new Set([
+    "taxes",
+    "tax_entities",
+    "improvement_analysis",
+  ]);
+  const objectSections = new Set(["fema"]);
+
+  if (!arraySections.has(section) && !objectSections.has(section)) {
     return {
       toolName: "update_subject_section_json",
       args,
       success: false,
-      message: `Invalid section: ${section}. Must be taxes or tax_entities`,
+      message: `Invalid section: ${section}. Must be taxes, tax_entities, fema, or improvement_analysis`,
     };
   }
 
@@ -738,13 +745,24 @@ async function executeUpdateSubjectSectionJson(
     };
   }
 
-  if (!Array.isArray(parsed)) {
-    return {
-      toolName: "update_subject_section_json",
-      args,
-      success: false,
-      message: "json_payload must be a JSON array",
-    };
+  if (arraySections.has(section)) {
+    if (!Array.isArray(parsed)) {
+      return {
+        toolName: "update_subject_section_json",
+        args,
+        success: false,
+        message: `json_payload for ${section} must be a JSON array`,
+      };
+    }
+  } else if (objectSections.has(section)) {
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        toolName: "update_subject_section_json",
+        args,
+        success: false,
+        message: "json_payload for fema must be a JSON object (not an array)",
+      };
+    }
   }
 
   const supabase = await createClient();
@@ -767,11 +785,18 @@ async function executeUpdateSubjectSectionJson(
     };
   }
 
+  let detail: string;
+  if (Array.isArray(parsed)) {
+    detail = `${parsed.length} row(s)`;
+  } else {
+    detail = `${Object.keys(parsed as Record<string, unknown>).length} key(s)`;
+  }
+
   return {
     toolName: "update_subject_section_json",
     args,
     success: true,
-    message: `Replaced subject_data.${section} (${parsed.length} row(s))`,
+    message: `Replaced subject_data.${section} (${detail})`,
   };
 }
 

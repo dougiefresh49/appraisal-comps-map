@@ -175,27 +175,27 @@ function formatSubjectBlock(subject: SubjectContext): string {
     parts.push("### Core Data\n" + coreLines.join("\n"));
   }
 
-  // Build remaining sections
+  // Build remaining sections (fema + improvement_analysis first so they are less likely truncated)
   const optionalSections: string[] = [];
+  if (subject.fema) {
+    optionalSections.push(serializeSection("FEMA Flood Data", subject.fema));
+  }
+  if (subject.improvement_analysis) {
+    optionalSections.push(
+      serializeSection("Improvement Analysis", subject.improvement_analysis),
+    );
+  }
   if (subject.taxes) {
     optionalSections.push(serializeSection("Tax Data", subject.taxes));
   }
   if (subject.tax_entities) {
     optionalSections.push(serializeSection("Tax Entities", subject.tax_entities));
   }
-  if (subject.fema) {
-    optionalSections.push(serializeSection("FEMA Flood Data", subject.fema));
-  }
   if (subject.parcels) {
     optionalSections.push(serializeSection("Parcels", subject.parcels));
   }
   if (subject.improvements) {
     optionalSections.push(serializeSection("Improvements", subject.improvements));
-  }
-  if (subject.improvement_analysis) {
-    optionalSections.push(
-      serializeSection("Improvement Analysis", subject.improvement_analysis),
-    );
   }
 
   // Add optional sections, respecting the total context budget
@@ -297,7 +297,7 @@ export async function buildChatPrompt(
     "",
     "**Write tools (use ONLY when the user explicitly asks to save/update/set a value):**",
     "- update_subject_field: Update a single field on the subject property (section 'core' for most fields, 'fema' for flood data).",
-    "- update_subject_section_json: Replace the full **taxes** or **tax_entities** JSON array (use when the user asks to set tax rows/rates). Pass json_payload as a JSON array string, e.g. [{\"Entity\":\"County\",\"Amount\":96068}] or [{\"Entity\":\"School\",\"Rate\":0.0123}].",
+    "- update_subject_section_json: Replace a full JSON column: **taxes**, **tax_entities**, or **improvement_analysis** (pass a JSON array); **fema** (pass a JSON object, e.g. FemaZone, FemaMapNum). Use [] or {} to clear. For one FEMA field only, update_subject_field with section fema also works.",
     "- update_comp_field: Update a field on a comparable's parsed data. You must use the comp's UUID as comp_id.",
     "- update_parcel_field: Update parcel-level data by APN (e.g. County Appraised Value, Total Tax Amount).",
     "- update_adjustment_grid: Apply property/transaction adjustment cells to the **land** or **sales** adjustment grid from structured data (JSON array of row, comp_number, qualitative, percentage). Percentages are decimal fractions (0.15 = 15%). Matches the Land Sales / Sales Adjustments pages in the app.",
