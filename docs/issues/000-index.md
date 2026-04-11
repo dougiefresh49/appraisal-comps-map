@@ -6,6 +6,12 @@ All issues 001-038 have been resolved and merged. All issue documents deleted.
 
 ## Open Code Issues
 
+### 042 — AI chat cost approach tool cannot read cost report content
+
+**Status:** Open  
+**Priority:** Medium  
+**Summary:** The `get_cost_report_html` chat tool can fail or return content the model does not effectively use when answering cost-approach questions. Example message for investigation: `chat_messages.id = 480424c2-c43e-4ab7-9db7-e020b80fcf4c`. See [042-ai-chat-cost-report-tool-content.md](./042-ai-chat-cost-report-tool-content.md).
+
 ### 041 — Clean up subject parcels/improvements data model
 
 **Status:** Open  
