@@ -698,7 +698,11 @@ async function executeGetCostReportHtml(
   args: Record<string, string>,
   activeProjectId: string,
 ): Promise<ToolCallResult> {
-  const targetProjectId = args.project_id?.trim() || activeProjectId;
+  const trimmedProjectId = args.project_id?.trim();
+  const targetProjectId =
+    trimmedProjectId && trimmedProjectId.length > 0
+      ? trimmedProjectId
+      : activeProjectId;
 
   const supabase = await createClient();
   const { data: projectRow, error: projectErr } = await supabase
