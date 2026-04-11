@@ -59,11 +59,23 @@ export async function POST(request: NextRequest) {
         : undefined;
 
     const rawAnalysis = subjectRow?.improvement_analysis;
-    const normalized = rawAnalysis
+    const existingRows = rawAnalysis
       ? normalizeImprovementAnalysisFromDb(rawAnalysis)
       : [];
-    const improvementBaseRows =
-      normalized.length > 0 ? normalized : buildDefaultImprovementAnalysisRows();
+
+    const defaultRows = buildDefaultImprovementAnalysisRows();
+    const existingByLabel = new Map(
+      existingRows.map((r) => [r.label, r]),
+    );
+    const improvementBaseRows = defaultRows.map((def) => {
+      const existing = existingByLabel.get(def.label);
+      return existing ?? def;
+    });
+    for (const row of existingRows) {
+      if (!defaultRows.some((d) => d.label === row.label)) {
+        improvementBaseRows.push(row);
+      }
+    }
 
     const proposedImprovementAnalysis = populateImprovementRowsFromSources(
       improvementBaseRows,
