@@ -2,7 +2,13 @@ import "server-only";
 
 import { Type, type FunctionDeclaration } from "@google/genai";
 import type { AdjustmentPatchInput } from "~/server/adjustment-grid-chat";
-import { createClient } from "~/utils/supabase/server";
+import {
+  DriveAuthError,
+  downloadFile,
+  listFolderChildren,
+  type DriveFile,
+} from "~/lib/drive-api";
+import { createClient, getGoogleToken } from "~/utils/supabase/server";
 
 // ---------------------------------------------------------------------------
 // Tool declarations for Gemini function calling
@@ -114,6 +120,22 @@ const queryCompData: FunctionDeclaration = {
         type: Type.STRING,
         description:
           "Optional UUID of a different project to search within. Omit to search in the current active project.",
+      },
+    },
+  },
+};
+
+const getCostReportHtml: FunctionDeclaration = {
+  name: "get_cost_report_html",
+  description:
+    "Load the cost report HTML from the user's Google Drive. Uses projects.folder_structure.costReportFolderId (discovered reports/cost-report folder — same as the Subject → Cost Report page). Chooses the HTML file with the latest Drive modifiedTime in that folder. Requires Google Drive OAuth. Use when the user asks about cost approach, replacement cost, Marshall Valuation, or the cost report document.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      project_id: {
+        type: Type.STRING,
+        description:
+          "Optional project UUID. Omit to use the current active project.",
       },
     },
   },
@@ -268,6 +290,7 @@ export const toolConfig = {
     querySubjectData,
     listProjectComps,
     queryCompData,
+    getCostReportHtml,
     queryAdjustmentGrid,
     updateSubjectField,
     updateSubjectSectionJson,
@@ -320,6 +343,8 @@ export async function executeToolCall(
         return await executeListProjectComps(args, projectId);
       case "query_comp_data":
         return await executeQueryCompData(args, projectId);
+      case "get_cost_report_html":
+        return await executeGetCostReportHtml(args, projectId);
       case "update_subject_field":
         return await executeUpdateSubjectField(args, projectId);
       case "update_subject_section_json":
@@ -639,6 +664,180 @@ async function executeQueryCompData(
       type: comp.type as string,
       number: comp.number as string | null,
       raw_data: (parsed?.raw_data as Record<string, unknown> | null) ?? null,
+    },
+    silent: true,
+  };
+}
+
+/** Max HTML characters passed to the model (cost reports can be very large). */
+const MAX_COST_REPORT_HTML_CHARS = 80_000;
+
+function isCostReportHtmlFile(f: DriveFile): boolean {
+  const n = f.name.toLowerCase();
+  return (
+    f.mimeType === "text/html" ||
+    f.mimeType === "application/xhtml+xml" ||
+    n.endsWith(".html") ||
+    n.endsWith(".htm")
+  );
+}
+
+function stripHtmlNoiseForChatModel(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
+}
+
+function parseCostReportFolderId(folderStructure: unknown): string | null {
+  if (!folderStructure || typeof folderStructure !== "object") return null;
+  const id = (folderStructure as Record<string, unknown>).costReportFolderId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+async function executeGetCostReportHtml(
+  args: Record<string, string>,
+  activeProjectId: string,
+): Promise<ToolCallResult> {
+  const targetProjectId = args.project_id?.trim() || activeProjectId;
+
+  const supabase = await createClient();
+  const { data: projectRow, error: projectErr } = await supabase
+    .from("projects")
+    .select("folder_structure")
+    .eq("id", targetProjectId)
+    .maybeSingle();
+
+  if (projectErr) {
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message: `Database error: ${projectErr.message}`,
+      silent: true,
+    };
+  }
+
+  if (!projectRow) {
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message: `Project not found: ${targetProjectId}`,
+      silent: true,
+    };
+  }
+
+  const folderId = parseCostReportFolderId(projectRow.folder_structure);
+  if (!folderId) {
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message:
+        "No cost-report Drive folder on this project (folder_structure.costReportFolderId). Run project discovery or link the reports/cost-report folder.",
+      silent: true,
+    };
+  }
+
+  const { token, error: driveAuthError } = await getGoogleToken();
+  if (!token) {
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message:
+        driveAuthError ??
+        "Google Drive not connected — sign in with Google to load cost report files.",
+      silent: true,
+    };
+  }
+
+  let files: DriveFile[];
+  try {
+    files = await listFolderChildren(token, folderId, {
+      filesOnly: true,
+      pageSize: 200,
+    });
+  } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return {
+        toolName: "get_cost_report_html",
+        args,
+        success: false,
+        message: err.message,
+        silent: true,
+      };
+    }
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message: err instanceof Error ? err.message : "Failed to list cost report folder",
+      silent: true,
+    };
+  }
+
+  const htmlFiles = files.filter(isCostReportHtmlFile);
+  htmlFiles.sort((a, b) => {
+    const ta = a.modifiedTime ? Date.parse(a.modifiedTime) : 0;
+    const tb = b.modifiedTime ? Date.parse(b.modifiedTime) : 0;
+    return tb - ta;
+  });
+
+  if (htmlFiles.length === 0) {
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message:
+        "No HTML files found in the cost-report folder (expected .html / .htm).",
+      silent: true,
+    };
+  }
+
+  const latest = htmlFiles[0]!;
+
+  let buf: ArrayBuffer;
+  try {
+    buf = await downloadFile(token, latest.id);
+  } catch (err) {
+    if (err instanceof DriveAuthError) {
+      return {
+        toolName: "get_cost_report_html",
+        args,
+        success: false,
+        message: err.message,
+        silent: true,
+      };
+    }
+    return {
+      toolName: "get_cost_report_html",
+      args,
+      success: false,
+      message: err instanceof Error ? err.message : "Failed to download cost report file",
+      silent: true,
+    };
+  }
+
+  const rawHtml = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+  let body = stripHtmlNoiseForChatModel(rawHtml);
+  let truncated = false;
+  if (body.length > MAX_COST_REPORT_HTML_CHARS) {
+    body = body.slice(0, MAX_COST_REPORT_HTML_CHARS);
+    truncated = true;
+  }
+
+  return {
+    toolName: "get_cost_report_html",
+    args,
+    success: true,
+    message: `Loaded "${latest.name}"${latest.modifiedTime ? ` (modified ${latest.modifiedTime})` : ""}${truncated ? ` — truncated to ${MAX_COST_REPORT_HTML_CHARS} characters` : ""}`,
+    data: {
+      file_id: latest.id,
+      file_name: latest.name,
+      modified_time: latest.modifiedTime ?? null,
+      html: body,
+      truncated,
     },
     silent: true,
   };

@@ -33,6 +33,8 @@ export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
+  /** RFC 3339 date-time from Drive when requested in `fields` */
+  modifiedTime?: string;
 }
 
 /** File or folder metadata including parent folder ids (Drive `files.get`). */
@@ -44,6 +46,8 @@ export interface DriveListOptions {
   foldersOnly?: boolean;
   filesOnly?: boolean;
   pageSize?: number;
+  /** Drive `orderBy`, e.g. `modifiedTime desc` for newest files first */
+  orderBy?: string;
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -68,9 +72,12 @@ export async function listFolderChildren(
 
   const q = encodeURIComponent(parts.join(" and "));
   const pageSize = options.pageSize ?? 200;
-  const fields = encodeURIComponent("files(id,name,mimeType)");
+  const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime)");
 
-  const url = `${DRIVE_API_BASE}/files?q=${q}&fields=${fields}&pageSize=${pageSize}`;
+  let url = `${DRIVE_API_BASE}/files?q=${q}&fields=${fields}&pageSize=${pageSize}`;
+  if (options.orderBy) {
+    url += `&orderBy=${encodeURIComponent(options.orderBy)}`;
+  }
   const res = await fetch(url, { headers: authHeaders(token) });
 
   const text = await res.text();

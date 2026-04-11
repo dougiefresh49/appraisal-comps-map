@@ -293,6 +293,7 @@ export async function buildChatPrompt(
     "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, tax_entities, parcels, improvements, fema, improvement_analysis). Pass project_id to query a different project than the current one.",
     "- list_project_comps: List all comparables for a project (id, address, type, number). Pass project_id to query a different project.",
     "- query_comp_data: Retrieve the full parsed data for a comparable by comp_id or address substring. Pass project_id to search in a different project.",
+    "- get_cost_report_html: Load the **cost report HTML** from Google Drive (projects.folder_structure.costReportFolderId). Uses the newest HTML file in that folder by modified time. Requires the user to be signed in with Google Drive access.",
     "- query_adjustment_grid: Read the land or sales **adjustment grid** (reconciliation grid) for the current project: comp numbers, row names, qualitative + % per cell. Use before update_adjustment_grid when the user pastes a table of adjustments keyed by comp # and row name.",
     "",
     "**Write tools (use ONLY when the user explicitly asks to save/update/set a value):**",
