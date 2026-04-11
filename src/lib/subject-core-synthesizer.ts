@@ -1,6 +1,6 @@
 import "server-only";
 
-import { GoogleGenAI } from "@google/genai";
+import { FinishReason, GoogleGenAI } from "@google/genai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const SYNTHESIS_MODEL = "gemini-3-flash-preview";
@@ -86,7 +86,7 @@ interface DocumentRow {
  * Aggregate first-non-empty value per improvements_observed key across all photos.
  * Same logic as fetchAggregatedPhotoImprovements but operates on in-memory rows.
  */
-function aggregatePhotoImprovements(
+export function aggregatePhotoImprovements(
   photos: PhotoRow[],
 ): Record<string, string> {
   const result: Record<string, string> = {};
@@ -128,6 +128,8 @@ function buildDocSummary(docs: DocumentRow[]): string {
 export interface SubjectCorePatchResult {
   currentCore: Record<string, unknown>;
   proposedPatch: Record<string, unknown>;
+  /** Present when photos were loaded (even if Gemini synthesis failed). */
+  aggregatedPhotoImprovements?: Record<string, string>;
   error?: string;
 }
 
@@ -242,10 +244,21 @@ Respond with ONLY the JSON patch object:`;
     contents: prompt,
     config: {
       temperature: 0.1,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
     },
   });
+
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    console.error("[buildSubjectCorePatch] Gemini response truncated (MAX_TOKENS)");
+    return {
+      currentCore,
+      proposedPatch: {},
+      aggregatedPhotoImprovements: aggregatedImprovements,
+      error: "Synthesis response was truncated — try again or reduce photo count",
+    };
+  }
 
   const raw = (response.text ?? "").trim();
   let patch: Record<string, unknown>;
@@ -253,11 +266,21 @@ Respond with ONLY the JSON patch object:`;
     patch = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     console.error("[buildSubjectCorePatch] Failed to parse Gemini JSON:", raw.slice(0, 500));
-    return { currentCore, proposedPatch: {}, error: "Failed to parse synthesis response" };
+    return {
+      currentCore,
+      proposedPatch: {},
+      aggregatedPhotoImprovements: aggregatedImprovements,
+      error: "Failed to parse synthesis response",
+    };
   }
 
   if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
-    return { currentCore, proposedPatch: {}, error: "Synthesis returned non-object response" };
+    return {
+      currentCore,
+      proposedPatch: {},
+      aggregatedPhotoImprovements: aggregatedImprovements,
+      error: "Synthesis returned non-object response",
+    };
   }
 
   // Remove null/undefined/empty-string values
@@ -268,7 +291,11 @@ Respond with ONLY the JSON patch object:`;
     }
   }
 
-  return { currentCore, proposedPatch: cleanPatch };
+  return {
+    currentCore,
+    proposedPatch: cleanPatch,
+    aggregatedPhotoImprovements: aggregatedImprovements,
+  };
 }
 
 /**

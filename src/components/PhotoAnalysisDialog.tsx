@@ -12,6 +12,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { DataMergeDialog } from "~/components/DataMergeDialog";
 import type { PhotoAnalysis } from "~/lib/supabase-queries";
+import { populateImprovementRowsFromSources } from "~/lib/improvement-analysis-populate";
+import type { ImprovementAnalysisRow } from "~/types/comp-data";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -26,7 +28,10 @@ export interface PhotoAnalysisDialogProps {
   projectFolderId: string | null | undefined;
   photos: PhotoAnalysis[];
   onClose: (didUpdate?: boolean) => void;
-  onSaveCore: (core: Record<string, unknown>) => Promise<void>;
+  onSaveCore: (
+    core: Record<string, unknown>,
+    improvementAnalysis?: ImprovementAnalysisRow[],
+  ) => Promise<void>;
 }
 
 interface ProcessingState {
@@ -114,6 +119,10 @@ export function PhotoAnalysisDialog({
   const [syncPreview, setSyncPreview] = useState<{
     currentCore: Record<string, unknown>;
     proposedCore: Record<string, unknown>;
+    improvementBaseRows: ImprovementAnalysisRow[];
+    aggregatedPhotoImprovements: Record<string, string>;
+    docStructuredSlices: unknown[];
+    projectPropertyType: string | null;
   } | null>(null);
   const [isMerging, setIsMerging] = useState(false);
   const [doneMessage, setDoneMessage] = useState("");
@@ -331,10 +340,21 @@ export function PhotoAnalysisDialog({
         success: boolean;
         currentCore?: Record<string, unknown>;
         proposedCore?: Record<string, unknown>;
+        improvementBaseRows?: ImprovementAnalysisRow[];
+        aggregatedPhotoImprovements?: Record<string, string>;
+        docStructuredSlices?: unknown[];
+        projectPropertyType?: string | null;
         error?: string;
       };
 
-      if (!data.success || !data.currentCore || !data.proposedCore) {
+      if (
+        !data.success ||
+        !data.currentCore ||
+        !data.proposedCore ||
+        !data.improvementBaseRows ||
+        !data.aggregatedPhotoImprovements ||
+        !Array.isArray(data.docStructuredSlices)
+      ) {
         setProcessing((p) => ({
           ...p!,
           error: data.error ?? "Failed to generate synthesis preview",
@@ -342,7 +362,14 @@ export function PhotoAnalysisDialog({
         return;
       }
 
-      setSyncPreview({ currentCore: data.currentCore, proposedCore: data.proposedCore });
+      setSyncPreview({
+        currentCore: data.currentCore,
+        proposedCore: data.proposedCore,
+        improvementBaseRows: data.improvementBaseRows,
+        aggregatedPhotoImprovements: data.aggregatedPhotoImprovements,
+        docStructuredSlices: data.docStructuredSlices,
+        projectPropertyType: data.projectPropertyType ?? null,
+      });
       setStep("sync-preview");
     } catch (err) {
       setProcessing((p) => ({
@@ -355,7 +382,17 @@ export function PhotoAnalysisDialog({
   const handleMergeConfirm = async (merged: Record<string, unknown>) => {
     setIsMerging(true);
     try {
-      await onSaveCore(merged);
+      const preview = syncPreview;
+      const improvementRows = preview
+        ? populateImprovementRowsFromSources(
+            preview.improvementBaseRows,
+            merged,
+            preview.projectPropertyType ?? undefined,
+            preview.docStructuredSlices,
+            preview.aggregatedPhotoImprovements,
+          )
+        : undefined;
+      await onSaveCore(merged, improvementRows);
       setDoneMessage("Subject data updated successfully from photo observations.");
       setSyncPreview(null);
       setStep("done");
