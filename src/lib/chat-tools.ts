@@ -52,8 +52,16 @@ const querySubjectData: FunctionDeclaration = {
       section: {
         type: Type.STRING,
         description:
-          "Which section of subject_data to retrieve: 'core' for main property fields (address, land size, year built, zoning, etc.), 'taxes' for tax data, 'parcels' for parcel-level data, 'improvements' for building improvements, 'fema' for flood data, 'improvement_analysis' for improvement analysis.",
-        enum: ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"],
+          "Which section of subject_data to retrieve: 'core' for main property fields (address, land size, year built, zoning, etc.), 'taxes' for tax amounts by entity, 'tax_entities' for tax rates by entity, 'parcels' for parcel-level data, 'improvements' for building improvements, 'fema' for flood data, 'improvement_analysis' for improvement analysis.",
+        enum: [
+          "core",
+          "taxes",
+          "tax_entities",
+          "parcels",
+          "improvements",
+          "fema",
+          "improvement_analysis",
+        ],
       },
       project_id: {
         type: Type.STRING,
@@ -138,6 +146,29 @@ const updateSubjectField: FunctionDeclaration = {
       },
     },
     required: ["section", "field_name", "value"],
+  },
+};
+
+const updateSubjectSectionJson: FunctionDeclaration = {
+  name: "update_subject_section_json",
+  description:
+    "Replace the entire taxes or tax_entities array on subject_data. Use when the user asks to save, set, or update tax rows (amounts) or tax entity rates. Pass json_payload as a JSON array string. taxes items: Entity (string), Amount (number). tax_entities items: Entity (string), Rate (number).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      section: {
+        type: Type.STRING,
+        description:
+          "Which column to replace: 'taxes' for amount rows, 'tax_entities' for rate rows.",
+        enum: ["taxes", "tax_entities"],
+      },
+      json_payload: {
+        type: Type.STRING,
+        description:
+          'JSON array only, e.g. [{"Entity":"County","Amount":96068}] or [{"Entity":"ISD","Rate":0.0145}]. Use [] to clear.',
+      },
+    },
+    required: ["section", "json_payload"],
   },
 };
 
@@ -239,6 +270,7 @@ export const toolConfig = {
     queryCompData,
     queryAdjustmentGrid,
     updateSubjectField,
+    updateSubjectSectionJson,
     updateCompField,
     updateParcelField,
     updateAdjustmentGrid,
@@ -290,6 +322,8 @@ export async function executeToolCall(
         return await executeQueryCompData(args, projectId);
       case "update_subject_field":
         return await executeUpdateSubjectField(args, projectId);
+      case "update_subject_section_json":
+        return await executeUpdateSubjectSectionJson(args, projectId);
       case "update_comp_field":
         return await executeUpdateCompField(args);
       case "update_parcel_field":
@@ -435,7 +469,15 @@ async function executeQuerySubjectData(
     };
   }
 
-  const validSections = ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"];
+  const validSections = [
+    "core",
+    "taxes",
+    "tax_entities",
+    "parcels",
+    "improvements",
+    "fema",
+    "improvement_analysis",
+  ];
   if (!validSections.includes(section)) {
     return {
       toolName: "query_subject_data",
@@ -658,6 +700,78 @@ async function executeUpdateSubjectField(
     args,
     success: true,
     message: `Updated subject ${section}.${field_name} = ${value}`,
+  };
+}
+
+async function executeUpdateSubjectSectionJson(
+  args: Record<string, string>,
+  projectId: string,
+): Promise<ToolCallResult> {
+  const { section, json_payload } = args;
+  if (!section || json_payload === undefined) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: "Missing required arguments: section, json_payload",
+    };
+  }
+
+  if (section !== "taxes" && section !== "tax_entities") {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: `Invalid section: ${section}. Must be taxes or tax_entities`,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json_payload);
+  } catch {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: "json_payload must be valid JSON",
+    };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: "json_payload must be a JSON array",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("subject_data").upsert(
+    {
+      project_id: projectId,
+      [section]: parsed,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "project_id" },
+  );
+
+  if (error) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: `Database error: ${error.message}`,
+    };
+  }
+
+  return {
+    toolName: "update_subject_section_json",
+    args,
+    success: true,
+    message: `Replaced subject_data.${section} (${parsed.length} row(s))`,
   };
 }
 
