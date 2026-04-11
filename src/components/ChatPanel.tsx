@@ -1149,6 +1149,7 @@ function MessageBubble({
 function ToolResultBubble({ result }: { result: ToolResult }) {
   const toolLabels: Record<string, string> = {
     update_subject_field: "Subject Updated",
+    update_subject_section_json: "Subject Section Updated",
     update_comp_field: "Comp Updated",
     update_parcel_field: "Parcel Updated",
   };

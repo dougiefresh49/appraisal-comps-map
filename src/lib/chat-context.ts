@@ -35,6 +35,7 @@ interface CompContext {
 interface SubjectContext {
   core: Record<string, unknown> | null;
   taxes: unknown;
+  tax_entities: unknown;
   parcels: unknown;
   improvements: unknown;
   fema: unknown;
@@ -101,7 +102,9 @@ async function loadSubjectContext(
   const supabase = await createClient();
   const { data } = await supabase
     .from("subject_data")
-    .select("core, taxes, parcels, improvements, fema, improvement_analysis")
+    .select(
+      "core, taxes, tax_entities, parcels, improvements, fema, improvement_analysis",
+    )
     .eq("project_id", projectId)
     .maybeSingle();
 
@@ -110,6 +113,7 @@ async function loadSubjectContext(
   return {
     core: (data.core as Record<string, unknown>) ?? null,
     taxes: data.taxes ?? null,
+    tax_entities: data.tax_entities ?? null,
     parcels: data.parcels ?? null,
     improvements: data.improvements ?? null,
     fema: data.fema ?? null,
@@ -171,24 +175,27 @@ function formatSubjectBlock(subject: SubjectContext): string {
     parts.push("### Core Data\n" + coreLines.join("\n"));
   }
 
-  // Build remaining sections
+  // Build remaining sections (fema + improvement_analysis first so they are less likely truncated)
   const optionalSections: string[] = [];
+  if (subject.fema) {
+    optionalSections.push(serializeSection("FEMA Flood Data", subject.fema));
+  }
+  if (subject.improvement_analysis) {
+    optionalSections.push(
+      serializeSection("Improvement Analysis", subject.improvement_analysis),
+    );
+  }
   if (subject.taxes) {
     optionalSections.push(serializeSection("Tax Data", subject.taxes));
   }
-  if (subject.fema) {
-    optionalSections.push(serializeSection("FEMA Flood Data", subject.fema));
+  if (subject.tax_entities) {
+    optionalSections.push(serializeSection("Tax Entities", subject.tax_entities));
   }
   if (subject.parcels) {
     optionalSections.push(serializeSection("Parcels", subject.parcels));
   }
   if (subject.improvements) {
     optionalSections.push(serializeSection("Improvements", subject.improvements));
-  }
-  if (subject.improvement_analysis) {
-    optionalSections.push(
-      serializeSection("Improvement Analysis", subject.improvement_analysis),
-    );
   }
 
   // Add optional sections, respecting the total context budget
@@ -283,13 +290,14 @@ export async function buildChatPrompt(
     "",
     "**Read tools (use these to look up data before answering questions):**",
     "- search_all_projects: Search ALL reports in the database by address, name, or property type. Supports include_reference param to include/filter past reports. Use this when the user asks about a different property, past reports, or historical comps. Returns project IDs you can pass to other read tools.",
-    "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, parcels, improvements, fema, improvement_analysis). Pass project_id to query a different project than the current one.",
+    "- query_subject_data: Retrieve a specific section of subject_data (core, taxes, tax_entities, parcels, improvements, fema, improvement_analysis). Pass project_id to query a different project than the current one.",
     "- list_project_comps: List all comparables for a project (id, address, type, number). Pass project_id to query a different project.",
     "- query_comp_data: Retrieve the full parsed data for a comparable by comp_id or address substring. Pass project_id to search in a different project.",
     "- query_adjustment_grid: Read the land or sales **adjustment grid** (reconciliation grid) for the current project: comp numbers, row names, qualitative + % per cell. Use before update_adjustment_grid when the user pastes a table of adjustments keyed by comp # and row name.",
     "",
     "**Write tools (use ONLY when the user explicitly asks to save/update/set a value):**",
-    "- update_subject_field: Update a field on the subject property (section 'core' for most fields, 'fema' for flood data).",
+    "- update_subject_field: Update a single field on the subject property (section 'core' for most fields, 'fema' for flood data).",
+    "- update_subject_section_json: Replace a full JSON column: **taxes**, **tax_entities**, or **improvement_analysis** (pass a JSON array); **fema** (pass a JSON object, e.g. FemaZone, FemaMapNum). Use [] or {} to clear. For one FEMA field only, update_subject_field with section fema also works.",
     "- update_comp_field: Update a field on a comparable's parsed data. You must use the comp's UUID as comp_id.",
     "- update_parcel_field: Update parcel-level data by APN (e.g. County Appraised Value, Total Tax Amount).",
     "- update_adjustment_grid: Apply property/transaction adjustment cells to the **land** or **sales** adjustment grid from structured data (JSON array of row, comp_number, qualitative, percentage). Percentages are decimal fractions (0.15 = 15%). Matches the Land Sales / Sales Adjustments pages in the app.",

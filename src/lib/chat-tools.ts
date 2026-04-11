@@ -52,8 +52,16 @@ const querySubjectData: FunctionDeclaration = {
       section: {
         type: Type.STRING,
         description:
-          "Which section of subject_data to retrieve: 'core' for main property fields (address, land size, year built, zoning, etc.), 'taxes' for tax data, 'parcels' for parcel-level data, 'improvements' for building improvements, 'fema' for flood data, 'improvement_analysis' for improvement analysis.",
-        enum: ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"],
+          "Which section of subject_data to retrieve: 'core' for main property fields (address, land size, year built, zoning, etc.), 'taxes' for tax amounts by entity, 'tax_entities' for tax rates by entity, 'parcels' for parcel-level data, 'improvements' for building improvements, 'fema' for flood data, 'improvement_analysis' for improvement analysis.",
+        enum: [
+          "core",
+          "taxes",
+          "tax_entities",
+          "parcels",
+          "improvements",
+          "fema",
+          "improvement_analysis",
+        ],
       },
       project_id: {
         type: Type.STRING,
@@ -138,6 +146,29 @@ const updateSubjectField: FunctionDeclaration = {
       },
     },
     required: ["section", "field_name", "value"],
+  },
+};
+
+const updateSubjectSectionJson: FunctionDeclaration = {
+  name: "update_subject_section_json",
+  description:
+    "Replace an entire subject_data JSON column in one call. Arrays: taxes, tax_entities, improvement_analysis (pass a JSON array string). Object: fema (pass a JSON object string with FEMA fields). Use for bulk updates; for a single core field prefer update_subject_field.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      section: {
+        type: Type.STRING,
+        description:
+          "Column to replace: taxes / tax_entities / improvement_analysis (JSON array), or fema (JSON object).",
+        enum: ["taxes", "tax_entities", "fema", "improvement_analysis"],
+      },
+      json_payload: {
+        type: Type.STRING,
+        description:
+          "For taxes, tax_entities, improvement_analysis: JSON array string. For fema: JSON object string (keys like FemaMapNum, FemaZone, FemaIsHazardZone, FemaMapDate). improvement_analysis rows: label, category, include, value. Use [] or {} to clear.",
+      },
+    },
+    required: ["section", "json_payload"],
   },
 };
 
@@ -239,6 +270,7 @@ export const toolConfig = {
     queryCompData,
     queryAdjustmentGrid,
     updateSubjectField,
+    updateSubjectSectionJson,
     updateCompField,
     updateParcelField,
     updateAdjustmentGrid,
@@ -290,6 +322,8 @@ export async function executeToolCall(
         return await executeQueryCompData(args, projectId);
       case "update_subject_field":
         return await executeUpdateSubjectField(args, projectId);
+      case "update_subject_section_json":
+        return await executeUpdateSubjectSectionJson(args, projectId);
       case "update_comp_field":
         return await executeUpdateCompField(args);
       case "update_parcel_field":
@@ -435,7 +469,15 @@ async function executeQuerySubjectData(
     };
   }
 
-  const validSections = ["core", "taxes", "parcels", "improvements", "fema", "improvement_analysis"];
+  const validSections = [
+    "core",
+    "taxes",
+    "tax_entities",
+    "parcels",
+    "improvements",
+    "fema",
+    "improvement_analysis",
+  ];
   if (!validSections.includes(section)) {
     return {
       toolName: "query_subject_data",
@@ -658,6 +700,103 @@ async function executeUpdateSubjectField(
     args,
     success: true,
     message: `Updated subject ${section}.${field_name} = ${value}`,
+  };
+}
+
+async function executeUpdateSubjectSectionJson(
+  args: Record<string, string>,
+  projectId: string,
+): Promise<ToolCallResult> {
+  const { section, json_payload } = args;
+  if (!section || json_payload === undefined) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: "Missing required arguments: section, json_payload",
+    };
+  }
+
+  const arraySections = new Set([
+    "taxes",
+    "tax_entities",
+    "improvement_analysis",
+  ]);
+  const objectSections = new Set(["fema"]);
+
+  if (!arraySections.has(section) && !objectSections.has(section)) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: `Invalid section: ${section}. Must be taxes, tax_entities, fema, or improvement_analysis`,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json_payload);
+  } catch {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: "json_payload must be valid JSON",
+    };
+  }
+
+  if (arraySections.has(section)) {
+    if (!Array.isArray(parsed)) {
+      return {
+        toolName: "update_subject_section_json",
+        args,
+        success: false,
+        message: `json_payload for ${section} must be a JSON array`,
+      };
+    }
+  } else if (objectSections.has(section)) {
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        toolName: "update_subject_section_json",
+        args,
+        success: false,
+        message: "json_payload for fema must be a JSON object (not an array)",
+      };
+    }
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("subject_data").upsert(
+    {
+      project_id: projectId,
+      [section]: parsed,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "project_id" },
+  );
+
+  if (error) {
+    return {
+      toolName: "update_subject_section_json",
+      args,
+      success: false,
+      message: `Database error: ${error.message}`,
+    };
+  }
+
+  let detail: string;
+  if (Array.isArray(parsed)) {
+    detail = `${parsed.length} row(s)`;
+  } else {
+    detail = `${Object.keys(parsed as Record<string, unknown>).length} key(s)`;
+  }
+
+  return {
+    toolName: "update_subject_section_json",
+    args,
+    success: true,
+    message: `Replaced subject_data.${section} (${detail})`,
   };
 }
 
