@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (docsResult.error) throw docsResult.error;
 
     const docStructuredSlices = (docsResult.data ?? []).map((row) => ({
-      structured_data: row.structured_data,
+      structured_data: row.structured_data as unknown,
     }));
 
     const propertyType =
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         ? projectRow.property_type
         : undefined;
 
-    const rawAnalysis = subjectRow?.improvement_analysis;
+    const rawAnalysis: unknown = subjectRow?.improvement_analysis;
     const existingRows = rawAnalysis
       ? normalizeImprovementAnalysisFromDb(rawAnalysis)
       : [];

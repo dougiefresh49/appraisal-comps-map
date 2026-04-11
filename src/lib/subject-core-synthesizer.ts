@@ -1,6 +1,6 @@
 import "server-only";
 
-import { GoogleGenAI } from "@google/genai";
+import { FinishReason, GoogleGenAI } from "@google/genai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const SYNTHESIS_MODEL = "gemini-3-flash-preview";
@@ -250,7 +250,7 @@ Respond with ONLY the JSON patch object:`;
   });
 
   const finishReason = response.candidates?.[0]?.finishReason;
-  if (finishReason === "MAX_TOKENS") {
+  if (finishReason === FinishReason.MAX_TOKENS) {
     console.error("[buildSubjectCorePatch] Gemini response truncated (MAX_TOKENS)");
     return {
       currentCore,
