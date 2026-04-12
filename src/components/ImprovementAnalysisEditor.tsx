@@ -5,8 +5,8 @@ import {
   XMarkIcon,
   FunnelIcon,
   CheckIcon,
-  CloudArrowUpIcon,
   ArrowDownOnSquareStackIcon,
+  CameraIcon,
 } from "@heroicons/react/24/outline";
 import { useSubjectData } from "~/hooks/useSubjectData";
 import { useProject } from "~/hooks/useProject";
@@ -16,10 +16,14 @@ import {
   normalizeImprovementAnalysisFromDb,
 } from "~/lib/improvement-analysis-default-rows";
 import { populateImprovementRowsFromSources } from "~/lib/improvement-analysis-populate";
+import { IMPROVEMENT_LABEL_TO_PHOTO_KEY } from "~/lib/improvement-constants";
+import { ImprovementRefPanel } from "~/components/ImprovementRefPanel";
 import type {
   ImprovementAnalysisRow,
   ImprovementCategory,
 } from "~/types/comp-data";
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface ImprovementAnalysisEditorProps {
   projectId: string;
@@ -197,9 +201,24 @@ export function ImprovementAnalysisEditor({
   const [docStructuredSlices, setDocStructuredSlices] = useState<unknown[]>([]);
   const [photoImprovements, setPhotoImprovements] = useState<Record<string, string>>({});
   const [activeCategories, setActiveCategories] = useState<Set<ImprovementCategory>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [selectedRefField, setSelectedRefField] = useState<{ label: string; photoKey: string } | null>(null);
+
+  // Auto-save refs — mirrors SubjectDataEditor pattern
+  const dirtyRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowsRef = useRef<LocalRow[]>(rows);
+  rowsRef.current = rows;
+  const subjectDataRef = useRef(subjectData);
+  subjectDataRef.current = subjectData;
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const improvementAnalysisJson = useMemo(
     () => JSON.stringify(subjectData?.improvement_analysis ?? null),
@@ -212,6 +231,9 @@ export function ImprovementAnalysisEditor({
   );
 
   useEffect(() => {
+    // Block hydration while user has unsaved edits — guards against realtime
+    // updates from another user clobbering in-progress local changes.
+    if (dirtyRef.current) return;
     const raw = subjectData?.improvement_analysis;
     const normalized = raw ? normalizeImprovementAnalysisFromDb(raw) : [];
     const base =
@@ -283,6 +305,7 @@ export function ImprovementAnalysisEditor({
 
   const updateRow = useCallback(
     (clientId: string, patch: Partial<ImprovementAnalysisRow>) => {
+      dirtyRef.current = true;
       setRows((prev) =>
         prev.map((r) => (r.clientId === clientId ? { ...r, ...patch } : r)),
       );
@@ -291,10 +314,12 @@ export function ImprovementAnalysisEditor({
   );
 
   const removeRow = useCallback((clientId: string) => {
+    dirtyRef.current = true;
     setRows((prev) => prev.filter((r) => r.clientId !== clientId));
   }, []);
 
   const addRow = useCallback((category: ImprovementCategory) => {
+    dirtyRef.current = true;
     setRows((prev) => [
       ...prev,
       {
@@ -309,6 +334,7 @@ export function ImprovementAnalysisEditor({
 
   const handlePopulateFromSubjectData = useCallback(() => {
     const core = (subjectData?.core ?? {}) as Record<string, unknown>;
+    dirtyRef.current = true;
     setRows((prev) => {
       const merged = populateImprovementRowsFromSources(
         toPayloadRows(prev),
@@ -327,28 +353,79 @@ export function ImprovementAnalysisEditor({
     });
   }, [subjectData?.core, project?.propertyType, docStructuredSlices, photoImprovements]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
+  /** Persist the current rows to Supabase, keeping all other subject_data slices intact. */
+  const persistRows = useCallback(async () => {
+    const current = subjectDataRef.current;
+    if (!current) return;
+    setSaveStatus("saving");
     try {
-      const payloadRows = toPayloadRows(rows);
       await saveSubjectData({
-        core: subjectData?.core ?? {},
-        taxes: subjectData?.taxes ?? [],
-        tax_entities: subjectData?.tax_entities ?? [],
-        parcels: subjectData?.parcels ?? [],
-        improvements: subjectData?.improvements ?? [],
-        improvement_analysis: payloadRows,
+        core: current.core ?? {},
+        taxes: current.taxes ?? [],
+        tax_entities: current.tax_entities ?? [],
+        parcels: current.parcels ?? [],
+        improvements: current.improvements ?? [],
+        improvement_analysis: toPayloadRows(rowsRef.current),
       });
-      setSaveSuccess(true);
-      window.setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setIsSaving(false);
+      dirtyRef.current = false;
+      if (mountedRef.current) {
+        setSaveStatus("saved");
+        window.setTimeout(() => {
+          if (mountedRef.current) setSaveStatus("idle");
+        }, 2500);
+      }
+    } catch {
+      if (mountedRef.current) setSaveStatus("error");
     }
-  };
+  }, [saveSubjectData]);
+
+  const persistRowsRef = useRef(persistRows);
+  persistRowsRef.current = persistRows;
+
+  /** Flush any pending debounced save immediately (blur, tab hide, unmount). */
+  const saveNow = useCallback(() => {
+    if (!dirtyRef.current) return;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    void persistRowsRef.current().catch(() => void 0);
+  }, []);
+
+  /** 2-second debounced auto-save on every rows change while dirty. */
+  useEffect(() => {
+    if (!dirtyRef.current) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (!dirtyRef.current) return;
+      void persistRowsRef.current().catch(() => void 0);
+    }, 2000);
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rows change drives this; saveNow is stable
+  }, [rows]);
+
+  /** Flush on tab hide. */
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState !== "hidden") return;
+      saveNow();
+    };
+    document.addEventListener("visibilitychange", flush);
+    return () => document.removeEventListener("visibilitychange", flush);
+  }, [saveNow]);
+
+  /** Flush on page unload. */
+  useEffect(() => {
+    const onPageHide = () => saveNow();
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [saveNow]);
 
   const toggleCategory = (cat: ImprovementCategory) => {
     setActiveCategories((prev) => {
@@ -378,7 +455,7 @@ export function ImprovementAnalysisEditor({
   }
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 transition-[margin] duration-300 ${selectedRefField ? "mr-[28rem]" : ""}`}>
       {/* Sticky toolbar — scrollport is project main (see layout min-h-0 + overflow-y-auto) */}
       <div className="sticky top-14 z-30 md:top-0">
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200/90 bg-white/85 px-3 py-2.5 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90 dark:ring-white/5 sm:px-4 sm:py-3">
@@ -390,14 +467,20 @@ export function ImprovementAnalysisEditor({
 
           <div className="min-w-2 flex-1" />
 
-          {saveSuccess && (
+          {saveStatus === "saving" && (
+            <span className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600 dark:border-gray-600 dark:border-t-gray-400" />
+              Saving…
+            </span>
+          )}
+          {saveStatus === "saved" && (
             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
               Saved ✓
             </span>
           )}
-          {saveError && (
-            <span className="max-w-[140px] truncate text-xs text-red-500 dark:text-red-400" title={saveError}>
-              Error
+          {saveStatus === "error" && (
+            <span className="text-xs text-red-500 dark:text-red-400">
+              Save failed
             </span>
           )}
 
@@ -409,21 +492,6 @@ export function ImprovementAnalysisEditor({
           >
             <ArrowDownOnSquareStackIcon className="h-4 w-4" />
             <span className="sr-only">Populate from Subject Data</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            title="Save to database"
-            className="flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white shadow-sm transition hover:bg-blue-500 disabled:opacity-50"
-          >
-            {isSaving ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : (
-              <CloudArrowUpIcon className="h-4 w-4" />
-            )}
-            <span className="sr-only">Save Changes</span>
           </button>
         </div>
       </div>
@@ -458,15 +526,25 @@ export function ImprovementAnalysisEditor({
                     No rows in this category yet.
                   </p>
                 ) : (
-                  inCategory.map((row) => (
-                    <ImprovementRow
-                      key={row.clientId}
-                      row={row}
-                      checkColor={checkColor}
-                      onUpdate={(patch) => updateRow(row.clientId, patch)}
-                      onRemove={() => removeRow(row.clientId)}
-                    />
-                  ))
+                  inCategory.map((row) => {
+                    const photoKey = IMPROVEMENT_LABEL_TO_PHOTO_KEY[row.label];
+                    const hasPhotoRef = !!(photoKey && photoImprovements[photoKey]);
+                    return (
+                      <ImprovementRow
+                        key={row.clientId}
+                        row={row}
+                        checkColor={checkColor}
+                        onUpdate={(patch) => updateRow(row.clientId, patch)}
+                        onRemove={() => removeRow(row.clientId)}
+                        hasPhotoRef={hasPhotoRef}
+                        onShowRef={
+                          hasPhotoRef && photoKey
+                            ? () => setSelectedRefField({ label: row.label, photoKey })
+                            : undefined
+                        }
+                      />
+                    );
+                  })
                 )}
               </div>
 
@@ -483,6 +561,16 @@ export function ImprovementAnalysisEditor({
           );
         })}
       </div>
+
+      {/* Reference image side panel */}
+      {selectedRefField && (
+        <ImprovementRefPanel
+          projectId={decodedId}
+          fieldLabel={selectedRefField.label}
+          photoKey={selectedRefField.photoKey}
+          onClose={() => setSelectedRefField(null)}
+        />
+      )}
     </div>
   );
 }
@@ -493,11 +581,15 @@ function ImprovementRow({
   checkColor,
   onUpdate,
   onRemove,
+  hasPhotoRef,
+  onShowRef,
 }: {
   row: LocalRow;
   checkColor: string;
   onUpdate: (patch: Partial<ImprovementAnalysisRow>) => void;
   onRemove: () => void;
+  hasPhotoRef?: boolean;
+  onShowRef?: () => void;
 }) {
   const isCustom = !buildDefaultImprovementAnalysisRows().some(
     (d) => d.label === row.label && d.category === row.category,
@@ -523,6 +615,19 @@ function ImprovementRow({
             </span>
           )}
         </div>
+
+        {/* Photo reference button — visible only when this field has photo-backed data */}
+        {hasPhotoRef && onShowRef && (
+          <button
+            type="button"
+            onClick={onShowRef}
+            title="View reference photos for this field"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-500 transition hover:bg-blue-100 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/60 dark:hover:text-blue-300"
+          >
+            <CameraIcon className="h-3.5 w-3.5" aria-hidden />
+            <span className="sr-only">View reference photos</span>
+          </button>
+        )}
 
         {/* Include checkbox */}
         <button

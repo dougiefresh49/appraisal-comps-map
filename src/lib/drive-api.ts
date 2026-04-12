@@ -302,6 +302,96 @@ export async function copyFile(
   return (await res.json()) as DriveFile;
 }
 
+const COST_REPORT_IMAGE_BASE = "cost-report.png";
+
+/**
+ * Picks the next available `cost-report.png` / `cost-report-N.png` name in a folder.
+ */
+export function pickUniqueCostReportImageName(existingFileNames: string[]): string {
+  const lower = new Set(existingFileNames.map((n) => n.toLowerCase()));
+  if (!lower.has(COST_REPORT_IMAGE_BASE)) {
+    return COST_REPORT_IMAGE_BASE;
+  }
+  let n = 2;
+  for (;;) {
+    const candidate = `cost-report-${n}.png`;
+    if (!lower.has(candidate.toLowerCase())) return candidate;
+    n += 1;
+  }
+}
+
+/**
+ * Lists a folder and returns the next available cost-report snapshot filename.
+ */
+export async function pickUniqueCostReportImageNameInFolder(
+  token: string,
+  folderId: string,
+): Promise<string> {
+  const files = await listFolderChildren(token, folderId, { filesOnly: true });
+  return pickUniqueCostReportImageName(files.map((f) => f.name));
+}
+
+/**
+ * Creates a new file in a Drive folder (never updates an existing file by name).
+ */
+export async function uploadNewFile(
+  token: string,
+  folderId: string,
+  fileName: string,
+  content: string | Buffer | Uint8Array | ArrayBuffer,
+  mimeType: string,
+): Promise<DriveFile> {
+  const boundary = "-------appraisal_drive_upload_boundary";
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
+
+  const contentBuffer: Uint8Array =
+    typeof content === "string"
+      ? new TextEncoder().encode(content)
+      : content instanceof ArrayBuffer
+        ? new Uint8Array(content)
+        : content instanceof Buffer
+          ? content
+          : new Uint8Array(content);
+
+  const metadataPart =
+    `${delimiter}Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}` +
+    `${delimiter}Content-Type: ${mimeType}\r\n\r\n`;
+
+  const metadataBytes = new TextEncoder().encode(metadataPart);
+  const closeBytes = new TextEncoder().encode(closeDelimiter);
+
+  const body = new Uint8Array(
+    metadataBytes.byteLength + contentBuffer.byteLength + closeBytes.byteLength,
+  );
+  body.set(metadataBytes, 0);
+  body.set(contentBuffer, metadataBytes.byteLength);
+  body.set(closeBytes, metadataBytes.byteLength + contentBuffer.byteLength);
+
+  const url = `${DRIVE_UPLOAD_BASE}/files?uploadType=multipart&fields=id,name,mimeType`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": `multipart/related; boundary="${boundary}"`,
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throwForFailedDriveResponse(
+      res,
+      "Drive uploadNewFile failed",
+      text.slice(0, 300),
+    );
+  }
+
+  return (await res.json()) as DriveFile;
+}
+
 /**
  * Creates or updates a file in a Drive folder.
  * Searches for an existing file by name; if found, updates its content.
