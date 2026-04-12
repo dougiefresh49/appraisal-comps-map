@@ -1017,9 +1017,28 @@ export async function fetchAggregatedPhotoImprovements(
   return aggregated;
 }
 
-// ============================================================
-// Report sections
-// ============================================================
+/**
+ * Fetches all included photos for a project that have a non-null/non-empty value
+ * for a given improvements_observed key. Used by the reference image panel to
+ * show which photos contributed to an auto-populated improvement field.
+ */
+export async function fetchPhotosForImprovementKey(
+  projectId: string,
+  improvementKey: string,
+): Promise<PhotoAnalysis[]> {
+  const supabase = createClient();
+  const result = (await supabase
+    .from("photo_analyses")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("is_included", true)
+    .not(`improvements_observed->>${improvementKey}`, "is", null)
+    .neq(`improvements_observed->>${improvementKey}`, "")
+    .order("sort_order", { ascending: true })) as PostgrestResponse<PhotoAnalysisRow>;
+
+  if (result.error) throw result.error;
+  return (result.data ?? []).map(photoFromRow);
+}
 
 interface ReportSectionRow {
   id: string;
