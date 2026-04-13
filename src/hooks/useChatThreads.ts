@@ -13,6 +13,7 @@ interface UseChatThreadsReturn {
   setActiveThreadId: (id: string | null) => void;
   createThread: () => Promise<ChatThread>;
   archiveThread: (threadId: string) => Promise<void>;
+  restoreThread: (threadId: string) => Promise<void>;
   renameThread: (threadId: string, title: string) => Promise<void>;
   refreshThreads: () => Promise<void>;
   /** Optimistically update a thread's title in local state (e.g. after auto-generation) */
@@ -91,6 +92,19 @@ export function useChatThreads(projectId: string): UseChatThreadsReturn {
     [activeThreadId, setActiveThreadId],
   );
 
+  const restoreThread = useCallback(
+    async (threadId: string): Promise<void> => {
+      const res = await fetch("/api/chat/threads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId, archived: false }),
+      });
+      if (!res.ok) throw new Error("Failed to restore thread");
+      await fetchThreads();
+    },
+    [fetchThreads],
+  );
+
   const renameThread = useCallback(
     async (threadId: string, title: string): Promise<void> => {
       // Optimistic: update title immediately
@@ -123,6 +137,7 @@ export function useChatThreads(projectId: string): UseChatThreadsReturn {
     setActiveThreadId,
     createThread,
     archiveThread,
+    restoreThread,
     renameThread,
     refreshThreads: fetchThreads,
     optimisticUpdateTitle,

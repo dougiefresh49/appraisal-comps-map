@@ -7,15 +7,18 @@ import {
   useCallback,
   useRef,
   useMemo,
+  useId,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   XMarkIcon,
-  ArchiveBoxArrowDownIcon,
   PencilSquareIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  EllipsisVerticalIcon,
+  ArchiveBoxIcon,
 } from "@heroicons/react/24/outline";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
@@ -100,6 +103,11 @@ function formatRelativeTime(isoString: string): string {
   return new Date(isoString).toLocaleDateString();
 }
 
+/** Sidebar time: last message, or thread creation if empty (not `updated_at` / rename). */
+function formatThreadActivityRelative(thread: ChatThread): string {
+  return formatRelativeTime(thread.lastMessageAt ?? thread.createdAt);
+}
+
 function persistedToUIMessage(pm: PersistedMessage): UIMessage {
   return {
     id: pm.id,
@@ -122,6 +130,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     isLoadingThreads,
     setActiveThreadId,
     archiveThread,
+    restoreThread,
     renameThread,
     refreshThreads,
     optimisticUpdateTitle,
@@ -141,7 +150,15 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     title: string;
   } | null>(null);
   const [isArchivingThread, setIsArchivingThread] = useState(false);
+  const [renameThreadDialog, setRenameThreadDialog] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [isRenamingThread, setIsRenamingThread] = useState(false);
+  const [archivedThreadsOpen, setArchivedThreadsOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const renameThreadInputRef = useRef<HTMLInputElement>(null);
 
   const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const panelWidthDuringResizeRef = useRef(panelWidth);
@@ -414,6 +431,40 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     }
   }, [archiveThreadConfirm, handleArchiveThread]);
 
+  const openRenameThreadDialog = useCallback((id: string, title: string) => {
+    setRenameThreadDialog({ id, title });
+    setRenameDraft(title.trim() ? title : "");
+  }, []);
+
+  const cancelRenameThreadDialog = useCallback(() => {
+    if (isRenamingThread) return;
+    setRenameThreadDialog(null);
+    setRenameDraft("");
+  }, [isRenamingThread]);
+
+  const confirmRenameThread = useCallback(async () => {
+    if (!renameThreadDialog) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed) return;
+    setIsRenamingThread(true);
+    try {
+      await renameThread(renameThreadDialog.id, trimmed);
+      setRenameThreadDialog(null);
+      setRenameDraft("");
+    } finally {
+      setIsRenamingThread(false);
+    }
+  }, [renameThreadDialog, renameDraft, renameThread]);
+
+  useEffect(() => {
+    if (!renameThreadDialog) return;
+    const id = requestAnimationFrame(() => {
+      renameThreadInputRef.current?.focus();
+      renameThreadInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [renameThreadDialog]);
+
   const handleStartEditTitle = useCallback(() => {
     setTitleDraft(activeThread?.title ?? "");
     setEditingTitle(true);
@@ -648,6 +699,8 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         onRequestArchive={(id, title) =>
           setArchiveThreadConfirm({ id, title })
         }
+        onRequestRename={openRenameThreadDialog}
+        onOpenArchivedThreads={() => setArchivedThreadsOpen(true)}
         onNewThread={() => void handleNewThread()}
         isStreaming={isStreaming}
       />
@@ -759,6 +812,23 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           if (!isArchivingThread) setArchiveThreadConfirm(null);
         }}
         onConfirm={() => void confirmArchiveThread()}
+      />
+
+      <RenameThreadDialog
+        isOpen={renameThreadDialog !== null}
+        value={renameDraft}
+        onChange={setRenameDraft}
+        inputRef={renameThreadInputRef}
+        isSaving={isRenamingThread}
+        onCancel={cancelRenameThreadDialog}
+        onSave={() => void confirmRenameThread()}
+      />
+
+      <ArchivedThreadsDialog
+        isOpen={archivedThreadsOpen}
+        projectId={projectId}
+        onClose={() => setArchivedThreadsOpen(false)}
+        onRestore={restoreThread}
       />
 
       {/* Desktop: inline resizable panel */}
@@ -888,6 +958,330 @@ function ArchiveThreadConfirmDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Rename thread (from thread list overflow)
+// ---------------------------------------------------------------------------
+
+function RenameThreadDialog({
+  isOpen,
+  value,
+  onChange,
+  inputRef,
+  isSaving,
+  onCancel,
+  onSave,
+}: {
+  isOpen: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  inputRef: RefObject<HTMLInputElement | null>;
+  isSaving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Dismiss"
+        onClick={isSaving ? undefined : onCancel}
+      />
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Rename conversation
+        </h3>
+        <label className="mt-4 block">
+          <span className="sr-only">Thread name</span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={isSaving}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSave();
+              }
+              if (e.key === "Escape") onCancel();
+            }}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-blue-600/0 transition focus:ring-2 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+            placeholder="Conversation title"
+            autoComplete="off"
+          />
+        </label>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving || !value.trim()}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Archived conversations (browse + restore)
+// ---------------------------------------------------------------------------
+
+function ArchivedThreadsDialog({
+  isOpen,
+  projectId,
+  onClose,
+  onRestore,
+}: {
+  isOpen: boolean;
+  projectId: string;
+  onClose: () => void;
+  onRestore: (threadId: string) => Promise<void>;
+}) {
+  const [archivedThreads, setArchivedThreads] = useState<ChatThread[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setArchivedThreads([]);
+    setLoadError(null);
+    setLoading(true);
+    void fetch(
+      `/api/chat/threads?projectId=${encodeURIComponent(projectId)}&archived=true`,
+    )
+      .then((res) =>
+        res.ok ? (res.json() as Promise<{ threads: ChatThread[] }>) : null,
+      )
+      .then((data) => {
+        if (data) setArchivedThreads(data.threads ?? []);
+        else setLoadError("Could not load archived conversations.");
+      })
+      .catch(() => setLoadError("Could not load archived conversations."))
+      .finally(() => setLoading(false));
+  }, [isOpen, projectId]);
+
+  const handleRestore = async (id: string) => {
+    setRestoringId(id);
+    setLoadError(null);
+    try {
+      await onRestore(id);
+      setArchivedThreads((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      setLoadError("Could not restore conversation.");
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Dismiss"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex max-h-[min(70vh,520px)] w-full max-w-md flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Archived conversations
+        </h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Restore a conversation to move it back to your active list.
+        </p>
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+            </div>
+          ) : loadError && archivedThreads.length === 0 ? (
+            <p className="py-4 text-sm text-red-600 dark:text-red-400">
+              {loadError}
+            </p>
+          ) : archivedThreads.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-600 dark:text-gray-500">
+              No archived conversations.
+            </p>
+          ) : (
+            <ul className="space-y-1.5 pr-1">
+              {archivedThreads.map((t) => {
+                const title = t.title ?? "New conversation";
+                return (
+                  <li
+                    key={t.id}
+                    className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-950/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-xs font-medium leading-snug text-gray-900 dark:text-gray-100">
+                        {title}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-600">
+                        {formatThreadActivityRelative(t)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRestore(t.id)}
+                      disabled={restoringId !== null}
+                      className="shrink-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-800 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      {restoringId === t.id ? "…" : "Restore"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        {loadError && archivedThreads.length > 0 ? (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            {loadError}
+          </p>
+        ) : null}
+        <div className="mt-5 flex justify-end border-t border-gray-200 pt-4 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Thread overflow menu (portal — avoids clipping in scroll area)
+// ---------------------------------------------------------------------------
+
+function ThreadOverflowMenu({
+  onRename,
+  onArchive,
+}: {
+  onRename: () => void;
+  onArchive: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const menuWidth = 148;
+    setPos({
+      top: r.bottom + 4,
+      left: Math.max(8, Math.min(r.right - menuWidth, window.innerWidth - menuWidth - 8)),
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const menu =
+    open &&
+    typeof document !== "undefined" &&
+    createPortal(
+      <div
+        ref={menuRef}
+        id={menuId}
+        role="menu"
+        className="fixed z-[80] min-w-[9rem] rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+        style={{ top: pos.top, left: pos.left }}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center px-3 py-2 text-left text-xs text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          onClick={() => {
+            setOpen(false);
+            onRename();
+          }}
+        >
+          Rename
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center px-3 py-2 text-left text-xs text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          onClick={() => {
+            setOpen(false);
+            onArchive();
+          }}
+        >
+          Archive
+        </button>
+      </div>,
+      document.body,
+    );
+
+  return (
+    <div
+      className="shrink-0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className={`mt-0.5 rounded p-0.5 text-gray-500 transition hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-400 ${
+          open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+        title="Thread actions"
+        aria-label="Thread actions"
+      >
+        <EllipsisVerticalIcon className="h-3.5 w-3.5" />
+      </button>
+      {menu}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Thread rail (expanded list or Gemini-style skinny bar)
 // ---------------------------------------------------------------------------
 
@@ -900,6 +1294,8 @@ function ThreadsRail({
   isLoading,
   onSelect,
   onRequestArchive,
+  onRequestRename,
+  onOpenArchivedThreads,
   onNewThread,
   isStreaming,
 }: {
@@ -911,6 +1307,8 @@ function ThreadsRail({
   isLoading: boolean;
   onSelect: (id: string) => void;
   onRequestArchive: (id: string, title: string) => void;
+  onRequestRename: (id: string, title: string) => void;
+  onOpenArchivedThreads: () => void;
   onNewThread: () => void;
   isStreaming: boolean;
 }) {
@@ -938,6 +1336,15 @@ function ThreadsRail({
           aria-label="New conversation"
         >
           <PencilSquareIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenArchivedThreads}
+          className="rounded-md p-2 text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          title="Archived conversations"
+          aria-label="Archived conversations"
+        >
+          <ArchiveBoxIcon className="h-5 w-5" />
         </button>
       </div>
     );
@@ -969,6 +1376,14 @@ function ThreadsRail({
           <PencilSquareIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
           <span>New conversation</span>
         </button>
+        <button
+          type="button"
+          onClick={onOpenArchivedThreads}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-900/80"
+        >
+          <ArchiveBoxIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+          <span>Archived</span>
+        </button>
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center py-8">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-gray-400" />
@@ -993,6 +1408,12 @@ function ThreadsRail({
                     thread.title ?? "New conversation",
                   )
                 }
+                onRequestRename={() =>
+                  onRequestRename(
+                    thread.id,
+                    thread.title ?? "New conversation",
+                  )
+                }
               />
             ))}
           </ul>
@@ -1007,14 +1428,16 @@ function ThreadItem({
   isActive,
   onSelect,
   onRequestArchive,
+  onRequestRename,
 }: {
   thread: ChatThread;
   isActive: boolean;
   onSelect: () => void;
   onRequestArchive: () => void;
+  onRequestRename: () => void;
 }) {
   const title = thread.title ?? "New conversation";
-  const time = formatRelativeTime(thread.updatedAt);
+  const time = formatThreadActivityRelative(thread);
 
   return (
     <li
@@ -1042,18 +1465,10 @@ function ThreadItem({
           {time}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRequestArchive();
-        }}
-        className="mt-0.5 shrink-0 rounded p-0.5 text-gray-500 opacity-0 transition hover:text-gray-800 group-hover:opacity-100 dark:text-gray-600 dark:hover:text-gray-400"
-        title="Archive conversation"
-        aria-label="Archive conversation"
-      >
-        <ArchiveBoxArrowDownIcon className="h-3 w-3" />
-      </button>
+      <ThreadOverflowMenu
+        onRename={onRequestRename}
+        onArchive={onRequestArchive}
+      />
     </li>
   );
 }

@@ -8,6 +8,8 @@ export interface ChatThread {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Latest `chat_messages.created_at` in this thread; omit/null if none yet (list RPC fills this). */
+  lastMessageAt?: string | null;
 }
 
 export interface PersistedMessage {

@@ -24,21 +24,38 @@ export async function createThread(
   return rowToThread(insertResult.data as Record<string, unknown>);
 }
 
+async function listThreadsForProject(
+  projectId: string,
+  userId: string,
+  archivedOnly: boolean,
+): Promise<ChatThread[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("list_chat_threads_for_project", {
+    project_uuid: projectId,
+    user_uuid: userId,
+    archived_only: archivedOnly,
+  });
+
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) =>
+    rowToThread(row),
+  );
+}
+
+/** Active threads, ordered by last message time (falls back to thread created_at if empty). */
 export async function listThreads(
   projectId: string,
   userId: string,
 ): Promise<ChatThread[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("chat_threads")
-    .select("id, project_id, user_id, title, created_at, updated_at, archived_at")
-    .eq("project_id", projectId)
-    .eq("user_id", userId)
-    .is("archived_at", null)
-    .order("updated_at", { ascending: false });
+  return listThreadsForProject(projectId, userId, false);
+}
 
-  if (error) throw error;
-  return (data ?? []).map(rowToThread);
+/** Archived threads, same ordering as active list. */
+export async function listArchivedThreads(
+  projectId: string,
+  userId: string,
+): Promise<ChatThread[]> {
+  return listThreadsForProject(projectId, userId, true);
 }
 
 export async function archiveThread(threadId: string): Promise<void> {
@@ -46,6 +63,16 @@ export async function archiveThread(threadId: string): Promise<void> {
   const { error } = await supabase
     .from("chat_threads")
     .update({ archived_at: new Date().toISOString() })
+    .eq("id", threadId);
+
+  if (error) throw error;
+}
+
+export async function unarchiveThread(threadId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("chat_threads")
+    .update({ archived_at: null })
     .eq("id", threadId);
 
   if (error) throw error;
@@ -83,12 +110,6 @@ export async function saveMessages(
 
   const { error } = await supabase.from("chat_messages").insert(rows);
   if (error) throw error;
-
-  // Touch the thread's updated_at so the list re-sorts correctly
-  await supabase
-    .from("chat_threads")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", threadId);
 }
 
 export async function loadMessages(threadId: string): Promise<PersistedMessage[]> {
@@ -127,6 +148,8 @@ function rowToThread(row: Record<string, unknown>): ChatThread {
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     archivedAt: (row.archived_at as string | null) ?? null,
+    lastMessageAt:
+      typeof row.last_message_at === "string" ? row.last_message_at : null,
   };
 }
 
