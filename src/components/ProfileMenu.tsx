@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowPathIcon,
   ArrowRightStartOnRectangleIcon,
+  ChartBarIcon,
   MoonIcon,
   SunIcon,
   UserCircleIcon,
@@ -11,6 +12,7 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "~/components/ThemeProvider";
 import { useAuth } from "~/hooks/useAuth";
+import { UsageModal } from "~/components/UsageModal";
 
 interface ProfileMenuProps {
   isCollapsed: boolean;
@@ -27,6 +29,7 @@ export function ProfileMenu({
   const router = useRouter();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on click-outside
@@ -127,6 +130,18 @@ export function ProfileMenu({
             Reconnect Google Drive
           </button>
 
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              setUsageOpen(true);
+            }}
+            className="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <ChartBarIcon className="h-4 w-4 shrink-0" />
+            Usage
+          </button>
+
           <div className="border-t border-gray-100 dark:border-gray-700" />
 
           {/* Sign out */}
@@ -179,6 +194,8 @@ export function ProfileMenu({
           </>
         )}
       </button>
+
+      <UsageModal isOpen={usageOpen} onClose={() => setUsageOpen(false)} />
     </div>
   );
 }

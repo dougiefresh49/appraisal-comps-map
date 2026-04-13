@@ -16,7 +16,9 @@ import {
   saveMessages,
   generateThreadTitle,
   renameThread,
+  insertGeminiChatUsage,
 } from "~/lib/chat-persistence";
+import type { GeminiChatUsagePayload } from "~/lib/gemini-usage";
 import { createClient } from "~/utils/supabase/server";
 import {
   fileToGeminiPart,
@@ -325,6 +327,8 @@ async function runChatAndRespond(opts: {
 
     void persistTurn(persistStream, {
       threadId: resolvedThreadId,
+      projectId,
+      userId: user?.id ?? null,
       userMessage: userMessageToSave,
       userMentions: mentions,
       userAttachments: attachmentsForClientAndDb,
@@ -401,10 +405,28 @@ function prependSSEEvent(
   });
 }
 
+function isGeminiChatUsagePayload(
+  value: unknown,
+): value is GeminiChatUsagePayload {
+  if (typeof value !== "object" || value === null) return false;
+  const o = value as Record<string, unknown>;
+  if (typeof o.model !== "string" || !Array.isArray(o.calls)) return false;
+  const t = o.totals;
+  if (typeof t !== "object" || t === null) return false;
+  const totals = t as Record<string, unknown>;
+  return (
+    typeof totals.promptTokens === "number" &&
+    typeof totals.candidatesTokens === "number" &&
+    typeof totals.totalTokens === "number"
+  );
+}
+
 async function persistTurn(
   stream: ReadableStream<Uint8Array>,
   opts: {
     threadId: string;
+    projectId: string;
+    userId: string | null;
     userMessage: string;
     userMentions: ChatMention[];
     userAttachments: ChatAttachment[] | null;
@@ -416,6 +438,7 @@ async function persistTurn(
   const decoder = new TextDecoder();
   let buffer = "";
   let assistantText = "";
+  let geminiUsage: GeminiChatUsagePayload | null = null;
   const toolMessages: Array<{
     toolName: string;
     args: Record<string, string>;
@@ -458,6 +481,15 @@ async function persistTurn(
               }
             ).toolResult;
             toolMessages.push(tr);
+          } else if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "geminiUsage" in parsed
+          ) {
+            const raw = (parsed as { geminiUsage: unknown }).geminiUsage;
+            if (isGeminiChatUsagePayload(raw)) {
+              geminiUsage = raw;
+            }
           }
         } catch {
           // ignore SSE parse errors
@@ -505,7 +537,34 @@ async function persistTurn(
       : []),
   ];
 
-  await saveMessages(opts.threadId, messages);
+  const insertedRows = await saveMessages(opts.threadId, messages);
+  const assistantMessageId =
+    insertedRows.find((r) => r.role === "assistant")?.id ?? null;
+
+  let userIdForUsage = opts.userId;
+  if (!userIdForUsage) {
+    const supabase = await createClient();
+    const { data: threadRow } = await supabase
+      .from("chat_threads")
+      .select("user_id")
+      .eq("id", opts.threadId)
+      .maybeSingle();
+    userIdForUsage = threadRow?.user_id ?? null;
+  }
+
+  if (userIdForUsage && geminiUsage && geminiUsage.calls.length > 0) {
+    try {
+      await insertGeminiChatUsage({
+        projectId: opts.projectId,
+        threadId: opts.threadId,
+        userId: userIdForUsage,
+        assistantMessageId,
+        payload: geminiUsage,
+      });
+    } catch (usageErr) {
+      console.error("[chat persistence] gemini usage insert failed:", usageErr);
+    }
+  }
 
   if (opts.isNewThread && (hasUserText || hasAttachments)) {
     const firstAtt = opts.userAttachments?.[0];

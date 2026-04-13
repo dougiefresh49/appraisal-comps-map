@@ -10,6 +10,11 @@ import {
   executeToolCall,
   type ToolCallResult,
 } from "~/lib/chat-tools";
+import {
+  aggregateUsageTotals,
+  snapshotUsageFromResponse,
+  type GeminiUsageCallSnapshot,
+} from "~/lib/gemini-usage";
 
 const GENERATION_MODEL = "gemini-3.1-flash-lite-preview";
 const CHAT_MODEL = "gemini-3-flash-preview";
@@ -172,6 +177,7 @@ export async function generateChatStream(
         let lastToolName: string | null = null;
         let repeatCount = 0;
         const REPEAT_THRESHOLD = 3;
+        const usageCalls: GeminiUsageCallSnapshot[] = [];
 
         while (loopCount < maxLoops) {
           loopCount++;
@@ -186,6 +192,8 @@ export async function generateChatStream(
               tools: [toolConfig],
             },
           });
+
+          usageCalls.push(snapshotUsageFromResponse(response));
 
           const candidate = response.candidates?.[0];
 
@@ -305,6 +313,21 @@ export async function generateChatStream(
             "This can happen with complex queries that span multiple projects. Please try rephrasing your question or breaking it into smaller parts.";
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(exhaustedMsg)}\n\n`),
+          );
+        }
+
+        if (usageCalls.length > 0) {
+          const totals = aggregateUsageTotals(usageCalls);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                geminiUsage: {
+                  model,
+                  calls: usageCalls,
+                  totals,
+                },
+              })}\n\n`,
+            ),
           );
         }
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "~/utils/supabase/server";
 import { generateReportSection } from "~/lib/gemini";
+import type { GeminiChatUsagePayload } from "~/lib/gemini-usage";
 import type { ChatThread, PersistedMessage, MessageToSave } from "~/types/chat";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,8 +104,8 @@ export async function renameThread(threadId: string, title: string): Promise<voi
 export async function saveMessages(
   threadId: string,
   messages: MessageToSave[],
-): Promise<void> {
-  if (messages.length === 0) return;
+): Promise<{ id: string; role: string }[]> {
+  if (messages.length === 0) return [];
   const supabase = await createClient();
 
   const rows = messages.map((m) => ({
@@ -118,7 +119,44 @@ export async function saveMessages(
     sort_order: m.sort_order,
   }));
 
-  const { error } = await supabase.from("chat_messages").insert(rows);
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert(rows)
+    .select("id, role");
+
+  if (error) throw error;
+  return (data ?? []) as { id: string; role: string }[];
+}
+
+export async function insertGeminiChatUsage(opts: {
+  projectId: string;
+  threadId: string;
+  userId: string;
+  assistantMessageId: string | null;
+  payload: GeminiChatUsagePayload;
+}): Promise<void> {
+  const { payload } = opts;
+  if (payload.calls.length === 0) return;
+
+  const responseIds = payload.calls
+    .map((c) => c.responseId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("gemini_chat_usage").insert({
+    project_id: opts.projectId,
+    thread_id: opts.threadId,
+    user_id: opts.userId,
+    assistant_message_id: opts.assistantMessageId,
+    model: payload.model,
+    generate_calls: payload.calls.length,
+    prompt_tokens: payload.totals.promptTokens,
+    candidates_tokens: payload.totals.candidatesTokens,
+    total_tokens: payload.totals.totalTokens,
+    response_ids: responseIds,
+    calls: payload.calls,
+  });
+
   if (error) throw error;
 }
 
