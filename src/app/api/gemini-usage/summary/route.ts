@@ -33,7 +33,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const fromParam = url.searchParams.get("from");
   const toParam = url.searchParams.get("to");
-  const userIdFilter = url.searchParams.get("userId")?.trim() || user.id;
+  const rawUserId = url.searchParams.get("userId");
+  const trimmedUserId = rawUserId?.trim() ?? "";
+  const userIdFilter = trimmedUserId !== "" ? trimmedUserId : user.id;
 
   const to = toParam ? new Date(toParam) : new Date();
   const from = fromParam

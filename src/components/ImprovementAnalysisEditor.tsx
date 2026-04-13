@@ -407,7 +407,6 @@ export function ImprovementAnalysisEditor({
         autosaveTimerRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- rows change drives this; saveNow is stable
   }, [rows]);
 
   /** Flush on tab hide. */

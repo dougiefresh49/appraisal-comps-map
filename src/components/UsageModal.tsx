@@ -79,7 +79,7 @@ export function UsageModal({
   const [loading, setLoading] = useState(false);
   const [groupByThread, setGroupByThread] = useState(true);
 
-  const effectiveUserId = userId || user?.id || "";
+  const effectiveUserId = userId !== "" ? userId : (user?.id ?? "");
 
   useEffect(() => {
     if (!isOpen || !user?.id) return;
@@ -145,7 +145,8 @@ export function UsageModal({
     }
     const groups = [...map.entries()].map(([threadId, rows]) => {
       const m = meta[threadId];
-      const title = m?.title?.trim() || null;
+      const trimmedTitle = m?.title?.trim() ?? "";
+      const title = trimmedTitle !== "" ? trimmedTitle : null;
       const label =
         title && title.length > 0
           ? title

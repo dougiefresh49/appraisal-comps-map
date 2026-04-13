@@ -405,6 +405,12 @@ function prependSSEEvent(
   });
 }
 
+function userIdFromChatThreadRow(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return null;
+  const uid = (data as Record<string, unknown>).user_id;
+  return typeof uid === "string" ? uid : null;
+}
+
 function isGeminiChatUsagePayload(
   value: unknown,
 ): value is GeminiChatUsagePayload {
@@ -544,12 +550,15 @@ async function persistTurn(
   let userIdForUsage = opts.userId;
   if (!userIdForUsage) {
     const supabase = await createClient();
-    const { data: threadRow } = await supabase
+    const threadLookup = await supabase
       .from("chat_threads")
       .select("user_id")
       .eq("id", opts.threadId)
       .maybeSingle();
-    userIdForUsage = threadRow?.user_id ?? null;
+    if (!threadLookup.error) {
+      userIdForUsage =
+        userIdFromChatThreadRow(threadLookup.data) ?? userIdForUsage;
+    }
   }
 
   if (userIdForUsage && geminiUsage && geminiUsage.calls.length > 0) {
