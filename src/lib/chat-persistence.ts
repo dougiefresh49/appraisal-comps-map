@@ -4,6 +4,16 @@ import { createClient } from "~/utils/supabase/server";
 import { generateReportSection } from "~/lib/gemini";
 import type { ChatThread, PersistedMessage, MessageToSave } from "~/types/chat";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** RPC rows are untyped until generated Supabase types include this function. */
+function threadRowsFromRpcData(data: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(data)) return [];
+  return data.filter(isRecord);
+}
+
 // ---------------------------------------------------------------------------
 // Thread CRUD
 // ---------------------------------------------------------------------------
@@ -30,16 +40,14 @@ async function listThreadsForProject(
   archivedOnly: boolean,
 ): Promise<ChatThread[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_chat_threads_for_project", {
+  const rpcResult = await supabase.rpc("list_chat_threads_for_project", {
     project_uuid: projectId,
     user_uuid: userId,
     archived_only: archivedOnly,
   });
 
-  if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) =>
-    rowToThread(row),
-  );
+  if (rpcResult.error) throw rpcResult.error;
+  return threadRowsFromRpcData(rpcResult.data).map(rowToThread);
 }
 
 /** Active threads, ordered by last message time (falls back to thread created_at if empty). */
