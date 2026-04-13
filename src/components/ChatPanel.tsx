@@ -1,21 +1,25 @@
 "use client";
 
 import {
+  Fragment,
   useState,
   useEffect,
   useLayoutEffect,
   useCallback,
   useRef,
   useMemo,
+  useId,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   XMarkIcon,
-  ArchiveBoxArrowDownIcon,
+  ClipboardDocumentIcon,
   PencilSquareIcon,
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  Bars3Icon,
+  EllipsisVerticalIcon,
+  ArchiveBoxIcon,
 } from "@heroicons/react/24/outline";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
@@ -26,12 +30,18 @@ import { useChatThreads } from "~/hooks/useChatThreads";
 import {
   MentionComposer,
   stripMentionTokens,
+  type ComposerRestoreDraft,
   type MentionEntity,
   type ResolvedMention,
 } from "~/components/MentionComposer";
 import type { ChatMention, ChatMessage } from "~/lib/chat-context";
-import type { ChatThread, PersistedMessage } from "~/types/chat";
+import {
+  getGeminiModelDisplayName,
+  type ChatModelPresetId,
+} from "~/lib/chat-model-presets";
+import type { ChatThread, PersistedMessage, ChatAttachment } from "~/types/chat";
 import { useTheme } from "~/components/ThemeProvider";
+import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
@@ -56,7 +66,37 @@ interface UIMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   mentions?: ResolvedMention[];
+  attachments?: ChatAttachment[];
   toolResult?: ToolResult;
+  /** Resolved Gemini model id for assistant messages (from SSE; not persisted yet). */
+  modelUsed?: string;
+  /** ISO time for day markers and per-message labels (set when sent or loaded from DB). */
+  createdAt?: string;
+}
+
+function chatAttachmentPreviewUrl(a: ChatAttachment): string {
+  if (a.previewUrl) return a.previewUrl;
+  const parts = a.storagePath.split("/").filter(Boolean).map(encodeURIComponent);
+  return `/api/chat/attachment/${parts.join("/")}`;
+}
+
+function optimisticAttachmentsFromFiles(files: File[]): ChatAttachment[] {
+  return files.map((f) => ({
+    fileName: f.name,
+    mimeType: f.type || "application/octet-stream",
+    storagePath: "",
+    size: f.size,
+    previewUrl: URL.createObjectURL(f),
+  }));
+}
+
+function revokeAttachmentPreviewUrls(attachments: ChatAttachment[] | undefined) {
+  if (!attachments) return;
+  for (const a of attachments) {
+    if (a.previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(a.previewUrl);
+    }
+  }
 }
 
 interface ChatPanelProps {
@@ -100,14 +140,104 @@ function formatRelativeTime(isoString: string): string {
   return new Date(isoString).toLocaleDateString();
 }
 
+/** Sidebar time: last message, or thread creation if empty (not `updated_at` / rename). */
+function formatThreadActivityRelative(thread: ChatThread): string {
+  return formatRelativeTime(thread.lastMessageAt ?? thread.createdAt);
+}
+
+/** Calendar day in local TZ for grouping (YYYY-MM-DD). */
+function dayKeyLocal(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatMessageTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Centered day separator: "Today · 9:15 PM" / "Yesterday · …" / "Sunday · …". */
+function formatDayMarkerLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  if (dOnly.getTime() === startOfToday.getTime()) return `Today · ${time}`;
+  if (dOnly.getTime() === startOfYesterday.getTime()) return `Yesterday · ${time}`;
+  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
+  return `${weekday} · ${time}`;
+}
+
 function persistedToUIMessage(pm: PersistedMessage): UIMessage {
   return {
     id: pm.id,
     role: pm.role,
     content: pm.content,
     mentions: pm.mentions as ResolvedMention[] | undefined,
+    attachments: pm.attachments ?? undefined,
     toolResult: pm.toolResult as ToolResult | undefined,
+    ...(pm.modelUsed ? { modelUsed: pm.modelUsed } : {}),
+    createdAt: pm.createdAt,
   };
+}
+
+/** Collapse consecutive tool rows into the following assistant message for rendering. */
+type ChatDisplayItem =
+  | { kind: "user"; message: UIMessage }
+  | { kind: "assistant"; message: UIMessage; toolGroup: ToolResult[] }
+  | { kind: "orphanTool"; message: UIMessage };
+
+function buildChatDisplayItems(messages: UIMessage[]): ChatDisplayItem[] {
+  const out: ChatDisplayItem[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const m = messages[i]!;
+    if (m.role === "user") {
+      out.push({ kind: "user", message: m });
+      i++;
+      continue;
+    }
+    if (m.role === "tool") {
+      const toolRows: UIMessage[] = [];
+      while (i < messages.length && messages[i]!.role === "tool") {
+        toolRows.push(messages[i]!);
+        i++;
+      }
+      if (i < messages.length && messages[i]!.role === "assistant") {
+        const assistant = messages[i]!;
+        const toolGroup = toolRows
+          .map((t) => t.toolResult)
+          .filter((tr): tr is ToolResult => tr != null);
+        out.push({ kind: "assistant", message: assistant, toolGroup });
+        i++;
+      } else {
+        for (const row of toolRows) {
+          out.push({ kind: "orphanTool", message: row });
+        }
+      }
+      continue;
+    }
+    if (m.role === "assistant") {
+      out.push({ kind: "assistant", message: m, toolGroup: [] });
+      i++;
+      continue;
+    }
+    i++;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +252,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     isLoadingThreads,
     setActiveThreadId,
     archiveThread,
+    restoreThread,
     renameThread,
     refreshThreads,
     optimisticUpdateTitle,
@@ -141,7 +272,18 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     title: string;
   } | null>(null);
   const [isArchivingThread, setIsArchivingThread] = useState(false);
+  const [renameThreadDialog, setRenameThreadDialog] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [isRenamingThread, setIsRenamingThread] = useState(false);
+  const [archivedThreadsOpen, setArchivedThreadsOpen] = useState(false);
+  const [lightboxAttachment, setLightboxAttachment] = useState<ChatAttachment | null>(
+    null,
+  );
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const renameThreadInputRef = useRef<HTMLInputElement>(null);
 
   const chatResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const panelWidthDuringResizeRef = useRef(panelWidth);
@@ -149,8 +291,16 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const chatScrollDesktopRef = useRef<HTMLDivElement>(null);
   const chatScrollMobileRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** Snapshot at send start; used to restore the composer after the user stops the stream. */
+  const stopRestoreRef = useRef<{
+    text: string;
+    files: File[];
+    modelPreset: ChatModelPresetId;
+  } | null>(null);
   /** When the server assigns a thread id mid-stream, skip loading messages from the API until the send finishes — persistence may not be committed yet, and an empty fetch would wipe optimistic messages. */
   const suppressThreadMessagesFetchRef = useRef<string | null>(null);
+  const [composerRestore, setComposerRestore] =
+    useState<ComposerRestoreDraft | null>(null);
 
   // Restore saved panel width
   useEffect(() => {
@@ -375,6 +525,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       }));
   }, [messages]);
 
+  const displayItems = useMemo(
+    () => buildChatDisplayItems(messages),
+    [messages],
+  );
+
   // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
@@ -414,6 +569,40 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     }
   }, [archiveThreadConfirm, handleArchiveThread]);
 
+  const openRenameThreadDialog = useCallback((id: string, title: string) => {
+    setRenameThreadDialog({ id, title });
+    setRenameDraft(title.trim() ? title : "");
+  }, []);
+
+  const cancelRenameThreadDialog = useCallback(() => {
+    if (isRenamingThread) return;
+    setRenameThreadDialog(null);
+    setRenameDraft("");
+  }, [isRenamingThread]);
+
+  const confirmRenameThread = useCallback(async () => {
+    if (!renameThreadDialog) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed) return;
+    setIsRenamingThread(true);
+    try {
+      await renameThread(renameThreadDialog.id, trimmed);
+      setRenameThreadDialog(null);
+      setRenameDraft("");
+    } finally {
+      setIsRenamingThread(false);
+    }
+  }, [renameThreadDialog, renameDraft, renameThread]);
+
+  useEffect(() => {
+    if (!renameThreadDialog) return;
+    const id = requestAnimationFrame(() => {
+      renameThreadInputRef.current?.focus();
+      renameThreadInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [renameThreadDialog]);
+
   const handleStartEditTitle = useCallback(() => {
     setTitleDraft(activeThread?.title ?? "");
     setEditingTitle(true);
@@ -426,20 +615,47 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     await renameThread(activeThreadId, trimmed);
   }, [titleDraft, activeThreadId, activeThread, renameThread]);
 
+  const handleComposerRestoreConsumed = useCallback(() => {
+    setComposerRestore(null);
+  }, []);
+
+  const handleStopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const handleSend = useCallback(
-    async (text: string, mentions: ResolvedMention[]) => {
+    async (
+      text: string,
+      mentions: ResolvedMention[],
+      pendingFiles: File[],
+      modelPreset: ChatModelPresetId,
+    ) => {
       if (isStreaming) return;
+
+      const sentAt = new Date().toISOString();
+      const optimisticAttachments =
+        pendingFiles.length > 0
+          ? optimisticAttachmentsFromFiles(pendingFiles)
+          : undefined;
 
       const userMsg: UIMessage = {
         id: generateId(),
         role: "user",
         content: text,
         mentions,
+        ...(optimisticAttachments ? { attachments: optimisticAttachments } : {}),
+        createdAt: sentAt,
       };
       const assistantMsg: UIMessage = {
         id: generateId(),
         role: "assistant",
         content: "",
+      };
+
+      stopRestoreRef.current = {
+        text,
+        files: pendingFiles.slice(),
+        modelPreset,
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -448,8 +664,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // The thread that will receive this message
       let currentThreadId = activeThreadId;
+
+      const revokeOptimisticPreviews = () => {
+        revokeAttachmentPreviewUrls(optimisticAttachments);
+      };
 
       try {
         const apiMentions: ChatMention[] = mentions.map((m) => ({
@@ -457,18 +676,37 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           id: m.id,
         }));
 
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId,
-            message: stripMentionTokens(text),
-            mentions: apiMentions,
-            history: historyForApi,
-            threadId: currentThreadId,
-          }),
-          signal: controller.signal,
-        });
+        const useMultipart = pendingFiles.length > 0;
+        let res: Response;
+        if (useMultipart) {
+          const fd = new FormData();
+          fd.set("projectId", projectId);
+          fd.set("message", stripMentionTokens(text));
+          fd.set("mentions", JSON.stringify(apiMentions));
+          fd.set("history", JSON.stringify(historyForApi));
+          if (currentThreadId) fd.set("threadId", currentThreadId);
+          fd.set("modelPreset", modelPreset);
+          for (const f of pendingFiles) fd.append("files", f);
+          res = await fetch("/api/chat", {
+            method: "POST",
+            body: fd,
+            signal: controller.signal,
+          });
+        } else {
+          res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              message: stripMentionTokens(text),
+              mentions: apiMentions,
+              history: historyForApi,
+              threadId: currentThreadId,
+              modelPreset,
+            }),
+            signal: controller.signal,
+          });
+        }
 
         if (!res.ok) {
           const errBody = (await res.json().catch(() => ({}))) as {
@@ -512,15 +750,51 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
               } else if (
                 typeof parsed === "object" &&
                 parsed !== null &&
+                "attachments" in parsed
+              ) {
+                const serverAtt = (
+                  parsed as { attachments: ChatAttachment[] }
+                ).attachments;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === userMsg.id
+                      ? {
+                          ...m,
+                          attachments: serverAtt.map((a, i) => ({
+                            ...a,
+                            previewUrl:
+                              optimisticAttachments?.find(
+                                (o) =>
+                                  o.fileName === a.fileName &&
+                                  o.size === a.size,
+                              )?.previewUrl ?? optimisticAttachments?.[i]?.previewUrl,
+                          })),
+                        }
+                      : m,
+                  ),
+                );
+              } else if (
+                typeof parsed === "object" &&
+                parsed !== null &&
                 "threadId" in parsed
               ) {
-                // Server created a new thread for this conversation
                 const newId = (parsed as { threadId: string }).threadId;
                 currentThreadId = newId;
                 suppressThreadMessagesFetchRef.current = newId;
                 setActiveThreadId(newId);
-                // Refresh thread list so the new thread appears in the sidebar
                 void refreshThreads();
+              } else if (
+                typeof parsed === "object" &&
+                parsed !== null &&
+                "modelUsed" in parsed &&
+                typeof (parsed as { modelUsed: unknown }).modelUsed === "string"
+              ) {
+                const modelUsed = (parsed as { modelUsed: string }).modelUsed;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id ? { ...m, modelUsed } : m,
+                  ),
+                );
               } else if (
                 typeof parsed === "object" &&
                 parsed !== null &&
@@ -532,6 +806,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                   role: "tool",
                   content: tr.message,
                   toolResult: tr,
+                  createdAt: new Date().toISOString(),
                 };
                 setMessages((prev) => {
                   const idx = prev.findIndex((m) => m.id === assistantMsg.id);
@@ -560,15 +835,18 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           }
         }
 
-        // Refresh thread list after stream completes to pick up updated
-        // updated_at and auto-generated title
         void refreshThreads().then(() => {
-          // If the thread title was just generated, it may now be in the list
           if (currentThreadId) {
             void fetch(
               `/api/chat/threads?projectId=${encodeURIComponent(projectId)}`,
             )
-              .then((r) => (r.ok ? (r.json() as Promise<{ threads: { id: string; title: string | null }[] }>) : null))
+              .then((r) =>
+                r.ok
+                  ? (r.json() as Promise<{
+                      threads: { id: string; title: string | null }[];
+                    }>)
+                  : null,
+              )
               .then((data) => {
                 if (!data || !currentThreadId) return;
                 const updated = data.threads.find(
@@ -584,7 +862,27 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           }
         });
       } catch (err) {
-        if ((err as Error).name === "AbortError") return;
+        if ((err as Error).name === "AbortError") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: "*You stopped the response.*" }
+                : m,
+            ),
+          );
+          const snap = stopRestoreRef.current;
+          stopRestoreRef.current = null;
+          if (snap) {
+            setComposerRestore({
+              token: Date.now(),
+              text: snap.text,
+              files: snap.files,
+              modelPreset: snap.modelPreset,
+            });
+          }
+          return;
+        }
+        revokeOptimisticPreviews();
         const errorText =
           err instanceof Error ? err.message : "Something went wrong";
         setMessages((prev) =>
@@ -598,6 +896,15 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         suppressThreadMessagesFetchRef.current = null;
         setIsStreaming(false);
         abortRef.current = null;
+        stopRestoreRef.current = null;
+        const completedAt = new Date().toISOString();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id && m.role === "assistant"
+              ? { ...m, createdAt: completedAt }
+              : m,
+          ),
+        );
       }
     },
     [
@@ -648,13 +955,15 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         onRequestArchive={(id, title) =>
           setArchiveThreadConfirm({ id, title })
         }
+        onRequestRename={openRenameThreadDialog}
+        onOpenArchivedThreads={() => setArchivedThreadsOpen(true)}
         onNewThread={() => void handleNewThread()}
         isStreaming={isStreaming}
       />
 
       {/* Chat column: title bar aligns to the right of the rail only */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2.5 dark:border-gray-800">
+        <div className="flex shrink-0 items-center gap-1.5 px-3 py-1.5">
           <div className="min-w-0 flex-1">
             {editingTitle ? (
               <input
@@ -715,7 +1024,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-5"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-5"
         >
           {isLoadingMessages ? (
             <div className="flex h-full items-center justify-center">
@@ -724,25 +1033,61 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           ) : messages.length === 0 ? (
             <EmptyState hasThreads={threads.length > 0} />
           ) : (
-            <div className="space-y-4">
-              {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isStreaming={
-                    isStreaming && msg === messages[messages.length - 1]
-                  }
-                />
-              ))}
+            <div className="min-w-0 space-y-4">
+              {displayItems.map((item, i) => {
+                const msg = item.message;
+                const prevItem = displayItems[i - 1];
+                const showDayMarker =
+                  msg.createdAt &&
+                  (!prevItem?.message.createdAt ||
+                    dayKeyLocal(msg.createdAt) !==
+                      dayKeyLocal(prevItem.message.createdAt));
+                const lastRaw = messages[messages.length - 1];
+                const isLastAssistantStreaming =
+                  isStreaming &&
+                  item.kind === "assistant" &&
+                  lastRaw !== undefined &&
+                  lastRaw.id === item.message.id;
+                return (
+                  <Fragment key={msg.id}>
+                    {showDayMarker && msg.createdAt ? (
+                      <div
+                        className="flex justify-center py-1"
+                        aria-hidden
+                      >
+                        <span className="text-[11px] font-medium text-gray-500 dark:text-gray-500">
+                          {formatDayMarkerLabel(msg.createdAt)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <MessageBubble
+                      message={msg}
+                      groupedToolResults={
+                        item.kind === "assistant" ? item.toolGroup : undefined
+                      }
+                      isStreaming={isLastAssistantStreaming}
+                      onOpenAttachment={
+                        msg.attachments?.length
+                          ? (a) => setLightboxAttachment(a)
+                          : undefined
+                      }
+                    />
+                  </Fragment>
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="shrink-0 border-t border-gray-200 px-4 py-3 dark:border-gray-800 md:px-5">
+        <div className="shrink-0 px-4 py-1.5 md:px-5">
           <MentionComposer
             entities={entities}
             onSend={handleSend}
             disabled={isStreaming}
+            isStreaming={isStreaming}
+            onStop={handleStopStreaming}
+            restoreDraft={composerRestore}
+            onRestoreConsumed={handleComposerRestoreConsumed}
           />
         </div>
       </div>
@@ -751,6 +1096,15 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
   return (
     <>
+      {lightboxAttachment ? (
+        <ImageZoomLightbox
+          imageSrc={chatAttachmentPreviewUrl(lightboxAttachment)}
+          title={lightboxAttachment.fileName}
+          fileName={lightboxAttachment.fileName}
+          onClose={() => setLightboxAttachment(null)}
+        />
+      ) : null}
+
       <ArchiveThreadConfirmDialog
         isOpen={archiveThreadConfirm !== null}
         threadTitle={archiveThreadConfirm?.title ?? ""}
@@ -759,6 +1113,23 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           if (!isArchivingThread) setArchiveThreadConfirm(null);
         }}
         onConfirm={() => void confirmArchiveThread()}
+      />
+
+      <RenameThreadDialog
+        isOpen={renameThreadDialog !== null}
+        value={renameDraft}
+        onChange={setRenameDraft}
+        inputRef={renameThreadInputRef}
+        isSaving={isRenamingThread}
+        onCancel={cancelRenameThreadDialog}
+        onSave={() => void confirmRenameThread()}
+      />
+
+      <ArchivedThreadsDialog
+        isOpen={archivedThreadsOpen}
+        projectId={projectId}
+        onClose={() => setArchivedThreadsOpen(false)}
+        onRestore={restoreThread}
       />
 
       {/* Desktop: inline resizable panel */}
@@ -888,6 +1259,330 @@ function ArchiveThreadConfirmDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Rename thread (from thread list overflow)
+// ---------------------------------------------------------------------------
+
+function RenameThreadDialog({
+  isOpen,
+  value,
+  onChange,
+  inputRef,
+  isSaving,
+  onCancel,
+  onSave,
+}: {
+  isOpen: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  inputRef: RefObject<HTMLInputElement | null>;
+  isSaving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Dismiss"
+        onClick={isSaving ? undefined : onCancel}
+      />
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Rename conversation
+        </h3>
+        <label className="mt-4 block">
+          <span className="sr-only">Thread name</span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={isSaving}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSave();
+              }
+              if (e.key === "Escape") onCancel();
+            }}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-blue-600/0 transition focus:ring-2 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+            placeholder="Conversation title"
+            autoComplete="off"
+          />
+        </label>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving || !value.trim()}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Archived conversations (browse + restore)
+// ---------------------------------------------------------------------------
+
+function ArchivedThreadsDialog({
+  isOpen,
+  projectId,
+  onClose,
+  onRestore,
+}: {
+  isOpen: boolean;
+  projectId: string;
+  onClose: () => void;
+  onRestore: (threadId: string) => Promise<void>;
+}) {
+  const [archivedThreads, setArchivedThreads] = useState<ChatThread[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setArchivedThreads([]);
+    setLoadError(null);
+    setLoading(true);
+    void fetch(
+      `/api/chat/threads?projectId=${encodeURIComponent(projectId)}&archived=true`,
+    )
+      .then((res) =>
+        res.ok ? (res.json() as Promise<{ threads: ChatThread[] }>) : null,
+      )
+      .then((data) => {
+        if (data) setArchivedThreads(data.threads ?? []);
+        else setLoadError("Could not load archived conversations.");
+      })
+      .catch(() => setLoadError("Could not load archived conversations."))
+      .finally(() => setLoading(false));
+  }, [isOpen, projectId]);
+
+  const handleRestore = async (id: string) => {
+    setRestoringId(id);
+    setLoadError(null);
+    try {
+      await onRestore(id);
+      setArchivedThreads((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      setLoadError("Could not restore conversation.");
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Dismiss"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex max-h-[min(70vh,520px)] w-full max-w-md flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Archived conversations
+        </h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Restore a conversation to move it back to your active list.
+        </p>
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+            </div>
+          ) : loadError && archivedThreads.length === 0 ? (
+            <p className="py-4 text-sm text-red-600 dark:text-red-400">
+              {loadError}
+            </p>
+          ) : archivedThreads.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-600 dark:text-gray-500">
+              No archived conversations.
+            </p>
+          ) : (
+            <ul className="space-y-1.5 pr-1">
+              {archivedThreads.map((t) => {
+                const title = t.title ?? "New conversation";
+                return (
+                  <li
+                    key={t.id}
+                    className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-950/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-xs font-medium leading-snug text-gray-900 dark:text-gray-100">
+                        {title}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-600">
+                        {formatThreadActivityRelative(t)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRestore(t.id)}
+                      disabled={restoringId !== null}
+                      className="shrink-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-800 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      {restoringId === t.id ? "…" : "Restore"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        {loadError && archivedThreads.length > 0 ? (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            {loadError}
+          </p>
+        ) : null}
+        <div className="mt-5 flex justify-end border-t border-gray-200 pt-4 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Thread overflow menu (portal — avoids clipping in scroll area)
+// ---------------------------------------------------------------------------
+
+function ThreadOverflowMenu({
+  onRename,
+  onArchive,
+}: {
+  onRename: () => void;
+  onArchive: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const menuWidth = 148;
+    setPos({
+      top: r.bottom + 4,
+      left: Math.max(8, Math.min(r.right - menuWidth, window.innerWidth - menuWidth - 8)),
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const menu =
+    open &&
+    typeof document !== "undefined" &&
+    createPortal(
+      <div
+        ref={menuRef}
+        id={menuId}
+        role="menu"
+        className="fixed z-[80] min-w-[9rem] rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+        style={{ top: pos.top, left: pos.left }}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center px-3 py-2 text-left text-xs text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          onClick={() => {
+            setOpen(false);
+            onRename();
+          }}
+        >
+          Rename
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center px-3 py-2 text-left text-xs text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          onClick={() => {
+            setOpen(false);
+            onArchive();
+          }}
+        >
+          Archive
+        </button>
+      </div>,
+      document.body,
+    );
+
+  return (
+    <div
+      className="shrink-0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className={`mt-0.5 rounded p-0.5 text-gray-500 transition hover:text-gray-800 dark:text-gray-600 dark:hover:text-gray-400 ${
+          open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+        title="Thread actions"
+        aria-label="Thread actions"
+      >
+        <EllipsisVerticalIcon className="h-3.5 w-3.5" />
+      </button>
+      {menu}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Thread rail (expanded list or Gemini-style skinny bar)
 // ---------------------------------------------------------------------------
 
@@ -900,6 +1595,8 @@ function ThreadsRail({
   isLoading,
   onSelect,
   onRequestArchive,
+  onRequestRename,
+  onOpenArchivedThreads,
   onNewThread,
   isStreaming,
 }: {
@@ -911,6 +1608,8 @@ function ThreadsRail({
   isLoading: boolean;
   onSelect: (id: string) => void;
   onRequestArchive: (id: string, title: string) => void;
+  onRequestRename: (id: string, title: string) => void;
+  onOpenArchivedThreads: () => void;
   onNewThread: () => void;
   isStreaming: boolean;
 }) {
@@ -927,7 +1626,7 @@ function ThreadsRail({
           title="Show thread list"
           aria-label="Expand thread list"
         >
-          <ChevronRightIcon className="h-4 w-4" />
+          <Bars3Icon className="h-4 w-4" />
         </button>
         <button
           type="button"
@@ -938,6 +1637,15 @@ function ThreadsRail({
           aria-label="New conversation"
         >
           <PencilSquareIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenArchivedThreads}
+          className="rounded-md p-2 text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          title="Archived conversations"
+          aria-label="Archived conversations"
+        >
+          <ArchiveBoxIcon className="h-5 w-5" />
         </button>
       </div>
     );
@@ -956,7 +1664,7 @@ function ThreadsRail({
           title="Collapse thread list"
           aria-label="Collapse thread list"
         >
-          <ChevronLeftIcon className="h-4 w-4" />
+          <Bars3Icon className="h-4 w-4" />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -968,6 +1676,14 @@ function ThreadsRail({
         >
           <PencilSquareIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
           <span>New conversation</span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenArchivedThreads}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-gray-800 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-900/80"
+        >
+          <ArchiveBoxIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+          <span>Archived</span>
         </button>
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center py-8">
@@ -993,6 +1709,12 @@ function ThreadsRail({
                     thread.title ?? "New conversation",
                   )
                 }
+                onRequestRename={() =>
+                  onRequestRename(
+                    thread.id,
+                    thread.title ?? "New conversation",
+                  )
+                }
               />
             ))}
           </ul>
@@ -1007,14 +1729,16 @@ function ThreadItem({
   isActive,
   onSelect,
   onRequestArchive,
+  onRequestRename,
 }: {
   thread: ChatThread;
   isActive: boolean;
   onSelect: () => void;
   onRequestArchive: () => void;
+  onRequestRename: () => void;
 }) {
   const title = thread.title ?? "New conversation";
-  const time = formatRelativeTime(thread.updatedAt);
+  const time = formatThreadActivityRelative(thread);
 
   return (
     <li
@@ -1042,18 +1766,10 @@ function ThreadItem({
           {time}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRequestArchive();
-        }}
-        className="mt-0.5 shrink-0 rounded p-0.5 text-gray-500 opacity-0 transition hover:text-gray-800 group-hover:opacity-100 dark:text-gray-600 dark:hover:text-gray-400"
-        title="Archive conversation"
-        aria-label="Archive conversation"
-      >
-        <ArchiveBoxArrowDownIcon className="h-3 w-3" />
-      </button>
+      <ThreadOverflowMenu
+        onRename={onRequestRename}
+        onArchive={onRequestArchive}
+      />
     </li>
   );
 }
@@ -1089,38 +1805,191 @@ function EmptyState({ hasThreads }: { hasThreads: boolean }) {
 // Message bubble
 // ---------------------------------------------------------------------------
 
+function formatAttachmentSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function AssistantMessageActions({
+  markdown,
+  modelId,
+  timeLabel,
+  timeIso,
+}: {
+  markdown: string;
+  modelId?: string;
+  timeLabel?: string | null;
+  /** ISO timestamp for <time dateTime> when timeLabel is shown */
+  timeIso?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const label = modelId ? getGeminiModelDisplayName(modelId) : null;
+
+  const handleCopy = useCallback(async () => {
+    const text = markdown.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }, [markdown]);
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <button
+        type="button"
+        onClick={handleCopy}
+        disabled={!markdown.trim()}
+        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-200/90 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+        title="Copy markdown"
+        aria-label="Copy message as markdown"
+      >
+        <ClipboardDocumentIcon className="h-4 w-4" />
+      </button>
+      {copied ? (
+        <span
+          className="text-[11px] text-emerald-600 dark:text-emerald-400"
+          role="status"
+        >
+          Copied
+        </span>
+      ) : null}
+      {label ? (
+        <span className="text-[11px] text-gray-500 dark:text-gray-500">
+          Model: {label}
+        </span>
+      ) : null}
+      {timeLabel ? (
+        <>
+          <span
+            className="select-none text-[11px] text-gray-400 dark:text-gray-600"
+            aria-hidden
+          >
+            |
+          </span>
+          <time
+            className="text-[10px] text-gray-500 tabular-nums dark:text-gray-500"
+            dateTime={timeIso ?? undefined}
+          >
+            {timeLabel}
+          </time>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   isStreaming,
+  onOpenAttachment,
+  groupedToolResults,
 }: {
   message: UIMessage;
   isStreaming: boolean;
+  onOpenAttachment?: (a: ChatAttachment) => void;
+  /** Tool calls merged into this assistant bubble (not separate rows). */
+  groupedToolResults?: ToolResult[];
 }) {
   const { theme } = useTheme();
 
   if (message.role === "tool") {
-    return <ToolResultBubble result={message.toolResult!} />;
+    return (
+      <ToolResultBubble result={message.toolResult!} />
+    );
   }
 
   const isUser = message.role === "user";
+  const timeLabel =
+    message.createdAt && (!isStreaming || isUser)
+      ? formatMessageTime(message.createdAt)
+      : null;
 
   if (isUser) {
     const displayText = message.content.replace(
       /@\[([^\]]+)\]\((doc|comp|project):[^)]+\)/g,
       (_, label: string) => `**@${label}**`,
     );
+    const att = message.attachments ?? [];
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
-          <div
-            className="text-sm leading-relaxed text-gray-900 dark:text-gray-200"
-            data-color-mode={theme}
-          >
-            <MarkdownPreview
-              source={displayText}
-              style={{ background: "transparent", fontSize: "0.875rem" }}
-            />
+      <div className="flex min-w-0 justify-end">
+        <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-0.5">
+          {att.length > 0 ? (
+            <div className="mb-1 flex w-full max-w-full flex-col gap-1.5">
+              {att.map((a, idx) => {
+                const isPdf =
+                  a.mimeType === "application/pdf" ||
+                  a.fileName.toLowerCase().endsWith(".pdf");
+                const thumb =
+                  a.previewUrl ??
+                  (!isPdf ? chatAttachmentPreviewUrl(a) : null);
+                return (
+                  <button
+                    key={`${a.storagePath || a.fileName}-${idx}`}
+                    type="button"
+                    onClick={() => onOpenAttachment?.(a)}
+                    className="flex w-full max-w-[min(100%,280px)] items-center gap-2 rounded-xl border border-gray-300/80 bg-gray-800/90 px-3 py-2 text-left text-gray-100 shadow-sm transition hover:bg-gray-700/90 dark:border-gray-600 dark:bg-gray-800/95 dark:hover:bg-gray-700/90"
+                  >
+                    {isPdf ? (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 text-[10px] font-bold text-white">
+                        PDF
+                      </span>
+                    ) : thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumb}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-600 text-[10px] text-white">
+                        IMG
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-xs font-medium">
+                        {a.fileName}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-gray-400">
+                        {isPdf ? "PDF" : "Image"} ·{" "}
+                        {formatAttachmentSize(a.size)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="min-w-0 max-w-full overflow-hidden rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
+            <div
+              className="w-full min-w-0 max-w-full break-words text-sm leading-relaxed text-gray-900 dark:text-gray-200 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:break-normal [&_pre]:whitespace-pre"
+              data-color-mode={theme}
+            >
+              {displayText.trim() ? (
+                <MarkdownPreview
+                  source={displayText}
+                  style={{
+                    background: "transparent",
+                    fontSize: "0.875rem",
+                    maxWidth: "100%",
+                  }}
+                />
+              ) : att.length > 0 ? (
+                <span className="text-xs italic text-gray-600 dark:text-gray-400">
+                  Attachment
+                </span>
+              ) : null}
+            </div>
           </div>
+          {timeLabel ? (
+            <span className="px-1 text-[10px] text-gray-500 dark:text-gray-500">
+              {timeLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     );
@@ -1128,53 +1997,115 @@ function MessageBubble({
 
   const isEmpty = !message.content.trim();
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-transparent dark:bg-gray-900">
-        {isEmpty && isStreaming ? (
-          <div className="flex items-center gap-1.5 py-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms] dark:bg-blue-400" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms] dark:bg-blue-400" />
-          </div>
-        ) : (
-          <div
-            className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200"
-            data-color-mode={theme}
-          >
-            <MarkdownPreview
-              source={message.content}
-              style={{ background: "transparent", fontSize: "0.875rem" }}
-            />
-            {isStreaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-600/70 dark:bg-blue-400/70" />
-            )}
-          </div>
-        )}
+    <div className="flex w-full min-w-0 justify-start">
+      <div className="flex w-full min-w-0 flex-col items-stretch gap-0.5">
+        <div className="min-w-0 w-full">
+          {isEmpty && isStreaming ? (
+            <div className="flex items-center gap-1.5 py-1">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms] dark:bg-blue-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms] dark:bg-blue-400" />
+            </div>
+          ) : (
+            <div
+              className="prose prose-sm max-w-none min-w-0 w-full text-sm leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:break-normal"
+              data-color-mode={theme}
+            >
+              <MarkdownPreview
+                source={message.content}
+                style={{ background: "transparent", fontSize: "0.875rem", maxWidth: "100%" }}
+              />
+              {isStreaming && (
+                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-600/70 dark:bg-blue-400/70" />
+              )}
+            </div>
+          )}
+          {groupedToolResults && groupedToolResults.length > 0 ? (
+            <AssistantToolUpdatesSection tools={groupedToolResults} />
+          ) : null}
+          <AssistantMessageActions
+            markdown={message.content}
+            modelId={message.modelUsed}
+            timeLabel={timeLabel}
+            timeIso={message.createdAt}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
+const TOOL_ACTION_LABELS: Record<string, string> = {
+  update_subject_field: "Subject Updated",
+  update_subject_section_json: "Subject Section Updated",
+  update_comp_field: "Comp Updated",
+  update_parcel_field: "Parcel Updated",
+};
+
+function toolActionLabel(toolName: string): string {
+  return TOOL_ACTION_LABELS[toolName] ?? "Action complete";
+}
+
+function AssistantToolUpdatesSection({ tools }: { tools: ToolResult[] }) {
+  const [open, setOpen] = useState(false);
+  const okCount = tools.filter((t) => t.success).length;
+  const summary =
+    okCount === tools.length
+      ? `${tools.length} update${tools.length === 1 ? "" : "s"} applied`
+      : `${okCount} of ${tools.length} updates succeeded`;
+
+  return (
+    <div className="mt-3 border-t border-gray-200/80 pt-3 dark:border-gray-700/60">
+      <p className="text-left text-[11px] text-gray-600 dark:text-gray-400">
+        {summary}
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1 text-left text-xs font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+        aria-expanded={open}
+      >
+        {open ? "Hide updates" : "View updates"}
+      </button>
+      {open ? (
+        <ul className="mt-2 list-disc space-y-1.5 pl-4 text-left text-[11px] text-gray-800 dark:text-gray-200">
+          {tools.map((tr, idx) => (
+            <li key={`${tr.toolName}-${idx}-${tr.message.slice(0, 24)}`}>
+              <span
+                className={
+                  tr.success
+                    ? "font-medium text-emerald-800 dark:text-emerald-300"
+                    : "font-medium text-red-800 dark:text-red-300"
+                }
+              >
+                {toolActionLabel(tr.toolName)}
+              </span>
+              <span className="text-gray-600 dark:text-gray-400">
+                {" "}
+                · {tr.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function ToolResultBubble({ result }: { result: ToolResult }) {
-  const toolLabels: Record<string, string> = {
-    update_subject_field: "Subject Updated",
-    update_subject_section_json: "Subject Section Updated",
-    update_comp_field: "Comp Updated",
-    update_parcel_field: "Parcel Updated",
-  };
-  const label = toolLabels[result.toolName] ?? "Action Complete";
+  const label = toolActionLabel(result.toolName);
 
   return (
     <div className="flex justify-center py-1">
       <div
-        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+        className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
           result.success
             ? "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800/50"
             : "bg-red-100 text-red-800 ring-1 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800/50"
         }`}
       >
         {result.success ? (
-          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+          <svg className="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="none">
             <path
               d="M2 6l3 3 5-5"
               stroke="currentColor"
@@ -1184,7 +2115,7 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
             />
           </svg>
         ) : (
-          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+          <svg className="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="none">
             <path
               d="M3 3l6 6M9 3l-6 6"
               stroke="currentColor"
@@ -1194,7 +2125,7 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
           </svg>
         )}
         <span>{label}</span>
-        <span className="text-[10px] opacity-70">{result.message}</span>
+        <span className="text-[10px] opacity-80">{result.message}</span>
       </div>
     </div>
   );

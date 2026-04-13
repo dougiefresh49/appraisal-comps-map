@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "~/utils/supabase/server";
 import {
   listThreads,
+  listArchivedThreads,
   createThread,
   archiveThread,
+  unarchiveThread,
   renameThread,
 } from "~/lib/chat-persistence";
 
@@ -16,6 +18,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "projectId is required" }, { status: 400 });
     }
 
+    const archivedOnly =
+      searchParams.get("archived") === "1" ||
+      searchParams.get("archived") === "true";
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -24,7 +30,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const threads = await listThreads(projectId, user.id);
+    const threads = archivedOnly
+      ? await listArchivedThreads(projectId, user.id)
+      : await listThreads(projectId, user.id);
     return NextResponse.json({ threads });
   } catch (error) {
     console.error("[GET /api/chat/threads]", error);
@@ -81,6 +89,11 @@ export async function PATCH(request: Request) {
 
     if (body.archived === true) {
       await archiveThread(threadId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.archived === false) {
+      await unarchiveThread(threadId);
       return NextResponse.json({ ok: true });
     }
 
