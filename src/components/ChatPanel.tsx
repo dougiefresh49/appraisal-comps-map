@@ -34,8 +34,9 @@ import {
   type ResolvedMention,
 } from "~/components/MentionComposer";
 import type { ChatMention, ChatMessage } from "~/lib/chat-context";
-import type { ChatThread, PersistedMessage } from "~/types/chat";
+import type { ChatThread, PersistedMessage, ChatAttachment } from "~/types/chat";
 import { useTheme } from "~/components/ThemeProvider";
+import { ImageZoomLightbox } from "~/components/ImageZoomLightbox";
 
 const MarkdownPreview = dynamic(() => import("@uiw/react-markdown-preview"), {
   ssr: false,
@@ -60,9 +61,35 @@ interface UIMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   mentions?: ResolvedMention[];
+  attachments?: ChatAttachment[];
   toolResult?: ToolResult;
   /** ISO time for day markers and per-message labels (set when sent or loaded from DB). */
   createdAt?: string;
+}
+
+function chatAttachmentPreviewUrl(a: ChatAttachment): string {
+  if (a.previewUrl) return a.previewUrl;
+  const parts = a.storagePath.split("/").filter(Boolean).map(encodeURIComponent);
+  return `/api/chat/attachment/${parts.join("/")}`;
+}
+
+function optimisticAttachmentsFromFiles(files: File[]): ChatAttachment[] {
+  return files.map((f) => ({
+    fileName: f.name,
+    mimeType: f.type || "application/octet-stream",
+    storagePath: "",
+    size: f.size,
+    previewUrl: URL.createObjectURL(f),
+  }));
+}
+
+function revokeAttachmentPreviewUrls(attachments: ChatAttachment[] | undefined) {
+  if (!attachments) return;
+  for (const a of attachments) {
+    if (a.previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(a.previewUrl);
+    }
+  }
 }
 
 interface ChatPanelProps {
@@ -153,6 +180,7 @@ function persistedToUIMessage(pm: PersistedMessage): UIMessage {
     role: pm.role,
     content: pm.content,
     mentions: pm.mentions as ResolvedMention[] | undefined,
+    attachments: pm.attachments ?? undefined,
     toolResult: pm.toolResult as ToolResult | undefined,
     createdAt: pm.createdAt,
   };
@@ -197,6 +225,9 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const [renameDraft, setRenameDraft] = useState("");
   const [isRenamingThread, setIsRenamingThread] = useState(false);
   const [archivedThreadsOpen, setArchivedThreadsOpen] = useState(false);
+  const [lightboxAttachment, setLightboxAttachment] = useState<ChatAttachment | null>(
+    null,
+  );
   const titleInputRef = useRef<HTMLInputElement>(null);
   const renameThreadInputRef = useRef<HTMLInputElement>(null);
 
@@ -518,15 +549,25 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   }, [titleDraft, activeThreadId, activeThread, renameThread]);
 
   const handleSend = useCallback(
-    async (text: string, mentions: ResolvedMention[]) => {
+    async (
+      text: string,
+      mentions: ResolvedMention[],
+      pendingFiles: File[],
+    ) => {
       if (isStreaming) return;
 
       const sentAt = new Date().toISOString();
+      const optimisticAttachments =
+        pendingFiles.length > 0
+          ? optimisticAttachmentsFromFiles(pendingFiles)
+          : undefined;
+
       const userMsg: UIMessage = {
         id: generateId(),
         role: "user",
         content: text,
         mentions,
+        ...(optimisticAttachments ? { attachments: optimisticAttachments } : {}),
         createdAt: sentAt,
       };
       const assistantMsg: UIMessage = {
@@ -541,8 +582,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // The thread that will receive this message
       let currentThreadId = activeThreadId;
+
+      const revokeOptimisticPreviews = () => {
+        revokeAttachmentPreviewUrls(optimisticAttachments);
+      };
 
       try {
         const apiMentions: ChatMention[] = mentions.map((m) => ({
@@ -550,18 +594,35 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           id: m.id,
         }));
 
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId,
-            message: stripMentionTokens(text),
-            mentions: apiMentions,
-            history: historyForApi,
-            threadId: currentThreadId,
-          }),
-          signal: controller.signal,
-        });
+        const useMultipart = pendingFiles.length > 0;
+        let res: Response;
+        if (useMultipart) {
+          const fd = new FormData();
+          fd.set("projectId", projectId);
+          fd.set("message", stripMentionTokens(text));
+          fd.set("mentions", JSON.stringify(apiMentions));
+          fd.set("history", JSON.stringify(historyForApi));
+          if (currentThreadId) fd.set("threadId", currentThreadId);
+          for (const f of pendingFiles) fd.append("files", f);
+          res = await fetch("/api/chat", {
+            method: "POST",
+            body: fd,
+            signal: controller.signal,
+          });
+        } else {
+          res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              message: stripMentionTokens(text),
+              mentions: apiMentions,
+              history: historyForApi,
+              threadId: currentThreadId,
+            }),
+            signal: controller.signal,
+          });
+        }
 
         if (!res.ok) {
           const errBody = (await res.json().catch(() => ({}))) as {
@@ -605,14 +666,38 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
               } else if (
                 typeof parsed === "object" &&
                 parsed !== null &&
+                "attachments" in parsed
+              ) {
+                const serverAtt = (
+                  parsed as { attachments: ChatAttachment[] }
+                ).attachments;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === userMsg.id
+                      ? {
+                          ...m,
+                          attachments: serverAtt.map((a, i) => ({
+                            ...a,
+                            previewUrl:
+                              optimisticAttachments?.find(
+                                (o) =>
+                                  o.fileName === a.fileName &&
+                                  o.size === a.size,
+                              )?.previewUrl ?? optimisticAttachments?.[i]?.previewUrl,
+                          })),
+                        }
+                      : m,
+                  ),
+                );
+              } else if (
+                typeof parsed === "object" &&
+                parsed !== null &&
                 "threadId" in parsed
               ) {
-                // Server created a new thread for this conversation
                 const newId = (parsed as { threadId: string }).threadId;
                 currentThreadId = newId;
                 suppressThreadMessagesFetchRef.current = newId;
                 setActiveThreadId(newId);
-                // Refresh thread list so the new thread appears in the sidebar
                 void refreshThreads();
               } else if (
                 typeof parsed === "object" &&
@@ -654,15 +739,18 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           }
         }
 
-        // Refresh thread list after stream completes to pick up updated
-        // updated_at and auto-generated title
         void refreshThreads().then(() => {
-          // If the thread title was just generated, it may now be in the list
           if (currentThreadId) {
             void fetch(
               `/api/chat/threads?projectId=${encodeURIComponent(projectId)}`,
             )
-              .then((r) => (r.ok ? (r.json() as Promise<{ threads: { id: string; title: string | null }[] }>) : null))
+              .then((r) =>
+                r.ok
+                  ? (r.json() as Promise<{
+                      threads: { id: string; title: string | null }[];
+                    }>)
+                  : null,
+              )
               .then((data) => {
                 if (!data || !currentThreadId) return;
                 const updated = data.threads.find(
@@ -678,6 +766,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           }
         });
       } catch (err) {
+        revokeOptimisticPreviews();
         if ((err as Error).name === "AbortError") return;
         const errorText =
           err instanceof Error ? err.message : "Something went wrong";
@@ -852,6 +941,11 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                       isStreaming={
                         isStreaming && msg === messages[messages.length - 1]
                       }
+                      onOpenAttachment={
+                        msg.attachments?.length
+                          ? (a) => setLightboxAttachment(a)
+                          : undefined
+                      }
                     />
                   </Fragment>
                 );
@@ -873,6 +967,15 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
   return (
     <>
+      {lightboxAttachment ? (
+        <ImageZoomLightbox
+          imageSrc={chatAttachmentPreviewUrl(lightboxAttachment)}
+          title={lightboxAttachment.fileName}
+          fileName={lightboxAttachment.fileName}
+          onClose={() => setLightboxAttachment(null)}
+        />
+      ) : null}
+
       <ArchiveThreadConfirmDialog
         isOpen={archiveThreadConfirm !== null}
         threadTitle={archiveThreadConfirm?.title ?? ""}
@@ -1573,12 +1676,20 @@ function EmptyState({ hasThreads }: { hasThreads: boolean }) {
 // Message bubble
 // ---------------------------------------------------------------------------
 
+function formatAttachmentSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function MessageBubble({
   message,
   isStreaming,
+  onOpenAttachment,
 }: {
   message: UIMessage;
   isStreaming: boolean;
+  onOpenAttachment?: (a: ChatAttachment) => void;
 }) {
   const { theme } = useTheme();
 
@@ -1602,18 +1713,71 @@ function MessageBubble({
       /@\[([^\]]+)\]\((doc|comp|project):[^)]+\)/g,
       (_, label: string) => `**@${label}**`,
     );
+    const att = message.attachments ?? [];
     return (
       <div className="flex justify-end">
         <div className="flex max-w-[85%] flex-col items-end gap-0.5">
+          {att.length > 0 ? (
+            <div className="mb-1 flex w-full max-w-full flex-col gap-1.5">
+              {att.map((a, idx) => {
+                const isPdf =
+                  a.mimeType === "application/pdf" ||
+                  a.fileName.toLowerCase().endsWith(".pdf");
+                const thumb =
+                  a.previewUrl ??
+                  (!isPdf ? chatAttachmentPreviewUrl(a) : null);
+                return (
+                  <button
+                    key={`${a.storagePath || a.fileName}-${idx}`}
+                    type="button"
+                    onClick={() => onOpenAttachment?.(a)}
+                    className="flex w-full max-w-[min(100%,280px)] items-center gap-2 rounded-xl border border-gray-300/80 bg-gray-800/90 px-3 py-2 text-left text-gray-100 shadow-sm transition hover:bg-gray-700/90 dark:border-gray-600 dark:bg-gray-800/95 dark:hover:bg-gray-700/90"
+                  >
+                    {isPdf ? (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 text-[10px] font-bold text-white">
+                        PDF
+                      </span>
+                    ) : thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumb}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-600 text-[10px] text-white">
+                        IMG
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-xs font-medium">
+                        {a.fileName}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-gray-400">
+                        {isPdf ? "PDF" : "Image"} ·{" "}
+                        {formatAttachmentSize(a.size)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
             <div
               className="text-sm leading-relaxed text-gray-900 dark:text-gray-200"
               data-color-mode={theme}
             >
-              <MarkdownPreview
-                source={displayText}
-                style={{ background: "transparent", fontSize: "0.875rem" }}
-              />
+              {displayText.trim() ? (
+                <MarkdownPreview
+                  source={displayText}
+                  style={{ background: "transparent", fontSize: "0.875rem" }}
+                />
+              ) : att.length > 0 ? (
+                <span className="text-xs italic text-gray-600 dark:text-gray-400">
+                  Attachment
+                </span>
+              ) : null}
             </div>
           </div>
           {timeLabel ? (

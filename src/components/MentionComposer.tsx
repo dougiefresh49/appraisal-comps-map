@@ -8,7 +8,14 @@ import {
   type KeyboardEvent,
 } from "react";
 import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useTheme } from "~/components/ThemeProvider";
+import {
+  CHAT_ATTACHMENT_MAX_BYTES,
+  CHAT_ATTACHMENT_MAX_FILES,
+  fileLooksLikeAcceptedAttachment,
+  isAcceptableChatAttachmentFile,
+} from "~/lib/chat-attachments-constants";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,7 +36,7 @@ export interface ResolvedMention {
 
 interface MentionComposerProps {
   entities: MentionEntity[];
-  onSend: (text: string, mentions: ResolvedMention[]) => void;
+  onSend: (text: string, mentions: ResolvedMention[], files: File[]) => void;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -55,6 +62,58 @@ export function stripMentionTokens(text: string): string {
   return text.replace(MENTION_RE, "@$1");
 }
 
+function fileKey(f: File): string {
+  return `${f.name}-${f.size}-${f.lastModified}`;
+}
+
+function PendingFilePreview({
+  file,
+  onRemove,
+}: {
+  file: File;
+  onRemove: () => void;
+}) {
+  const [thumb, setThumb] = useState<string | null>(null);
+  const isImg = file.type.startsWith("image/");
+
+  useEffect(() => {
+    if (!isImg) return;
+    const u = URL.createObjectURL(file);
+    setThumb(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, isImg]);
+
+  return (
+    <div
+      className="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-100/90 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800/80"
+    >
+      {isImg && thumb ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={thumb}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded object-cover"
+        />
+      ) : (
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-600/90 text-[10px] font-bold text-white">
+          PDF
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-xs text-gray-800 dark:text-gray-200">
+        {file.name}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+        aria-label={`Remove ${file.name}`}
+      >
+        <XMarkIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -71,9 +130,48 @@ export function MentionComposer({
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [mentionStartPos, setMentionStartPos] = useState<number | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = useCallback((incoming: File[]) => {
+    setAttachError(null);
+    const good = incoming.filter(fileLooksLikeAcceptedAttachment);
+    if (good.length === 0 && incoming.length > 0) {
+      setAttachError("Only images (PNG, JPEG, GIF, WebP) or PDF, max 10MB each.");
+      return;
+    }
+
+    setPendingFiles((prev) => {
+      const next = [...prev];
+      let err: string | null = null;
+      for (const f of good) {
+        if (!isAcceptableChatAttachmentFile(f)) continue;
+        if (next.length >= CHAT_ATTACHMENT_MAX_FILES) {
+          err = `At most ${CHAT_ATTACHMENT_MAX_FILES} files per message.`;
+          break;
+        }
+        if (f.size > CHAT_ATTACHMENT_MAX_BYTES) {
+          err = `"${f.name}" is larger than 10MB.`;
+          continue;
+        }
+        if (next.some((x) => fileKey(x) === fileKey(f))) continue;
+        next.push(f);
+      }
+      if (err) {
+        setTimeout(() => setAttachError(err), 0);
+      }
+      return next;
+    });
+  }, []);
+
+  const removeFile = useCallback((f: File) => {
+    setPendingFiles((prev) => prev.filter((x) => fileKey(x) !== fileKey(f)));
+  }, []);
 
   // Filter entities by the query typed after @
   const filtered = query
@@ -208,12 +306,27 @@ export function MentionComposer({
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
-    if (!trimmed || disabled) return;
+    if (disabled) return;
+    if (!trimmed && pendingFiles.length === 0) return;
     const mentions = parseMentions(trimmed);
-    onSend(trimmed, mentions);
+    onSend(trimmed, mentions, pendingFiles);
     setValue("");
     setShowDropdown(false);
-  }, [value, disabled, onSend]);
+    setPendingFiles([]);
+    setAttachError(null);
+  }, [value, disabled, onSend, pendingFiles]);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.files;
+      if (!items?.length) return;
+      const files = Array.from(items).filter(fileLooksLikeAcceptedAttachment);
+      if (files.length === 0) return;
+      e.preventDefault();
+      addFiles(files);
+    },
+    [addFiles],
+  );
 
   // Auto-resize textarea
   useEffect(() => {
@@ -222,6 +335,8 @@ export function MentionComposer({
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [value]);
+
+  const canSend = !disabled && (value.trim().length > 0 || pendingFiles.length > 0);
 
   return (
     <div className="relative">
@@ -269,27 +384,97 @@ export function MentionComposer({
         </div>
       )}
 
+      {attachError ? (
+        <p className="mb-1.5 text-xs text-amber-700 dark:text-amber-400/90">
+          {attachError}
+        </p>
+      ) : null}
+
+      {pendingFiles.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {pendingFiles.map((f) => (
+            <PendingFilePreview
+              key={fileKey(f)}
+              file={f}
+              onRemove={() => removeFile(f)}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {/* Composer */}
-      <div className="flex items-end gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:focus-within:border-blue-600/50 dark:focus-within:ring-blue-600/30">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          className="max-h-40 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder-gray-500 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
-        />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={disabled || !value.trim()}
-          className="shrink-0 rounded-md p-1.5 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 dark:disabled:text-gray-600"
-          aria-label="Send message"
-        >
-          <PaperAirplaneIcon className="h-4 w-4" />
-        </button>
+      <div
+        className={`flex flex-col gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:focus-within:border-blue-600/50 dark:focus-within:ring-blue-600/30 ${
+          isDragging ? "ring-2 ring-blue-500/50 dark:ring-blue-400/40" : ""
+        }`}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          if (e.currentTarget === e.target) setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
+          const files = Array.from(e.dataTransfer?.files ?? []).filter(
+            fileLooksLikeAcceptedAttachment,
+          );
+          if (files.length) addFiles(files);
+        }}
+      >
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.pdf"
+            multiple
+            onChange={(e) => {
+              const list = e.target.files;
+              if (list?.length) addFiles(Array.from(list));
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || pendingFiles.length >= CHAT_ATTACHMENT_MAX_FILES}
+            className="shrink-0 rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+            aria-label="Attach file"
+            title="Attach images or PDF (max 5, 10MB each)"
+          >
+            <PaperClipIcon className="h-4 w-4" />
+          </button>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            className="max-h-40 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder-gray-500 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
+          />
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend}
+            className="shrink-0 rounded-md p-1.5 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 dark:disabled:text-gray-600"
+            aria-label="Send message"
+          >
+            <PaperAirplaneIcon className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

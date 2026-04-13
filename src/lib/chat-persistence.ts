@@ -30,16 +30,15 @@ async function listThreadsForProject(
   archivedOnly: boolean,
 ): Promise<ChatThread[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_chat_threads_for_project", {
+  const rpcResult = await supabase.rpc("list_chat_threads_for_project", {
     project_uuid: projectId,
     user_uuid: userId,
     archived_only: archivedOnly,
   });
 
-  if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) =>
-    rowToThread(row),
-  );
+  if (rpcResult.error) throw rpcResult.error;
+  const rows = (rpcResult.data ?? []) as Record<string, unknown>[];
+  return rows.map((row) => rowToThread(row));
 }
 
 /** Active threads, ordered by last message time (falls back to thread created_at if empty). */
@@ -104,6 +103,7 @@ export async function saveMessages(
     role: m.role,
     content: m.content,
     mentions: m.mentions ?? null,
+    attachments: m.attachments ?? null,
     tool_result: m.tool_result ?? null,
     sort_order: m.sort_order,
   }));
@@ -116,7 +116,7 @@ export async function loadMessages(threadId: string): Promise<PersistedMessage[]
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("id, thread_id, role, content, mentions, tool_result, sort_order, created_at")
+    .select("id, thread_id, role, content, mentions, attachments, tool_result, sort_order, created_at")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true })
     .order("sort_order", { ascending: true });
@@ -160,6 +160,7 @@ function rowToMessage(row: Record<string, unknown>): PersistedMessage {
     role: row.role as "user" | "assistant" | "tool",
     content: (row.content as string) ?? "",
     mentions: (row.mentions as PersistedMessage["mentions"]) ?? null,
+    attachments: (row.attachments as PersistedMessage["attachments"]) ?? null,
     toolResult: (row.tool_result as PersistedMessage["toolResult"]) ?? null,
     sortOrder: (row.sort_order as number) ?? 0,
     createdAt: row.created_at as string,

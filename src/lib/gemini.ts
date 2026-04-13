@@ -144,13 +144,25 @@ export async function generateChatStream(
   messages: ChatMessage[],
   projectId: string,
   model: string = CHAT_MODEL,
+  /** Inline image/PDF parts for the latest user message (multimodal chat). */
+  lastUserAttachmentParts?: Part[],
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
-  const contents: Content[] = messages.map((m) => ({
-    role: m.role === "assistant" ? ("model" as const) : ("user" as const),
-    parts: [{ text: m.content }],
-  }));
+  const contents: Content[] = messages.map((m, i) => {
+    const isLastUser =
+      m.role === "user" && i === messages.length - 1;
+    const extra: Part[] =
+      isLastUser &&
+      lastUserAttachmentParts &&
+      lastUserAttachmentParts.length > 0
+        ? lastUserAttachmentParts
+        : [];
+    return {
+      role: m.role === "assistant" ? ("model" as const) : ("user" as const),
+      parts: [...extra, { text: m.content }],
+    };
+  });
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
