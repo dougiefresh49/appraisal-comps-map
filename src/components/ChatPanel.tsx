@@ -149,6 +149,8 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   const chatScrollDesktopRef = useRef<HTMLDivElement>(null);
   const chatScrollMobileRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** When the server assigns a thread id mid-stream, skip loading messages from the API until the send finishes — persistence may not be committed yet, and an empty fetch would wipe optimistic messages. */
+  const suppressThreadMessagesFetchRef = useRef<string | null>(null);
 
   // Restore saved panel width
   useEffect(() => {
@@ -299,6 +301,10 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       return;
     }
 
+    if (suppressThreadMessagesFetchRef.current === activeThreadId) {
+      return;
+    }
+
     setIsLoadingMessages(true);
     fetch(`/api/chat/threads/${activeThreadId}/messages`)
       .then((res) => (res.ok ? (res.json() as Promise<{ messages: PersistedMessage[] }>) : null))
@@ -374,6 +380,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
   // -------------------------------------------------------------------------
 
   const handleNewThread = useCallback(async () => {
+    suppressThreadMessagesFetchRef.current = null;
     setActiveThreadId(null);
     setMessages([]);
   }, [setActiveThreadId]);
@@ -510,6 +517,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                 // Server created a new thread for this conversation
                 const newId = (parsed as { threadId: string }).threadId;
                 currentThreadId = newId;
+                suppressThreadMessagesFetchRef.current = newId;
                 setActiveThreadId(newId);
                 // Refresh thread list so the new thread appears in the sidebar
                 void refreshThreads();
@@ -587,6 +595,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
           ),
         );
       } finally {
+        suppressThreadMessagesFetchRef.current = null;
         setIsStreaming(false);
         abortRef.current = null;
       }
