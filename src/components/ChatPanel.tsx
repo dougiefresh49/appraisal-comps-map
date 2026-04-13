@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useState,
   useEffect,
   useLayoutEffect,
@@ -60,6 +61,8 @@ interface UIMessage {
   content: string;
   mentions?: ResolvedMention[];
   toolResult?: ToolResult;
+  /** ISO time for day markers and per-message labels (set when sent or loaded from DB). */
+  createdAt?: string;
 }
 
 interface ChatPanelProps {
@@ -108,6 +111,42 @@ function formatThreadActivityRelative(thread: ChatThread): string {
   return formatRelativeTime(thread.lastMessageAt ?? thread.createdAt);
 }
 
+/** Calendar day in local TZ for grouping (YYYY-MM-DD). */
+function dayKeyLocal(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatMessageTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Centered day separator: "Today · 9:15 PM" / "Yesterday · …" / "Sunday · …". */
+function formatDayMarkerLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  if (dOnly.getTime() === startOfToday.getTime()) return `Today · ${time}`;
+  if (dOnly.getTime() === startOfYesterday.getTime()) return `Yesterday · ${time}`;
+  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
+  return `${weekday} · ${time}`;
+}
+
 function persistedToUIMessage(pm: PersistedMessage): UIMessage {
   return {
     id: pm.id,
@@ -115,6 +154,7 @@ function persistedToUIMessage(pm: PersistedMessage): UIMessage {
     content: pm.content,
     mentions: pm.mentions as ResolvedMention[] | undefined,
     toolResult: pm.toolResult as ToolResult | undefined,
+    createdAt: pm.createdAt,
   };
 }
 
@@ -481,11 +521,13 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
     async (text: string, mentions: ResolvedMention[]) => {
       if (isStreaming) return;
 
+      const sentAt = new Date().toISOString();
       const userMsg: UIMessage = {
         id: generateId(),
         role: "user",
         content: text,
         mentions,
+        createdAt: sentAt,
       };
       const assistantMsg: UIMessage = {
         id: generateId(),
@@ -583,6 +625,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
                   role: "tool",
                   content: tr.message,
                   toolResult: tr,
+                  createdAt: new Date().toISOString(),
                 };
                 setMessages((prev) => {
                   const idx = prev.findIndex((m) => m.id === assistantMsg.id);
@@ -649,6 +692,14 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
         suppressThreadMessagesFetchRef.current = null;
         setIsStreaming(false);
         abortRef.current = null;
+        const completedAt = new Date().toISOString();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id && m.role === "assistant"
+              ? { ...m, createdAt: completedAt }
+              : m,
+          ),
+        );
       }
     },
     [
@@ -778,15 +829,33 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
             <EmptyState hasThreads={threads.length > 0} />
           ) : (
             <div className="space-y-4">
-              {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isStreaming={
-                    isStreaming && msg === messages[messages.length - 1]
-                  }
-                />
-              ))}
+              {messages.map((msg, i) => {
+                const prev = messages[i - 1];
+                const showDayMarker =
+                  msg.createdAt &&
+                  (!prev?.createdAt ||
+                    dayKeyLocal(msg.createdAt) !== dayKeyLocal(prev.createdAt));
+                return (
+                  <Fragment key={msg.id}>
+                    {showDayMarker && msg.createdAt ? (
+                      <div
+                        className="flex justify-center py-1"
+                        aria-hidden
+                      >
+                        <span className="text-[11px] font-medium text-gray-500 dark:text-gray-500">
+                          {formatDayMarkerLabel(msg.createdAt)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <MessageBubble
+                      message={msg}
+                      isStreaming={
+                        isStreaming && msg === messages[messages.length - 1]
+                      }
+                    />
+                  </Fragment>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1514,10 +1583,19 @@ function MessageBubble({
   const { theme } = useTheme();
 
   if (message.role === "tool") {
-    return <ToolResultBubble result={message.toolResult!} />;
+    return (
+      <ToolResultBubble
+        result={message.toolResult!}
+        createdAt={message.createdAt}
+      />
+    );
   }
 
   const isUser = message.role === "user";
+  const timeLabel =
+    message.createdAt && (!isStreaming || isUser)
+      ? formatMessageTime(message.createdAt)
+      : null;
 
   if (isUser) {
     const displayText = message.content.replace(
@@ -1526,16 +1604,23 @@ function MessageBubble({
     );
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
-          <div
-            className="text-sm leading-relaxed text-gray-900 dark:text-gray-200"
-            data-color-mode={theme}
-          >
-            <MarkdownPreview
-              source={displayText}
-              style={{ background: "transparent", fontSize: "0.875rem" }}
-            />
+        <div className="flex max-w-[85%] flex-col items-end gap-0.5">
+          <div className="rounded-2xl rounded-br-md bg-blue-100 px-4 py-2.5 dark:bg-blue-600/20">
+            <div
+              className="text-sm leading-relaxed text-gray-900 dark:text-gray-200"
+              data-color-mode={theme}
+            >
+              <MarkdownPreview
+                source={displayText}
+                style={{ background: "transparent", fontSize: "0.875rem" }}
+              />
+            </div>
           </div>
+          {timeLabel ? (
+            <span className="px-1 text-[10px] text-gray-500 dark:text-gray-500">
+              {timeLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     );
@@ -1544,33 +1629,46 @@ function MessageBubble({
   const isEmpty = !message.content.trim();
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-transparent dark:bg-gray-900">
-        {isEmpty && isStreaming ? (
-          <div className="flex items-center gap-1.5 py-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms] dark:bg-blue-400" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms] dark:bg-blue-400" />
-          </div>
-        ) : (
-          <div
-            className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200"
-            data-color-mode={theme}
-          >
-            <MarkdownPreview
-              source={message.content}
-              style={{ background: "transparent", fontSize: "0.875rem" }}
-            />
-            {isStreaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-600/70 dark:bg-blue-400/70" />
-            )}
-          </div>
-        )}
+      <div className="flex max-w-[90%] flex-col items-start gap-0.5">
+        <div className="rounded-2xl rounded-bl-md border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-transparent dark:bg-gray-900">
+          {isEmpty && isStreaming ? (
+            <div className="flex items-center gap-1.5 py-1">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms] dark:bg-blue-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms] dark:bg-blue-400" />
+            </div>
+          ) : (
+            <div
+              className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-800 dark:prose-invert dark:text-gray-200"
+              data-color-mode={theme}
+            >
+              <MarkdownPreview
+                source={message.content}
+                style={{ background: "transparent", fontSize: "0.875rem" }}
+              />
+              {isStreaming && (
+                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-600/70 dark:bg-blue-400/70" />
+              )}
+            </div>
+          )}
+        </div>
+        {timeLabel ? (
+          <span className="px-1 text-[10px] text-gray-500 dark:text-gray-500">
+            {timeLabel}
+          </span>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function ToolResultBubble({ result }: { result: ToolResult }) {
+function ToolResultBubble({
+  result,
+  createdAt,
+}: {
+  result: ToolResult;
+  createdAt?: string;
+}) {
   const toolLabels: Record<string, string> = {
     update_subject_field: "Subject Updated",
     update_subject_section_json: "Subject Section Updated",
@@ -1580,7 +1678,7 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
   const label = toolLabels[result.toolName] ?? "Action Complete";
 
   return (
-    <div className="flex justify-center py-1">
+    <div className="flex flex-col items-center gap-0.5 py-1">
       <div
         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
           result.success
@@ -1611,6 +1709,11 @@ function ToolResultBubble({ result }: { result: ToolResult }) {
         <span>{label}</span>
         <span className="text-[10px] opacity-70">{result.message}</span>
       </div>
+      {createdAt ? (
+        <span className="text-[10px] text-gray-500 dark:text-gray-500">
+          {formatMessageTime(createdAt)}
+        </span>
+      ) : null}
     </div>
   );
 }
