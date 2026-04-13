@@ -6,6 +6,12 @@ import {
 import { generateChatStream } from "~/lib/gemini";
 import { classifyQuery } from "~/lib/chat-router";
 import {
+  DEFAULT_CHAT_MODEL_PRESET,
+  isChatModelPresetId,
+  PRESET_TO_GEMINI_MODEL,
+  type ChatModelPresetId,
+} from "~/lib/chat-model-presets";
+import {
   createThread,
   saveMessages,
   generateThreadTitle,
@@ -25,6 +31,8 @@ interface ChatRequestBody {
   mentions?: ChatMention[];
   history?: ChatMessage[];
   threadId?: string | null;
+  /** User-selected model tier; omit or "auto" to use the query classifier */
+  modelPreset?: string;
 }
 
 const SSE_HEADERS = {
@@ -35,6 +43,28 @@ const SSE_HEADERS = {
 
 const PLACEHOLDER_ATTACHMENT_ONLY =
   "(The user attached file(s). Analyze the attached image(s) or PDF and answer their question.)";
+
+function parseModelPreset(raw: unknown): ChatModelPresetId {
+  if (raw === undefined || raw === null || raw === "") {
+    return DEFAULT_CHAT_MODEL_PRESET;
+  }
+  return isChatModelPresetId(raw) ? raw : DEFAULT_CHAT_MODEL_PRESET;
+}
+
+async function resolveGeminiModelId(opts: {
+  preset: ChatModelPresetId;
+  userMessageForModel: string;
+  subjectAddress?: string;
+}): Promise<string> {
+  if (opts.preset === "auto") {
+    const { model } = await classifyQuery(
+      opts.userMessageForModel,
+      opts.subjectAddress,
+    );
+    return model;
+  }
+  return PRESET_TO_GEMINI_MODEL[opts.preset];
+}
 
 export async function POST(request: Request) {
   try {
@@ -81,6 +111,8 @@ export async function POST(request: Request) {
         )
       : [];
 
+    const modelPreset = parseModelPreset(body.modelPreset);
+
     return await runChatAndRespond({
       projectId,
       userMessageForModel: message.trim(),
@@ -90,6 +122,7 @@ export async function POST(request: Request) {
       threadId: body.threadId ?? null,
       attachmentParts: undefined,
       attachmentsForClientAndDb: null,
+      modelPreset,
     });
   } catch (error) {
     console.error("[/api/chat] error:", error);
@@ -211,6 +244,8 @@ async function handleMultipartPost(request: Request) {
   const userMessageForModel = trimmed || PLACEHOLDER_ATTACHMENT_ONLY;
   const userMessageToSave = trimmed;
 
+  const modelPreset = parseModelPreset(formData.get("modelPreset"));
+
   return await runChatAndRespond({
     projectId,
     userMessageForModel,
@@ -220,6 +255,7 @@ async function handleMultipartPost(request: Request) {
     threadId,
     attachmentParts,
     attachmentsForClientAndDb: uploaded,
+    modelPreset,
   });
 }
 
@@ -232,6 +268,7 @@ async function runChatAndRespond(opts: {
   threadId: string | null;
   attachmentParts: Part[] | undefined;
   attachmentsForClientAndDb: ChatAttachment[] | null;
+  modelPreset: ChatModelPresetId;
 }): Promise<Response> {
   const {
     projectId,
@@ -242,6 +279,7 @@ async function runChatAndRespond(opts: {
     threadId: initialThreadId,
     attachmentParts,
     attachmentsForClientAndDb,
+    modelPreset,
   } = opts;
 
   const supabase = await createClient();
@@ -268,7 +306,11 @@ async function runChatAndRespond(opts: {
   );
 
   const subjectAddress = extractSubjectAddress(systemPrompt);
-  const { model } = await classifyQuery(userMessageForModel, subjectAddress);
+  const model = await resolveGeminiModelId({
+    preset: modelPreset,
+    userMessageForModel,
+    subjectAddress,
+  });
 
   const rawStream = await generateChatStream(
     systemPrompt,
@@ -287,6 +329,7 @@ async function runChatAndRespond(opts: {
       userMentions: mentions,
       userAttachments: attachmentsForClientAndDb,
       isNewThread,
+      geminiModelId: model,
     }).catch((err: unknown) => {
       console.error("[chat persistence] background persist failed:", err);
     });
@@ -306,6 +349,8 @@ async function runChatAndRespond(opts: {
       out = prependSSEEvent(out, { threadId: resolvedThreadId });
     }
 
+    out = prependSSEEvent(out, { modelUsed: model });
+
     return new Response(out, { headers: SSE_HEADERS });
   }
 
@@ -313,13 +358,15 @@ async function runChatAndRespond(opts: {
     attachmentsForClientAndDb &&
     attachmentsForClientAndDb.length > 0
   ) {
-    const withMeta = prependSSEEvent(rawStream, {
+    let withMeta = prependSSEEvent(rawStream, {
       attachments: attachmentsForClientAndDb.map(stripPreviewUrl),
     });
+    withMeta = prependSSEEvent(withMeta, { modelUsed: model });
     return new Response(withMeta, { headers: SSE_HEADERS });
   }
 
-  return new Response(rawStream, { headers: SSE_HEADERS });
+  const withModel = prependSSEEvent(rawStream, { modelUsed: model });
+  return new Response(withModel, { headers: SSE_HEADERS });
 }
 
 function stripPreviewUrl(a: ChatAttachment): ChatAttachment {
@@ -362,6 +409,7 @@ async function persistTurn(
     userMentions: ChatMention[];
     userAttachments: ChatAttachment[] | null;
     isNewThread: boolean;
+    geminiModelId: string;
   },
 ): Promise<void> {
   const reader = stream.getReader();
@@ -450,6 +498,7 @@ async function persistTurn(
           {
             role: "assistant" as const,
             content: assistantText,
+            model_used: opts.geminiModelId,
             sort_order: toolMessages.length + 1,
           },
         ]

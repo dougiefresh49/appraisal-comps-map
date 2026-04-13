@@ -7,8 +7,12 @@ import {
   useEffect,
   type KeyboardEvent,
 } from "react";
-import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
-import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { PaperAirplaneIcon, StopIcon } from "@heroicons/react/24/solid";
+import {
+  ChevronDownIcon,
+  PaperClipIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useTheme } from "~/components/ThemeProvider";
 import {
   CHAT_ATTACHMENT_MAX_BYTES,
@@ -16,6 +20,15 @@ import {
   fileLooksLikeAcceptedAttachment,
   isAcceptableChatAttachmentFile,
 } from "~/lib/chat-attachments-constants";
+import {
+  CHAT_MODEL_PRESET_HINTS,
+  CHAT_MODEL_PRESET_IDS,
+  CHAT_MODEL_PRESET_LABELS,
+  DEFAULT_CHAT_MODEL_PRESET,
+  type ChatModelPresetId,
+} from "~/lib/chat-model-presets";
+
+export type { ChatModelPresetId };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,11 +47,29 @@ export interface ResolvedMention {
   id: string;
 }
 
+/** Passed from parent after a stopped stream so the composer can restore text, files, and model. */
+export interface ComposerRestoreDraft {
+  token: number;
+  text: string;
+  files: File[];
+  modelPreset: ChatModelPresetId;
+}
+
 interface MentionComposerProps {
   entities: MentionEntity[];
-  onSend: (text: string, mentions: ResolvedMention[], files: File[]) => void;
+  onSend: (
+    text: string,
+    mentions: ResolvedMention[],
+    files: File[],
+    modelPreset: ChatModelPresetId,
+  ) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** While the assistant is streaming, show a stop control instead of send. */
+  isStreaming?: boolean;
+  onStop?: () => void;
+  restoreDraft?: ComposerRestoreDraft | null;
+  onRestoreConsumed?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +116,7 @@ function PendingFilePreview({
 
   return (
     <div
-      className="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-100/90 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800/80"
+      className="flex max-w-[220px] items-center gap-2 rounded-xl bg-white/70 px-2 py-1.5 ring-1 ring-gray-200/80 dark:bg-gray-800/50 dark:ring-gray-600/40"
     >
       {isImg && thumb ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -123,6 +154,10 @@ export function MentionComposer({
   onSend,
   disabled = false,
   placeholder = "Ask about your project data... use @ to reference docs, comps, or reports",
+  isStreaming = false,
+  onStop,
+  restoreDraft,
+  onRestoreConsumed,
 }: MentionComposerProps) {
   const { theme } = useTheme();
   const [value, setValue] = useState("");
@@ -133,6 +168,8 @@ export function MentionComposer({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [modelPreset, setModelPreset] =
+    useState<ChatModelPresetId>(DEFAULT_CHAT_MODEL_PRESET);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -195,6 +232,18 @@ export function MentionComposer({
     const el = dropdownRef.current.children[selectedIdx] as HTMLElement | undefined;
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIdx]);
+
+  // After user stops streaming, parent reapplies the sent message into the composer.
+  useEffect(() => {
+    if (!restoreDraft) return;
+    setValue(restoreDraft.text);
+    setPendingFiles(restoreDraft.files);
+    setModelPreset(restoreDraft.modelPreset);
+    setShowDropdown(false);
+    setAttachError(null);
+    onRestoreConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per restore token
+  }, [restoreDraft?.token]);
 
   const insertMention = useCallback(
     (entity: MentionEntity) => {
@@ -309,12 +358,12 @@ export function MentionComposer({
     if (disabled) return;
     if (!trimmed && pendingFiles.length === 0) return;
     const mentions = parseMentions(trimmed);
-    onSend(trimmed, mentions, pendingFiles);
+    onSend(trimmed, mentions, pendingFiles, modelPreset);
     setValue("");
     setShowDropdown(false);
     setPendingFiles([]);
     setAttachError(null);
-  }, [value, disabled, onSend, pendingFiles]);
+  }, [value, disabled, onSend, pendingFiles, modelPreset]);
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -337,6 +386,7 @@ export function MentionComposer({
   }, [value]);
 
   const canSend = !disabled && (value.trim().length > 0 || pendingFiles.length > 0);
+  const showStop = Boolean(isStreaming && onStop);
 
   return (
     <div className="relative">
@@ -390,23 +440,18 @@ export function MentionComposer({
         </p>
       ) : null}
 
-      {pendingFiles.length > 0 ? (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {pendingFiles.map((f) => (
-            <PendingFilePreview
-              key={fileKey(f)}
-              file={f}
-              onRemove={() => removeFile(f)}
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {/* Composer */}
+      {/* Composer — Gemini-style: message area + bottom toolbar */}
       <div
-        className={`flex flex-col gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:focus-within:border-blue-600/50 dark:focus-within:ring-blue-600/30 ${
-          isDragging ? "ring-2 ring-blue-500/50 dark:ring-blue-400/40" : ""
-        }`}
+        className={[
+          "flex flex-col overflow-hidden rounded-3xl",
+          "bg-white/95 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.08),0_4px_16px_-4px_rgba(15,23,42,0.06)]",
+          "dark:bg-gray-900/85 dark:shadow-[0_2px_12px_-2px_rgba(0,0,0,0.45),0_8px_28px_-6px_rgba(0,0,0,0.35)]",
+          "transition-shadow duration-200 focus-within:shadow-[0_4px_14px_-2px_rgba(15,23,42,0.12),0_8px_24px_-4px_rgba(37,99,235,0.08)]",
+          "dark:focus-within:shadow-[0_4px_18px_-2px_rgba(0,0,0,0.55),0_8px_28px_-6px_rgba(59,130,246,0.12)]",
+          isDragging
+            ? "shadow-[0_4px_16px_-2px_rgba(37,99,235,0.2),0_8px_28px_-4px_rgba(37,99,235,0.12)] dark:shadow-[0_4px_20px_-2px_rgba(59,130,246,0.25)]"
+            : "",
+        ].join(" ")}
         onDragEnter={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -431,29 +476,32 @@ export function MentionComposer({
           if (files.length) addFiles(files);
         }}
       >
-        <div className="flex items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.pdf"
-            multiple
-            onChange={(e) => {
-              const list = e.target.files;
-              if (list?.length) addFiles(Array.from(list));
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled || pendingFiles.length >= CHAT_ATTACHMENT_MAX_FILES}
-            className="shrink-0 rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-            aria-label="Attach file"
-            title="Attach images or PDF (max 5, 10MB each)"
-          >
-            <PaperClipIcon className="h-4 w-4" />
-          </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.pdf"
+          multiple
+          onChange={(e) => {
+            const list = e.target.files;
+            if (list?.length) addFiles(Array.from(list));
+            e.target.value = "";
+          }}
+        />
+
+        <div className="flex flex-col px-3.5 pb-1.5 pt-3 sm:px-4">
+          {pendingFiles.length > 0 ? (
+            <div className="mb-2.5 flex flex-wrap gap-2">
+              {pendingFiles.map((f) => (
+                <PendingFilePreview
+                  key={fileKey(f)}
+                  file={f}
+                  onRemove={() => removeFile(f)}
+                />
+              ))}
+            </div>
+          ) : null}
+
           <textarea
             ref={textareaRef}
             value={value}
@@ -463,17 +511,75 @@ export function MentionComposer({
             placeholder={placeholder}
             disabled={disabled}
             rows={1}
-            className="max-h-40 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder-gray-500 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
+            className="max-h-40 min-h-[3rem] w-full resize-none bg-transparent text-sm leading-5 text-gray-900 placeholder-gray-500 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
           />
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            className="shrink-0 rounded-md p-1.5 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 dark:disabled:text-gray-600"
-            aria-label="Send message"
-          >
-            <PaperAirplaneIcon className="h-4 w-4" />
-          </button>
+
+          <div className="mt-2 flex items-center justify-between gap-2 sm:gap-3">
+            <div className="flex min-w-0 shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  disabled || pendingFiles.length >= CHAT_ATTACHMENT_MAX_FILES
+                }
+                className="shrink-0 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-200/90 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                aria-label="Attach file"
+                title="Attach images or PDF (max 5, 10MB each)"
+              >
+                <PaperClipIcon className="h-[18px] w-[18px]" />
+              </button>
+              <div className="relative w-[112px] shrink-0">
+                <label htmlFor="chat-model-preset" className="sr-only">
+                  Model
+                </label>
+                <select
+                  id="chat-model-preset"
+                  value={modelPreset}
+                  onChange={(e) =>
+                    setModelPreset(e.target.value as ChatModelPresetId)
+                  }
+                  disabled={disabled}
+                  className="h-9 w-full cursor-pointer appearance-none rounded-full border-0 bg-transparent py-1.5 pl-3 pr-8 text-xs font-medium text-gray-500 shadow-none outline-none ring-0 transition-colors hover:bg-gray-200/90 focus-visible:ring-2 focus-visible:ring-blue-500/35 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800/90 dark:focus-visible:ring-blue-500/30"
+                >
+                  {CHAT_MODEL_PRESET_IDS.map((id) => (
+                    <option
+                      key={id}
+                      value={id}
+                      title={CHAT_MODEL_PRESET_HINTS[id]}
+                    >
+                      {CHAT_MODEL_PRESET_LABELS[id]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon
+                  className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                  aria-hidden
+                />
+              </div>
+            </div>
+
+            {showStop ? (
+              <button
+                type="button"
+                onClick={onStop}
+                className="shrink-0 rounded-full p-2 text-red-600 transition-colors hover:bg-red-100/90 hover:text-red-800 dark:text-red-400 dark:hover:bg-red-950/50 dark:hover:text-red-300"
+                aria-label="Stop generating"
+                title="Stop generating"
+              >
+                <StopIcon className="h-[18px] w-[18px]" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!canSend}
+                className="shrink-0 rounded-full p-2 text-blue-600 transition-colors hover:bg-blue-100/90 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent dark:text-blue-400 dark:hover:bg-blue-900/35 dark:hover:text-blue-300 dark:disabled:text-gray-600"
+                aria-label="Send message"
+              >
+                <PaperAirplaneIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

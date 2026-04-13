@@ -39,6 +39,8 @@ export interface PersistedMessage {
     success: boolean;
     message: string;
   } | null;
+  /** Resolved Gemini model id for assistant messages (e.g. gemini-3-flash-preview). */
+  modelUsed: string | null;
   sortOrder: number;
   createdAt: string;
 }
@@ -49,5 +51,7 @@ export interface MessageToSave {
   mentions?: unknown;
   attachments?: unknown;
   tool_result?: unknown;
+  /** Gemini model id; set only for assistant messages */
+  model_used?: string | null;
   sort_order: number;
 }

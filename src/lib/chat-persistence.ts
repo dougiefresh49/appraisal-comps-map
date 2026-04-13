@@ -114,6 +114,7 @@ export async function saveMessages(
     mentions: m.mentions ?? null,
     attachments: m.attachments ?? null,
     tool_result: m.tool_result ?? null,
+    model_used: m.model_used ?? null,
     sort_order: m.sort_order,
   }));
 
@@ -125,7 +126,9 @@ export async function loadMessages(threadId: string): Promise<PersistedMessage[]
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("id, thread_id, role, content, mentions, attachments, tool_result, sort_order, created_at")
+    .select(
+      "id, thread_id, role, content, mentions, attachments, tool_result, model_used, sort_order, created_at",
+    )
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true })
     .order("sort_order", { ascending: true });
@@ -171,6 +174,10 @@ function rowToMessage(row: Record<string, unknown>): PersistedMessage {
     mentions: (row.mentions as PersistedMessage["mentions"]) ?? null,
     attachments: (row.attachments as PersistedMessage["attachments"]) ?? null,
     toolResult: (row.tool_result as PersistedMessage["toolResult"]) ?? null,
+    modelUsed:
+      typeof row.model_used === "string" && row.model_used.length > 0
+        ? row.model_used
+        : null,
     sortOrder: (row.sort_order as number) ?? 0,
     createdAt: row.created_at as string,
   };
