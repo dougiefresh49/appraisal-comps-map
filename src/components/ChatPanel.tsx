@@ -1134,7 +1134,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
 
       {/* Desktop: inline resizable panel */}
       <div
-        className="relative hidden h-full shrink-0 md:block"
+        className="relative hidden h-full shrink-0 print:hidden md:block"
         style={{ width: panelWidth }}
       >
         <div
@@ -1182,7 +1182,7 @@ export function ChatPanel({ projectId, isOpen, onClose }: ChatPanelProps) {
       </div>
 
       {/* Mobile: full-screen overlay */}
-      <div className="fixed inset-0 z-50 md:hidden">
+      <div className="fixed inset-0 z-50 print:hidden md:hidden">
         <div
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={onClose}

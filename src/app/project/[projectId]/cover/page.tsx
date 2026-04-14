@@ -57,8 +57,8 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
 
   if (isLoading || !project) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-50">
-        <div className="text-gray-500">Loading...</div>
+      <div className="flex h-full w-full items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -83,78 +83,78 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
         }}
       />
 
-      <div className="flex h-full w-full bg-white">
-        <div className="no-print w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">
+      <div className="flex h-full w-full bg-white dark:bg-gray-950">
+        <div className="no-print w-80 overflow-y-auto border-r border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
             Cover Page Settings
           </h2>
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Property Type
               </label>
               <input
                 type="text"
                 value={propertyType}
                 onChange={(e) => setPropertyType(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
                 placeholder="Commercial Office Building"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Subject Address
               </label>
-              <div className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <div className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300">
                 {subjectAddress || "No address set"}
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
                 From subject addressForDisplay
               </p>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Client Company
               </label>
               <input
                 type="text"
                 value={clientCompany}
                 onChange={(e) => setClientCompany(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
                 placeholder="Winkler County Hospital District"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase">
+              <label className="mb-1 block text-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
                 Client Name
               </label>
               <input
                 type="text"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
                 placeholder="Lorenzo Serrano"
               />
             </div>
 
             {project?.projectFolderId && (
-              <div className="mt-6 border-t border-gray-200 pt-6">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+              <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-800">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Cover Data
                 </label>
                 {isLoadingCoverData ? (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     Loading cover data...
                   </div>
                 ) : (
-                  <div className="space-y-2 text-xs text-gray-500">
+                  <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
                     <div>Data fetched from Drive</div>
                     {subjectPhotoUrl && (
-                      <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all">
+                      <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] break-all dark:bg-gray-800 dark:text-gray-300">
                         <div className="font-semibold">Image URL:</div>
                         <div className="mt-1 line-clamp-2 break-all">
                           {subjectPhotoUrl}
@@ -162,7 +162,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       </div>
                     )}
                     {!subjectPhotoUrl && (
-                      <div className="mt-2 text-orange-600">
+                      <div className="mt-2 text-orange-600 dark:text-orange-400">
                         No image URL available
                       </div>
                     )}
@@ -211,7 +211,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
                       setIsLoadingCoverData(false);
                     }
                   }}
-                  className="mt-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                  className="mt-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/60"
                   disabled={isLoadingCoverData}
                 >
                   Refresh Cover Data
@@ -219,58 +219,58 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
               </div>
             )}
 
-            <div className="mt-6 border-t border-gray-200 pt-6">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+            <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-800">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Image Size
               </label>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setImageSize(Math.max(0.5, imageSize - 0.1))}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   −
                 </button>
-                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                   {Math.round(imageSize * 100)}%
                 </span>
                 <button
                   onClick={() => setImageSize(Math.min(2.0, imageSize + 0.1))}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   +
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 border-t border-gray-200 pt-6">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+            <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-800">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Cover Size
               </label>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setCoverSize(Math.max(0.5, coverSize - 0.05))}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   −
                 </button>
-                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700">
+                <span className="min-w-[60px] text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                   {Math.round(coverSize * 100)}%
                 </span>
                 <button
                   onClick={() => setCoverSize(Math.min(3.0, coverSize + 0.05))}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   +
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 border-t border-gray-200 pt-6">
+            <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-800">
               <button
                 onClick={() => {
                   window.print();
                 }}
-                className="w-full rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="w-full rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
               >
                 Print to PDF
               </button>
@@ -278,9 +278,9 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
           </div>
         </div>
 
-        <main className="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-8">
+        <main className="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-8 dark:bg-gray-950">
           <div
-            className="relative flex flex-col overflow-hidden bg-white shadow-2xl"
+            className="relative flex flex-col overflow-hidden bg-white shadow-2xl dark:bg-white dark:shadow-black/40"
             style={{
               width: "612px",
               height: "792px",
@@ -318,7 +318,7 @@ export default function ProjectCoverPage({ params }: CoverPageProps) {
               style={{ padding: "56px 100px 100px 100px" }}
             >
               <div
-                className="overflow-hidden rounded-lg border border-gray-300 shadow-sm"
+                className="overflow-hidden rounded-lg border border-gray-300"
                 style={{
                   width:
                     imageSize >= 1.40625 ? "450px" : `${320 * imageSize}px`,

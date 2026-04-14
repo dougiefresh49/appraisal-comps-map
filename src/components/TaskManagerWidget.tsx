@@ -203,7 +203,7 @@ export function TaskManagerWidget() {
   };
 
   return (
-    <div className="fixed right-5 bottom-16 z-50 w-80 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-2xl md:right-6 md:bottom-20">
+    <div className="fixed right-5 bottom-16 z-50 w-80 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-2xl print:hidden md:right-6 md:bottom-20">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-gray-800 px-3 py-2">
         <p className="flex-1 text-xs font-semibold text-gray-200">
