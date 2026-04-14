@@ -244,7 +244,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   return (
     <>
       {/* ── Mobile: sticky top bar + slide-in drawer overlay ── */}
-      <div className="md:hidden">
+      <div className="print:hidden md:hidden">
         {/* Sticky header bar */}
         <div className="fixed top-0 left-0 right-0 z-[60] flex h-14 items-center gap-3 border-b border-gray-200 bg-white/95 px-4 shadow-sm backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/95">
           <button
@@ -323,7 +323,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
 
       {/* ── Desktop: traditional collapsible sidebar ── */}
       <aside
-        className={`relative z-[60] hidden h-screen flex-col border-r border-gray-200 bg-white shadow-sm transition-all duration-300 dark:border-gray-800 dark:bg-gray-900 md:flex ${
+        className={`relative z-[60] hidden h-screen flex-col border-r border-gray-200 bg-white shadow-sm transition-all duration-300 print:hidden dark:border-gray-800 dark:bg-gray-900 md:flex ${
           isCollapsed ? "w-12" : "w-64"
         }`}
       >
